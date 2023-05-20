@@ -1,0 +1,6 @@
+# Request
+int16 value
+---
+# Response
+bool success
+string message
