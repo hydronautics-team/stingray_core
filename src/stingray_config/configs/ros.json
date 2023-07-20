@@ -1,5 +1,6 @@
 {
     "topics": {
+        "to_bridge_parcel": "/stingray/topics/to_bridge_parcel",
         "to_driver_parcel": "/stingray/topics/to_driver_parcel",
         "from_driver_parcel": "/stingray/topics/from_driver_parcel",
         "robot_info": "/stingray/topics/driver/robot_info",

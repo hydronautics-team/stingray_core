@@ -38,7 +38,7 @@ GuiBridgeReceiver::GuiBridgeReceiver(boost::asio::io_service &io_service)
     com_config = json::parse(std::ifstream(config_directory + "/communication.json"));
 
     // ROS publishers
-    this->requestMessagePublisher = this->create_publisher<std_msgs::msg::UInt8MultiArray>(ros_config["topics"]["to_driver_parcel"], 1000);
+    this->requestMessagePublisher = this->create_publisher<std_msgs::msg::UInt8MultiArray>(ros_config["topics"]["to_bridge_parcel"], 1000);
 
     // UDP receiver
     _receive_socket.open(udp::v4());
