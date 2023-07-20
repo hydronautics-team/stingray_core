@@ -13,7 +13,7 @@
 #include <vector>
 
 #include "std_msgs/msg/string.hpp"
-#include "stingray_utils/json.hpp"
+#include "nlohmann/json.hpp"
 
 using json = nlohmann::json;
 using namespace std::chrono_literals;

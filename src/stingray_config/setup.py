@@ -1,6 +1,6 @@
 from setuptools import setup
 
-package_name = 'stingray_utils'
+package_name = 'stingray_config'
 
 setup(
     name=package_name,

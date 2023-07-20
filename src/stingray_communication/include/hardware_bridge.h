@@ -23,7 +23,7 @@
 #include "stingray_communication_msgs/srv/set_stabilization.hpp"
 #include "messages/common.h"
 #include "messages/normal.h"
-#include "stingray_utils/json.hpp"
+#include "nlohmann/json.hpp"
 
 using json = nlohmann::json;
 using namespace std::chrono_literals;

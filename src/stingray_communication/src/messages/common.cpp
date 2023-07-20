@@ -1,8 +1,10 @@
 #include "messages/common.h"
+#include <ament_index_cpp/get_package_share_directory.hpp>
 
 AbstractMessage::AbstractMessage() {
     // parse json config
-    config = json::parse(std::ifstream("resources/configs/communication.json"));
+    std::string config_directory = ament_index_cpp::get_package_share_directory("stingray_config");
+    config = json::parse(std::ifstream(config_directory + "/configs/communication.json"));
 }
 
 /** @brief Overloaded transform to string function, transforms value to string bitwise correctly

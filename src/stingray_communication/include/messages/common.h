@@ -7,7 +7,7 @@
 #include <fstream>
 #include <vector>
 
-#include "stingray_utils/json.hpp"
+#include "nlohmann/json.hpp"
 
 #define UNUSED(x) (void)(x)
 using json = nlohmann::json;

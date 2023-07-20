@@ -7,11 +7,13 @@
 #include <fstream>
 #include "uart_driver.h"
 #include "messages/normal.h"
+#include <ament_index_cpp/get_package_share_directory.hpp>
 
 UartDriver::UartDriver() : Node("UartDriver")
 {
-    ros_config = json::parse(std::ifstream("resources/configs/ros.json"));
-    com_config = json::parse(std::ifstream("resources/configs/communication.json"));
+    std::string config_directory = ament_index_cpp::get_package_share_directory("stingray_config");
+    ros_config = json::parse(std::ifstream(config_directory + "configs/ros.json"));
+    com_config = json::parse(std::ifstream(config_directory + "configs/communication.json"));
     // Serial port initialization
     portInitialize();
     // ROS publishers

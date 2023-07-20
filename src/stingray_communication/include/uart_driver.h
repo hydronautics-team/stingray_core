@@ -8,7 +8,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include "stingray_utils/json.hpp"
+#include "nlohmann/json.hpp"
 
 using json = nlohmann::json;
 using std::placeholders::_1;

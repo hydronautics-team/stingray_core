@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>stingray_utils</name>
+  <name>stingray_config</name>
   <version>0.1.0</version>
   <description>Package contains different helper utilities of the Stingray platform.</description>
 
@@ -11,10 +11,8 @@
 
   <license>MIT</license>
 
-  <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>ament_cmake_python</buildtool_depend>
   
-  <depend>rclcpp</depend>
   <depend>rclpy</depend>
 
   <test_depend>ament_lint_auto</test_depend>

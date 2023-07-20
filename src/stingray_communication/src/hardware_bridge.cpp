@@ -5,12 +5,14 @@
  */
 
 #include "hardware_bridge.h"
+#include <ament_index_cpp/get_package_share_directory.hpp>
 
 #include <fstream>
 
 HardwareBridge::HardwareBridge() : Node("HardwareBridge") {
-    ros_config = json::parse(std::ifstream("resources/configs/ros.json"));
-
+    std::string config_directory = ament_index_cpp::get_package_share_directory("stingray_config");
+    ros_config = json::parse(std::ifstream(config_directory + "configs/ros.json"));
+    
     // ROS publishers
     this->outputMessagePublisher = this->create_publisher<std_msgs::msg::UInt8MultiArray>(ros_config["topics"]["to_driver_parcel"], 1000);
     this->hardwareInfoPublisher = this->create_publisher<stingray_communication_msgs::msg::HardwareInfo>(ros_config["topics"]["robot_info"], 1000);
