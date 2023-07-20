@@ -16,10 +16,10 @@ RequestNormalMessage::RequestNormalMessage() : AbstractMessage() {
         dev[i] = 0;
     }
 
-    dev_flags = 0;
-    stabilize_flags = 0;
-    cameras = 0;
-    pc_reset = 0;
+    // dev_flags = 0;
+    // stabilize_flags = 0;
+    // cameras = 0;
+    // pc_reset = 0;
     checksum = 0;
 }
 
@@ -41,14 +41,38 @@ void RequestNormalMessage::serialize(std::vector<uint8_t> &container) {
         pushToVector(container, dev[i]);
     }
 
-    pushToVector(container, lag_error);
-    pushToVector(container, dev_flags);
-    pushToVector(container, stabilize_flags);
-    pushToVector(container, cameras);
-    pushToVector(container, pc_reset);
+    // pushToVector(container, lag_error);
+    // pushToVector(container, dev_flags);
+    // pushToVector(container, stabilize_flags);
+    // pushToVector(container, cameras);
+    // pushToVector(container, pc_reset);
 
     uint16_t checksum = getChecksum16b(container);
     pushToVector(container, checksum);  // do i need to revert bytes here?
+}
+
+bool RequestNormalMessage::deserialize(std::vector<uint8_t> &input) {
+    popFromVector(input, checksum, true);
+
+    uint16_t checksum_calc = getChecksum16b(input);
+
+    // if (checksum_calc != checksum) {
+    //     return false;
+    // }
+
+    for (int i = 0; i < DevAmount; i++) {
+        popFromVector(input, dev[DevAmount - i]);
+    }
+
+    popFromVector(input, yaw);
+    popFromVector(input, pitch);
+    popFromVector(input, roll);
+    popFromVector(input, depth);
+    popFromVector(input, lag);
+    popFromVector(input, march);
+    popFromVector(input, flags);
+
+    return true;
 }
 
 /**
@@ -56,7 +80,9 @@ void RequestNormalMessage::serialize(std::vector<uint8_t> &container) {
  * @param[in] bit Bit to set
  * @param[in] state State to set
  */
-void RequestNormalMessage::setStabilizationState(uint8_t bit, bool state) { setBit(stabilize_flags, bit, state); }
+void RequestNormalMessage::setStabilizationState(uint8_t bit, bool state) { 
+    // setBit(stabilize_flags, bit, state); 
+    }
 
 /** @brief Constructor for ResponseNormalMessage
  *

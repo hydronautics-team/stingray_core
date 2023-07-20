@@ -66,6 +66,46 @@ add_executable(gui_bridge
         )
 ament_target_dependencies(gui_bridge Boost rclcpp std_msgs std_srvs serial stingray_communication_msgs  nlohmann_json ament_index_cpp)
 
+add_library(
+        messages SHARED
+        src/messages/common.cpp
+        src/messages/config.cpp
+        src/messages/direct.cpp
+        src/messages/normal.cpp
+        include/messages/common.h
+        include/messages/config.h
+        include/messages/direct.h
+        include/messages/normal.h
+)
+
+# this line to exports the library
+ament_target_dependencies(messages rclcpp)
+
+target_include_directories(messages
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
+ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
+ament_export_dependencies(
+  rclcpp
+)
+
+install(
+  DIRECTORY include/
+  DESTINATION include
+)
+install(TARGETS
+messages
+  EXPORT export_${PROJECT_NAME}
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+  INCLUDES DESTINATION include
+)
+
+
 install(TARGETS
         hardware_bridge
         uart_driver

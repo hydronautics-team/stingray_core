@@ -3,12 +3,8 @@
 
 GuiBridgeSender::GuiBridgeSender(boost::asio::io_service &io_service) : Node("GuiBridgeSender"), _io_service(io_service), _send_socket(io_service) {
     std::string config_directory = ament_index_cpp::get_package_share_directory("stingray_config");
-    std::string ros_config_path = config_directory + "/ros.json";
-    std::string com_config_path = config_directory + "/communication.json";
-    std::ifstream ros_config_file(ros_config_path);
-    ros_config = json::parse(ros_config_file);
-    std::ifstream com_config_file(com_config_path);
-    com_config = json::parse(com_config_file);
+    ros_config = json::parse(std::ifstream(config_directory + "/ros.json"));
+    com_config = json::parse(std::ifstream(config_directory + "/communication.json"));
     
     // UDP sender
     _send_endpoint =

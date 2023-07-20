@@ -73,7 +73,7 @@ void HardwareBridge::horizontalMoveCallback(const std::shared_ptr<stingray_commu
     if (lagStabilizationEnabled) {
         requestMessage.march = static_cast<int16_t>(0.0);
         requestMessage.lag = static_cast<int16_t>(0.0);
-        requestMessage.lag_error = static_cast<int16_t>(request->lag);
+        // requestMessage.lag_error = static_cast<int16_t>(request->lag);
     } else {
         requestMessage.march = static_cast<int16_t>(request->march);
         requestMessage.lag = static_cast<int16_t>(request->lag);

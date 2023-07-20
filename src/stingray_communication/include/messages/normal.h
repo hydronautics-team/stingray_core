@@ -10,7 +10,7 @@ struct RequestNormalMessage : public AbstractMessage {
     RequestNormalMessage();
 
     /// Length in bytes of the normal message protocol
-    const static uint8_t length = 30;
+    const static uint8_t length = 24;
 
     /// Type code for the normal message protocol
     const static uint8_t type = 0xA5;
@@ -22,14 +22,15 @@ struct RequestNormalMessage : public AbstractMessage {
     int16_t pitch;
     int16_t yaw;
     int8_t dev[DevAmount];
-    int32_t lag_error;
-    uint8_t dev_flags;
-    uint8_t stabilize_flags;
-    uint8_t cameras;
-    uint8_t pc_reset;
+    // int32_t lag_error;
+    // uint8_t dev_flags;
+    // uint8_t stabilize_flags;
+    // uint8_t cameras;
+    // uint8_t pc_reset;
     uint16_t checksum;
 
     void serialize(std::vector<uint8_t> &container) override;
+    bool deserialize(std::vector<uint8_t> &input) override;
     void setStabilizationState(uint8_t bit, bool state);
 };
 
