@@ -12,8 +12,8 @@
 UartDriver::UartDriver() : Node("UartDriver")
 {
     std::string config_directory = ament_index_cpp::get_package_share_directory("stingray_config");
-    ros_config = json::parse(std::ifstream(config_directory + "configs/ros.json"));
-    com_config = json::parse(std::ifstream(config_directory + "configs/communication.json"));
+    ros_config = json::parse(std::ifstream(config_directory + "/ros.json"));
+    com_config = json::parse(std::ifstream(config_directory + "/communication.json"));
     // Serial port initialization
     portInitialize();
     // ROS publishers

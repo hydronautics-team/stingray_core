@@ -11,7 +11,7 @@
 
 HardwareBridge::HardwareBridge() : Node("HardwareBridge") {
     std::string config_directory = ament_index_cpp::get_package_share_directory("stingray_config");
-    ros_config = json::parse(std::ifstream(config_directory + "configs/ros.json"));
+    ros_config = json::parse(std::ifstream(config_directory + "/ros.json"));
     
     // ROS publishers
     this->outputMessagePublisher = this->create_publisher<std_msgs::msg::UInt8MultiArray>(ros_config["topics"]["to_driver_parcel"], 1000);

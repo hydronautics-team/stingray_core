@@ -17,7 +17,6 @@ find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(serial REQUIRED)
 find_package(stingray_communication_msgs REQUIRED)
-find_package(stingray_config REQUIRED)
 find_package(nlohmann_json REQUIRED)
 
 
@@ -37,7 +36,7 @@ add_executable(uart_driver
         include/messages/direct.h
         include/messages/normal.h
         )
-ament_target_dependencies(uart_driver rclcpp std_msgs std_srvs serial stingray_communication_msgs stingray_config nlohmann_json ament_index_cpp)
+ament_target_dependencies(uart_driver rclcpp std_msgs std_srvs serial stingray_communication_msgs  nlohmann_json ament_index_cpp)
 
 add_executable(hardware_bridge
         src/hardware_bridge.cpp
@@ -51,7 +50,7 @@ add_executable(hardware_bridge
         include/messages/direct.h
         include/messages/normal.h
         )
-ament_target_dependencies(hardware_bridge rclcpp std_msgs std_srvs serial stingray_communication_msgs stingray_config nlohmann_json ament_index_cpp)
+ament_target_dependencies(hardware_bridge rclcpp std_msgs std_srvs serial stingray_communication_msgs  nlohmann_json ament_index_cpp)
 
 add_executable(gui_bridge
         src/gui_bridge.cpp
@@ -65,7 +64,7 @@ add_executable(gui_bridge
         include/messages/direct.h
         include/messages/normal.h
         )
-ament_target_dependencies(gui_bridge Boost rclcpp std_msgs std_srvs serial stingray_communication_msgs stingray_config nlohmann_json ament_index_cpp)
+ament_target_dependencies(gui_bridge Boost rclcpp std_msgs std_srvs serial stingray_communication_msgs  nlohmann_json ament_index_cpp)
 
 install(TARGETS
         hardware_bridge

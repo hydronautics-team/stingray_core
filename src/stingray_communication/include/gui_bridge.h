@@ -29,12 +29,12 @@ class GuiBridgeSender : public rclcpp::Node {
    private:
     void from_driver_callback(const std_msgs::msg::UInt8MultiArray &msg);
 
-    // ROS subscribers
-    rclcpp::Subscription<std_msgs::msg::UInt8MultiArray>::SharedPtr responseMessageSubscriber;
-
     // get json config
     json ros_config;
     json com_config;
+
+    // ROS subscribers
+    rclcpp::Subscription<std_msgs::msg::UInt8MultiArray>::SharedPtr responseMessageSubscriber;
 
     // udp connection
     boost::asio::io_service &_io_service;

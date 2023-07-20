@@ -3,9 +3,13 @@
 
 GuiBridgeSender::GuiBridgeSender(boost::asio::io_service &io_service) : Node("GuiBridgeSender"), _io_service(io_service), _send_socket(io_service) {
     std::string config_directory = ament_index_cpp::get_package_share_directory("stingray_config");
-    ros_config = json::parse(std::ifstream(config_directory + "configs/ros.json"));
-    com_config = json::parse(std::ifstream(config_directory + "configs/communication.json"));
-
+    std::string ros_config_path = config_directory + "/ros.json";
+    std::string com_config_path = config_directory + "/communication.json";
+    std::ifstream ros_config_file(ros_config_path);
+    ros_config = json::parse(ros_config_file);
+    std::ifstream com_config_file(com_config_path);
+    com_config = json::parse(com_config_file);
+    
     // UDP sender
     _send_endpoint =
         udp::endpoint(address::from_string(com_config["bridges"]["gui"]["send_to_ip"]), com_config["bridges"]["gui"]["send_to_port"].get<int>());
@@ -33,8 +37,9 @@ void GuiBridgeSender::from_driver_callback(const std_msgs::msg::UInt8MultiArray 
 
 GuiBridgeReceiver::GuiBridgeReceiver(boost::asio::io_service &io_service)
     : Node("GuiBridgeReceiver"), _io_service(io_service), _receive_socket(io_service) {
-    ros_config = json::parse(std::ifstream("resources/configs/ros.json"));
-    com_config = json::parse(std::ifstream("resources/configs/communication.json"));
+    std::string config_directory = ament_index_cpp::get_package_share_directory("stingray_config");
+    ros_config = json::parse(std::ifstream(config_directory + "/ros.json"));
+    com_config = json::parse(std::ifstream(config_directory + "/communication.json"));
 
     // ROS publishers
     this->requestMessagePublisher = this->create_publisher<std_msgs::msg::UInt8MultiArray>(ros_config["topics"]["to_driver_parcel"], 1000);
