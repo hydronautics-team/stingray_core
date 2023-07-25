@@ -5,20 +5,28 @@
 
 struct RequestDirectMessage : public AbstractMessage {
     RequestDirectMessage();
-    /// Type code for the Direct message protocol
+
     const static uint8_t type = 0xAA;
-    uint8_t number;
-    uint8_t id;
-    int8_t velocity;
+
+    const static uint8_t length = 20; // 1(type) + 20(message) + 2(checksum) = 24 dyte
+
+    uint8_t flags; // [0]thrusters_on, [1]reset_imu, [2]reset_depth, [3]rgb_light_on, [4]lower_light_on,
+
+    uint8_t id; // 0..7
+    uint8_t adress; // 0..7
+
+    float_t target_forse; // newton
+
     uint8_t reverse;
-    float kForward;
-    float kBackward;
-    int8_t sForward;
-    int8_t sBackward;
+    float_t k_forward;
+    float_t k_backward;
 
-    uint16_t checksum;
+    int16_t s_forward; // max PWM
+    int16_t s_backward; // min PWM
 
-    void serialize(std::vector<uint8_t> &container) override;
+    uint16_t checksum; // 1(type) + 20(message) + 2(checksum) = 24 dyte
+
+    bool deserialize(std::vector<uint8_t>& input) override; // pult to raspberry_cm4
 };
 
 /** @brief Structure for storing and processing data from the STM32 direct request message protocol
@@ -27,12 +35,17 @@ struct RequestDirectMessage : public AbstractMessage {
 struct ResponseDirectMessage : public AbstractMessage {
     ResponseDirectMessage();
 
-    uint8_t number;
-    uint8_t connection;
-    uint16_t current;
+    const static uint8_t length = 57; // 57(message) + 2(checksum) = 59 dyte
 
-    uint16_t checksum;
+    uint8_t id; // 0..7
 
-    bool deserialize(std::vector<uint8_t> &container) override;
+    float_t current_logic_electronics; // from jetson + raspberry dc-dc
+    float_t current_vma[8];
+    float_t voltage_battery_cell[4];
+    float_t voltage_battery; // 56
+
+    uint16_t checksum; // 57(message) + 2(checksum) = 59 dyte
+
+    void serialize(std::vector<uint8_t>& container) override; // raspberry_cm4 to pult
 };
 #endif  // STINGRAY_MESSAGES_DIRECT_H

@@ -1,58 +1,84 @@
 #include "messages/direct.h"
 
+// pult -> cm4 -> stm
 RequestDirectMessage::RequestDirectMessage() : AbstractMessage() {
-    number = 0;
-    id = 0;
+    flags = 0;
 
-    velocity = 0;
+    id = 0;
+    adress = 0;
+
+    target_forse = 0;
 
     reverse = 0;
-    kForward = 0;
-    kBackward = 0;
+    k_forward = 0;
+    k_backward = 0;
 
-    sForward = 0;
-    sBackward = 0;
-
-    checksum = 0;
-}
-
-void RequestDirectMessage::serialize(std::vector<uint8_t>& container) {
-    pushToVector(container, type);
-    pushToVector(container, number);
-    pushToVector(container, id);
-    pushToVector(container, velocity);
-    pushToVector(container, reverse);
-    pushToVector(container, kForward);
-    pushToVector(container, kBackward);
-    pushToVector(container, sForward);
-    pushToVector(container, sBackward);
-
-    uint16_t checksum = getChecksum16b(container);
-    pushToVector(container, checksum);  // do i need to revert bytes here?
-}
-
-/** @brief Constructor for ResponseDirectMessage
- *
- */
-ResponseDirectMessage::ResponseDirectMessage() {
-    number = 0;
-    connection = 0;
-    current = 0;
+    s_forward = 0;
+    s_backward = 0;
 
     checksum = 0;
 }
 
+// stm -> cm4 -> pult
+ResponseDirectMessage::ResponseDirectMessage() : AbstractMessage() {
+    id = 0;
 
-bool ResponseDirectMessage::deserialize(std::vector<uint8_t> &input) {
+    current_logic_electronics = 0;
+    for (int i = 0; i < 4; i++) {
+        current_vma[i] = 0;
+    }
+    for (int i = 0; i < 8; i++) {
+        voltage_battery_cell[i] = 0;
+    }
+    voltage_battery = 0;
+
+    checksum = 0;
+}
+
+// pult to raspberry_cm4
+bool RequestDirectMessage::deserialize(std::vector<uint8_t>& input) {
     popFromVector(input, checksum, true);
     uint16_t checksum_calc = getChecksum16b(input);
     if (checksum_calc != checksum) {
         return false;
     }
 
-    popFromVector(input, current);
-    popFromVector(input, connection);
-    popFromVector(input, number);
+    popFromVector(input, s_backward);
+    popFromVector(input, s_forward);
+
+    popFromVector(input, k_backward);
+    popFromVector(input, k_forward);
+    popFromVector(input, reverse);
+
+    popFromVector(input, target_forse);
+
+    popFromVector(input, adress);
+    popFromVector(input, id);
+
+    popFromVector(input, flags);
+
+    thrusters_on = pickBit(&flags, 0);
+    reset_imu = pickBit(&flags, 1);
+    reset_depth = pickBit(&flags, 2);
+    rgb_light_on = pickBit(&flags, 3);
+    lower_light_on = pickBit(&flags, 4);
 
     return true;
+}
+
+// form byte-vector (raspberry_cm4 to pult)
+bool ResponseDirectMessage::serialize(std::vector<uint8_t>& input) {
+    pushToVector(container, id);
+
+    pushToVector(container, current_logic_electronics);
+    for (int i = 0; i < 4; i++) {
+        pushToVector(container, current_vma[i]);
+    }
+    for (int i = 0; i < 8; i++) {
+        pushToVector(container, voltage_battery_cell[i]);
+    }
+    pushToVector(container, voltage_battery);
+
+    uint16_t checksum = getChecksum16b(container);
+    pushToVector(container, checksum);  // do i need to revert bytes here?
 }
