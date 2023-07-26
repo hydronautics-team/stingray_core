@@ -85,10 +85,10 @@ ResponseConfigMessage::ResponseConfigMessage() : AbstractMessage() {
     out = 0;
 
     current_logic_electronics = 0;
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 8; i++) {
         current_vma[i] = 0;
     }
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 4; i++) {
         voltage_battery_cell[i] = 0;
     }
     voltage_battery = 0;
@@ -187,10 +187,10 @@ void ResponseConfigMessage::serialize(std::vector<uint8_t>& container) {
     pushToVector(container, out);
 
     pushToVector(container, current_logic_electronics);
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 8; i++) {
         pushToVector(container, current_vma[i]);
     }
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 4; i++) {
         pushToVector(container, voltage_battery_cell[i]);
     }
     pushToVector(container, voltage_battery);

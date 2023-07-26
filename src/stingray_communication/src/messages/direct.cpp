@@ -77,10 +77,10 @@ void ResponseDirectMessage::serialize(std::vector<uint8_t>& container) {
     pushToVector(container, id);
 
     pushToVector(container, current_logic_electronics);
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 8; i++) {
         pushToVector(container, current_vma[i]);
     }
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 4; i++) {
         pushToVector(container, voltage_battery_cell[i]);
     }
     pushToVector(container, voltage_battery);

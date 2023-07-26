@@ -26,12 +26,14 @@ RequestNormalMessage::RequestNormalMessage() : AbstractMessage() {
     reset_depth = false;
     rgb_light_on = false;
     lower_light_on = false;
+
     stab_march = false;
     stab_lag = false;
     stab_depth = false;
     stab_roll = false;
     stab_pitch = false;
     stab_yaw = false;
+
     control_mode = false;
     control_auto = false;
     control_maneuverable = false;
@@ -128,10 +130,10 @@ void ResponseNormalMessage::serialize(std::vector<uint8_t>& container) {
     pushToVector(container, speed_right);
 
     pushToVector(container, current_logic_electronics);
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 8; i++) {
         pushToVector(container, current_vma[i]);
     }
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 4; i++) {
         pushToVector(container, voltage_battery_cell[i]);
     }
     pushToVector(container, voltage_battery);
