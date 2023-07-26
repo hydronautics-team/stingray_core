@@ -26,6 +26,12 @@ struct RequestDirectMessage : public AbstractMessage {
 
     uint16_t checksum; // 1(type) + 20(message) + 2(checksum) = 24 dyte
 
+    bool thrusters_on;
+    bool reset_imu;
+    bool reset_depth;
+    bool rgb_light_on;
+    bool lower_light_on;
+
     bool deserialize(std::vector<uint8_t>& input) override; // pult to raspberry_cm4
 };
 

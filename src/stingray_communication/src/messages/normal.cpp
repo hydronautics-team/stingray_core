@@ -94,22 +94,22 @@ bool RequestNormalMessage::deserialize(std::vector<uint8_t>& input) {
 
     popFromVector(input, flags);
 
-    thrusters_on = pickBit(&flags, 0);
-    reset_imu = pickBit(&flags, 1);
-    reset_depth = pickBit(&flags, 2);
-    rgb_light_on = pickBit(&flags, 3);
-    lower_light_on = pickBit(&flags, 4);
+    thrusters_on = pickBit(flags, 0);
+    reset_imu = pickBit(flags, 1);
+    reset_depth = pickBit(flags, 2);
+    rgb_light_on = pickBit(flags, 3);
+    lower_light_on = pickBit(flags, 4);
 
-    stab_march = pickBit(&stab_flags, 0);
-    stab_lag = pickBit(&stab_flags, 1);
-    stab_depth = pickBit(&stab_flags, 2);
-    stab_roll = pickBit(&stab_flags, 3);
-    stab_pitch = pickBit(&stab_flags, 4);
-    stab_yaw = pickBit(&stab_flags, 5);
+    stab_march = pickBit(stab_flags, 0);
+    stab_lag = pickBit(stab_flags, 1);
+    stab_depth = pickBit(stab_flags, 2);
+    stab_roll = pickBit(stab_flags, 3);
+    stab_pitch = pickBit(stab_flags, 4);
+    stab_yaw = pickBit(stab_flags, 5);
 
-    control_mode = pickBit(&control_mode, 0);
-    control_auto = pickBit(&control_mode, 1);
-    control_maneuverable = pickBit(&control_mode, 2);
+    control_handle = pickBit(control_mode, 0);
+    control_auto = pickBit(control_mode, 1);
+    control_maneuverable = pickBit(control_mode, 2);
 
     return true;
 }

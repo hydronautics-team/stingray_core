@@ -43,7 +43,7 @@ struct RequestNormalMessage : public AbstractMessage {
     bool stab_pitch;
     bool stab_yaw;
 
-    bool control_mode;
+    bool control_handle;
     bool control_auto;
     bool control_maneuverable;
 

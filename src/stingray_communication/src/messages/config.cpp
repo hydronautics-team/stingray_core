@@ -136,25 +136,25 @@ bool RequestConfigMessage::deserialize(std::vector<uint8_t>& input) {
     popFromVector(input, stab_flags);
     popFromVector(input, flags);
 
-    thrusters_on = pickBit(&flags, 0);
-    reset_imu = pickBit(&flags, 1);
-    reset_depth = pickBit(&flags, 2);
-    rgb_light_on = pickBit(&flags, 3);
-    lower_light_on = pickBit(&flags, 4);
+    thrusters_on = pickBit(flags, 0);
+    reset_imu = pickBit(flags, 1);
+    reset_depth = pickBit(flags, 2);
+    rgb_light_on = pickBit(flags, 3);
+    lower_light_on = pickBit(flags, 4);
 
-    stab_march = pickBit(&stab_flags, 0);
-    stab_lag = pickBit(&stab_flags, 1);
-    stab_depth = pickBit(&stab_flags, 2);
-    stab_roll = pickBit(&stab_flags, 3);
-    stab_pitch = pickBit(&stab_flags, 4);
-    stab_yaw = pickBit(&stab_flags, 5);
+    stab_march = pickBit(stab_flags, 0);
+    stab_lag = pickBit(stab_flags, 1);
+    stab_depth = pickBit(stab_flags, 2);
+    stab_roll = pickBit(stab_flags, 3);
+    stab_pitch = pickBit(stab_flags, 4);
+    stab_yaw = pickBit(stab_flags, 5);
 
-    current_march = pickBit(&current_contour, 0);
-    current_lag = pickBit(&current_contour, 1);
-    current_depth = pickBit(&current_contour, 2);
-    current_roll = pickBit(&current_contour, 3);
-    current_pitch = pickBit(&current_contour, 4);
-    current_yaw = pickBit(&current_contour, 5);
+    current_march = pickBit(current_contour, 0);
+    current_lag = pickBit(current_contour, 1);
+    current_depth = pickBit(current_contour, 2);
+    current_roll = pickBit(current_contour, 3);
+    current_pitch = pickBit(current_contour, 4);
+    current_yaw = pickBit(current_contour, 5);
 
     return true;
 }

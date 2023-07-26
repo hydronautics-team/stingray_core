@@ -12,7 +12,7 @@
 HardwareBridge::HardwareBridge() : Node("HardwareBridge") {
     std::string config_directory = ament_index_cpp::get_package_share_directory("stingray_config");
     ros_config = json::parse(std::ifstream(config_directory + "/ros.json"));
-    
+
     // ROS publishers
     this->outputMessagePublisher = this->create_publisher<std_msgs::msg::UInt8MultiArray>(ros_config["topics"]["to_driver_parcel"], 1000);
     this->hardwareInfoPublisher = this->create_publisher<stingray_communication_msgs::msg::HardwareInfo>(ros_config["topics"]["robot_info"], 1000);
@@ -57,13 +57,10 @@ void HardwareBridge::inputMessage_callback(const std_msgs::msg::UInt8MultiArray 
         yawMessage.data = responseMessage.yaw;
         RCLCPP_INFO(this->get_logger(), "Received yaw: %f", responseMessage.yaw);
 
+        hardwareInfoMessage.depth = responseMessage.depth;
         hardwareInfoMessage.roll = responseMessage.roll;
         hardwareInfoMessage.pitch = responseMessage.pitch;
         hardwareInfoMessage.yaw = responseMessage.yaw;
-        hardwareInfoMessage.roll_speed = responseMessage.rollSpeed;
-        hardwareInfoMessage.pitch_speed = responseMessage.pitchSpeed;
-        hardwareInfoMessage.yaw_speed = responseMessage.yawSpeed;
-        hardwareInfoMessage.depth = responseMessage.depth;
     } else
         RCLCPP_WARN(this->get_logger(), "Wrong checksum");
 }
@@ -109,7 +106,7 @@ void HardwareBridge::depthCallback(const std::shared_ptr<stingray_communication_
 void HardwareBridge::imuCallback(const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
                                  std::shared_ptr<std_srvs::srv::SetBool::Response> response) {
     RCLCPP_INFO(this->get_logger(), "Hardware bridge: Setting SHORE_STABILIZE_IMU_BIT to %d", request->data);
-    requestMessage.setStabilizationState(SHORE_STABILIZE_IMU_BIT, request->data);
+    // requestMessage.setStabilizationState(SHORE_STABILIZE_IMU_BIT, request->data);
 
     isReady = true;
     response->success = true;
@@ -126,18 +123,18 @@ void HardwareBridge::stabilizationCallback(const std::shared_ptr<stingray_commun
     // requestMessage.depth = currentDepth;
     // RCLCPP_INFO(this->get_logger(), "Hardware bridge: Setting initial depth: %f", currentDepth);
 
-    RCLCPP_INFO(this->get_logger(), "Setting depth stabilization %d", request->depth_stabilization);
-    requestMessage.setStabilizationState(SHORE_STABILIZE_DEPTH_BIT, request->depth_stabilization);
-    RCLCPP_INFO(this->get_logger(), "Setting pitch stabilization %d", request->pitch_stabilization);
-    requestMessage.setStabilizationState(SHORE_STABILIZE_PITCH_BIT, request->pitch_stabilization);
-    RCLCPP_INFO(this->get_logger(), "Setting yaw stabilization %d", request->yaw_stabilization);
-    requestMessage.setStabilizationState(SHORE_STABILIZE_YAW_BIT, request->yaw_stabilization);
-    RCLCPP_INFO(this->get_logger(), "Setting lag stabilization %d", request->lag_stabilization);
-    requestMessage.setStabilizationState(SHORE_STABILIZE_LAG_BIT, request->lag_stabilization);
-    depthStabilizationEnabled = request->depth_stabilization;
-    pitchStabilizationEnabled = request->pitch_stabilization;
-    yawStabilizationEnabled = request->yaw_stabilization;
-    lagStabilizationEnabled = request->lag_stabilization;
+    // RCLCPP_INFO(this->get_logger(), "Setting depth stabilization %d", request->depth_stabilization);
+    // requestMessage.setStabilizationState(SHORE_STABILIZE_DEPTH_BIT, request->depth_stabilization);
+    // RCLCPP_INFO(this->get_logger(), "Setting pitch stabilization %d", request->pitch_stabilization);
+    // requestMessage.setStabilizationState(SHORE_STABILIZE_PITCH_BIT, request->pitch_stabilization);
+    // RCLCPP_INFO(this->get_logger(), "Setting yaw stabilization %d", request->yaw_stabilization);
+    // requestMessage.setStabilizationState(SHORE_STABILIZE_YAW_BIT, request->yaw_stabilization);
+    // RCLCPP_INFO(this->get_logger(), "Setting lag stabilization %d", request->lag_stabilization);
+    // requestMessage.setStabilizationState(SHORE_STABILIZE_LAG_BIT, request->lag_stabilization);
+    // depthStabilizationEnabled = request->depth_stabilization;
+    // pitchStabilizationEnabled = request->pitch_stabilization;
+    // yawStabilizationEnabled = request->yaw_stabilization;
+    // lagStabilizationEnabled = request->lag_stabilization;
 
     isReady = true;
     response->success = true;
@@ -146,7 +143,7 @@ void HardwareBridge::stabilizationCallback(const std::shared_ptr<stingray_commun
 void HardwareBridge::deviceActionCallback(const std::shared_ptr<stingray_communication_msgs::srv::SetDeviceAction::Request> request,
                                           std::shared_ptr<stingray_communication_msgs::srv::SetDeviceAction::Response> response) {
     RCLCPP_INFO(this->get_logger(), "Setting device [%d] action value to %d", request->device, request->value);
-    requestMessage.dev[request->device] = request->value;
+    // requestMessage.dev[request->device] = request->value;
 
     isReady = true;
     response->success = true;

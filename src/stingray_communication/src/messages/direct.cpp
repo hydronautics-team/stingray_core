@@ -17,6 +17,12 @@ RequestDirectMessage::RequestDirectMessage() : AbstractMessage() {
     s_backward = 0;
 
     checksum = 0;
+
+    thrusters_on = 0;
+    reset_imu = 0;
+    reset_depth = 0;
+    rgb_light_on = 0;
+    lower_light_on = 0;
 }
 
 // stm -> cm4 -> pult
@@ -57,17 +63,17 @@ bool RequestDirectMessage::deserialize(std::vector<uint8_t>& input) {
 
     popFromVector(input, flags);
 
-    thrusters_on = pickBit(&flags, 0);
-    reset_imu = pickBit(&flags, 1);
-    reset_depth = pickBit(&flags, 2);
-    rgb_light_on = pickBit(&flags, 3);
-    lower_light_on = pickBit(&flags, 4);
+    thrusters_on = pickBit(flags, 0);
+    reset_imu = pickBit(flags, 1);
+    reset_depth = pickBit(flags, 2);
+    rgb_light_on = pickBit(flags, 3);
+    lower_light_on = pickBit(flags, 4);
 
     return true;
 }
 
 // form byte-vector (raspberry_cm4 to pult)
-bool ResponseDirectMessage::serialize(std::vector<uint8_t>& input) {
+void ResponseDirectMessage::serialize(std::vector<uint8_t>& container) {
     pushToVector(container, id);
 
     pushToVector(container, current_logic_electronics);
