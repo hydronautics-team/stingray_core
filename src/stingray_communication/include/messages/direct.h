@@ -6,9 +6,9 @@
 struct RequestDirectMessage : public AbstractMessage {
     RequestDirectMessage();
 
-    const static uint8_t type = 0xAA;
+    const static uint8_t length = 23; // 1(type) + 20(message) + 2(checksum) = 23 dyte
 
-    const static uint8_t length = 20; // 1(type) + 20(message) + 2(checksum) = 24 dyte
+    const static uint8_t type = 0xAA;
 
     uint8_t flags; // [0]thrusters_on, [1]reset_imu, [2]reset_depth, [3]rgb_light_on, [4]lower_light_on,
 
@@ -24,7 +24,7 @@ struct RequestDirectMessage : public AbstractMessage {
     int16_t s_forward; // max PWM
     int16_t s_backward; // min PWM
 
-    uint16_t checksum; // 1(type) + 20(message) + 2(checksum) = 24 dyte
+    uint16_t checksum; // 1(type) + 20(message) + 2(checksum) = 23 dyte
 
     bool thrusters_on;
     bool reset_imu;
@@ -41,7 +41,7 @@ struct RequestDirectMessage : public AbstractMessage {
 struct ResponseDirectMessage : public AbstractMessage {
     ResponseDirectMessage();
 
-    const static uint8_t length = 57; // 57(message) + 2(checksum) = 59 dyte
+    const static uint8_t length = 59; // 57(message) + 2(checksum) = 59 dyte
 
     uint8_t id; // 0..7
 

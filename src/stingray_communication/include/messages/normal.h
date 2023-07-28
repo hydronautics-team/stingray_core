@@ -9,16 +9,16 @@ struct RequestNormalMessage : public AbstractMessage {
 
     const static uint8_t type = 0xA5;
 
-    const static uint8_t length = 30; // 1(type) + 30(message) + 2(checksum) = 33 dyte
+    const static uint8_t length = 34; // 1(type) + 30(message) + 2(checksum) = 33 dyte
 
     uint8_t flags; // [0]thrusters_on, [1]reset_imu, [2]reset_depth, [3]rgb_light_on, [4]lower_light_on,
 
-    float_t march; // NED coordinate system
-    float_t lag;
-    float_t depth;
-    float_t roll;
-    float_t pitch;
-    float_t yaw;
+    float march; // NED coordinate system
+    float lag;
+    float depth;
+    float roll;
+    float pitch;
+    float yaw;
 
     uint8_t stab_flags; // [0]march, [1]lag, [2]depth, [3]roll, [4]pitch, [5]yaw
     uint8_t control_mode; // [0]handle , [1]auto (set depth and yaw, pitch and roll = 0), [2]maneuverable (set depth, yaw, pitch and roll)
