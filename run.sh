@@ -1,1 +1,1 @@
-source install/setup.bash && ros2 launch scanrov_startup rov.launch.py
+source install/setup.bash && ros2 launch stingray_startup rov.launch.py

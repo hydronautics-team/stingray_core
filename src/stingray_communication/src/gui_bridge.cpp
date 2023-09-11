@@ -38,7 +38,7 @@ GuiBridgeReceiver::GuiBridgeReceiver(boost::asio::io_service& io_service)
     com_config = json::parse(std::ifstream(config_directory + "/communication.json"));
 
     // ROS publishers
-    this->requestMessagePublisher = this->create_publisher<std_msgs::msg::UInt8MultiArray>(ros_config["topics"]["to_bridge_parcel"], 1000);
+    this->requestMessagePublisher = this->create_publisher<std_msgs::msg::UInt8MultiArray>(ros_config["topics"]["to_bridge_parcel"], 1);
 
     // UDP receiver
     _receive_socket.open(udp::v4());
@@ -58,7 +58,10 @@ void GuiBridgeReceiver::from_gui_callback(const boost::system::error_code& error
         return;
     }
     std::string str(request_buffer.begin(), request_buffer.end());
-    RCLCPP_INFO(this->get_logger(), "Received from gui %s", str.c_str());
+    RCLCPP_INFO(this->get_logger(), "Received from gui %s", str);
+    // for (auto msg : request_buffer) {
+    //     RCLCPP_INFO(this->get_logger(), "Received from gui %c", msg);
+    // }
 
     // RCLCPP_INFO(this->get_logger(), "Received from gui %ld", bytes_transferred);
     // for (size_t i = 0; i < 34; i++) {
