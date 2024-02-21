@@ -76,9 +76,7 @@ void HardwareBridge::horizontalMoveCallback(const std::shared_ptr<stingray_commu
         requestMessage.lag = static_cast<int16_t>(request->lag);
     }
 
-    if (!yawStabilizationEnabled) {
-        response->message = "Yaw stabilization is not enabled";
-    } else {
+    if (yawStabilizationEnabled) {
         // currentYaw += request->yaw;
         requestMessage.yaw = static_cast<int16_t>(responseMessage.yaw + request->yaw);
     }
