@@ -77,12 +77,12 @@ void HardwareBridge::horizontalMoveCallback(const std::shared_ptr<stingray_commu
     }
 
     if (!yawStabilizationEnabled) {
-        response->success = false;
         response->message = "Yaw stabilization is not enabled";
-        return;
+    } else {
+        // currentYaw += request->yaw;
+        requestMessage.yaw = static_cast<int16_t>(responseMessage.yaw + request->yaw);
     }
-    // currentYaw += request->yaw;
-    requestMessage.yaw = static_cast<int16_t>(responseMessage.yaw + request->yaw);
+    
 
     isReady = true;
     response->success = true;
@@ -153,7 +153,6 @@ void HardwareBridge::deviceActionCallback(const std::shared_ptr<stingray_communi
  *
  */
 void HardwareBridge::timerCallback() {
-    RCLCPP_INFO(this->get_logger(), "Timer callback");
     if (isReady) {
         // Make output message
         std::vector<uint8_t> output_vector;
@@ -168,8 +167,8 @@ void HardwareBridge::timerCallback() {
         depthPublisher->publish(depthMessage);
         yawPublisher->publish(yawMessage);
         RCLCPP_INFO(this->get_logger(), "Hardware bridge publishing ...");
-    } else
-        RCLCPP_INFO(this->get_logger(), "Wait for topic updating");
+        isReady = false;
+    } 
 }
 
 int main(int argc, char *argv[]) {

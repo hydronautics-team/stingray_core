@@ -35,6 +35,9 @@ UartDriver::UartDriver() : Node("UartDriver")
     outputMessage.layout.dim[0].stride = ResponseNormalMessage::length;
     outputMessage.layout.dim[0].label = "outputMessage";
     outputMessage.data = {0};
+
+    RCLCPP_INFO(this->get_logger(), "Uart driver initialized");
+
 }
 /**
  * Initialasing serial port
