@@ -32,7 +32,7 @@ struct RequestDirectMessage : public AbstractMessage {
     bool rgb_light_on;
     bool lower_light_on;
 
-    bool deserialize(std::vector<uint8_t>& input) override; // pult to raspberry_cm4
+    bool parse(std::vector<uint8_t>& input) override; // pult to raspberry_cm4
 };
 
 /** @brief Structure for storing and processing data from the STM32 direct request message protocol
@@ -52,6 +52,6 @@ struct ResponseDirectMessage : public AbstractMessage {
 
     uint16_t checksum; // 57(message) + 2(checksum) = 59 dyte
 
-    void serialize(std::vector<uint8_t>& container) override; // raspberry_cm4 to pult
+    void pack(std::vector<uint8_t>& container) override; // raspberry_cm4 to pult
 };
 #endif  // STINGRAY_MESSAGES_DIRECT_H

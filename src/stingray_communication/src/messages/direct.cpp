@@ -42,7 +42,7 @@ ResponseDirectMessage::ResponseDirectMessage() : AbstractMessage() {
 }
 
 // pult to raspberry_cm4
-bool RequestDirectMessage::deserialize(std::vector<uint8_t>& input) {
+bool RequestDirectMessage::parse(std::vector<uint8_t>& input) {
     popFromVector(input, checksum, true);
     uint16_t checksum_calc = getChecksum16b(input);
     if (checksum_calc != checksum) {
@@ -73,7 +73,7 @@ bool RequestDirectMessage::deserialize(std::vector<uint8_t>& input) {
 }
 
 // form byte-vector (raspberry_cm4 to pult)
-void ResponseDirectMessage::serialize(std::vector<uint8_t>& container) {
+void ResponseDirectMessage::pack(std::vector<uint8_t>& container) {
     pushToVector(container, id);
 
     pushToVector(container, current_logic_electronics);

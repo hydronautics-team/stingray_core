@@ -20,4 +20,9 @@ def generate_launch_description():
             executable='uart_driver',
             name='uart_driver'
         ),
+        Node(
+            package='rqt_gui',
+            executable='rqt_gui',
+            name='rqt_gui',
+        ),
     ])

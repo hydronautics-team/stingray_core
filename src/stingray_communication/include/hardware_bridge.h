@@ -3,6 +3,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/string.hpp>
+#include <geometry_msgs/msg/twist.hpp>
 #include <std_msgs/msg/u_int16.hpp>
 #include <std_msgs/msg/float64.hpp>
 #include <std_msgs/msg/u_int32.hpp>
@@ -15,12 +16,10 @@
 #include <string>
 #include <vector>
 
-#include "stingray_communication_msgs/msg/hardware_info.hpp"
-#include "stingray_communication_msgs/srv/set_horizontal_move.hpp"
-#include "stingray_communication_msgs/srv/set_float64.hpp"
-#include "stingray_communication_msgs/srv/set_int16.hpp"
-#include "stingray_communication_msgs/srv/set_device_action.hpp"
-#include "stingray_communication_msgs/srv/set_stabilization.hpp"
+#include "stingray_core_interfaces/srv/set_twist.hpp"
+#include "stingray_core_interfaces/srv/set_device_action.hpp"
+#include "stingray_core_interfaces/srv/set_stabilization.hpp"
+#include "stingray_core_interfaces/msg/uv_state.hpp"
 #include "messages/common.h"
 #include "messages/normal.h"
 #include "nlohmann/json.hpp"
@@ -31,59 +30,44 @@ using std::placeholders::_1;
 using std::placeholders::_2;
 using std::placeholders::_3;
 
-class HardwareBridge : public rclcpp::Node
-{
+class HardwareBridge : public rclcpp::Node {
 public:
     HardwareBridge();
 
 private:
-    void inputMessage_callback(const std_msgs::msg::UInt8MultiArray &msg);
-    void horizontalMoveCallback(const std::shared_ptr<stingray_communication_msgs::srv::SetHorizontalMove::Request> request,
-                                std::shared_ptr<stingray_communication_msgs::srv::SetHorizontalMove::Response> response);
-    void depthCallback(const std::shared_ptr<stingray_communication_msgs::srv::SetInt16::Request> request,
-                       std::shared_ptr<stingray_communication_msgs::srv::SetInt16::Response> response);
-    void imuCallback(const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
-                     std::shared_ptr<std_srvs::srv::SetBool::Response> response);
-    void deviceActionCallback(const std::shared_ptr<stingray_communication_msgs::srv::SetDeviceAction::Request> request,
-                              std::shared_ptr<stingray_communication_msgs::srv::SetDeviceAction::Response> response);
-    void stabilizationCallback(const std::shared_ptr<stingray_communication_msgs::srv::SetStabilization::Request> request,
-                               std::shared_ptr<stingray_communication_msgs::srv::SetStabilization::Response> response);
-    void timerCallback();
+    void setTwistCallback(const std::shared_ptr<stingray_core_interfaces::srv::SetTwist::Request> request,
+        std::shared_ptr<stingray_core_interfaces::srv::SetTwist::Response> response);
+    void resetImuCallback(const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
+        std::shared_ptr<std_srvs::srv::SetBool::Response> response);
+    void enableThrustersCallback(const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
+        std::shared_ptr<std_srvs::srv::SetBool::Response> response);
+    void deviceActionCallback(const std::shared_ptr<stingray_core_interfaces::srv::SetDeviceAction::Request> request,
+        std::shared_ptr<stingray_core_interfaces::srv::SetDeviceAction::Response> response);
+    void setStabilizationCallback(const std::shared_ptr<stingray_core_interfaces::srv::SetStabilization::Request> request,
+        std::shared_ptr<stingray_core_interfaces::srv::SetStabilization::Response> response);
+    void driverRequestCallback();
+    void driverResponseCallback(const std_msgs::msg::UInt8MultiArray &msg);
 
     // ROS publishers
-    rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr outputMessagePublisher;
-    rclcpp::Publisher<stingray_communication_msgs::msg::HardwareInfo>::SharedPtr hardwareInfoPublisher;
-    rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr depthPublisher;
-    rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr yawPublisher;
+    rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr driverRequestPub;
+    rclcpp::Publisher<stingray_core_interfaces::msg::UVState>::SharedPtr uvStatePub;
+
     // ROS subscribers
-    rclcpp::Subscription<std_msgs::msg::UInt8MultiArray>::SharedPtr inputMessageSubscriber;
+    rclcpp::Subscription<std_msgs::msg::UInt8MultiArray>::SharedPtr driverResponseSub;
+
     // ROS services
-    rclcpp::Service<stingray_communication_msgs::srv::SetHorizontalMove>::SharedPtr horizontalMoveService;
-    rclcpp::Service<stingray_communication_msgs::srv::SetInt16>::SharedPtr depthService;
-    rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr imuService;
-    rclcpp::Service<stingray_communication_msgs::srv::SetDeviceAction>::SharedPtr deviceActionService;
-    rclcpp::Service<stingray_communication_msgs::srv::SetStabilization>::SharedPtr stabilizationService;
+    rclcpp::Service<stingray_core_interfaces::srv::SetTwist>::SharedPtr setTwistSrv;
+    rclcpp::Service<stingray_core_interfaces::srv::SetStabilization>::SharedPtr setStabilizationSrv;
+    rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr resetImuSrv;
+    rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr enableThrustersSrv;
+    rclcpp::Service<stingray_core_interfaces::srv::SetDeviceAction>::SharedPtr setDeviceActionSrv;
     // Message containers
-    stingray_communication_msgs::msg::HardwareInfo hardwareInfoMessage;
-    std_msgs::msg::UInt8MultiArray outputMessage; // Hardware bridge -> Protocol_bridge
-    std_msgs::msg::Float64 depthMessage;
-    std_msgs::msg::Float64 yawMessage;
+    stingray_core_interfaces::msg::UVState uvStateMsg; // UV state
+    std_msgs::msg::UInt8MultiArray driverRequestMsg; // Hardware bridge -> Protocol_bridge
     RequestNormalMessage requestMessage;
     ResponseNormalMessage responseMessage;
     // Other
     rclcpp::TimerBase::SharedPtr publishingTimer; // Timer for publishing messages
-
-    bool isReady = false; // isTopicUpdated flag
-    bool depthStabilizationEnabled = false;
-    bool pitchStabilizationEnabled = false;
-    bool yawStabilizationEnabled = false;
-    bool lagStabilizationEnabled = false;
-
-    float currentYaw;
-    float currentDepth;
-
-    // get json config
-    json ros_config;
 };
 
 #endif // STINGRAY_COMMUNICATION_HARDWARE_BRIDGE_H

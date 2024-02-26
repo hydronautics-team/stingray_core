@@ -26,17 +26,14 @@ class UartDriver : public rclcpp::Node {
     bool receiveData();
 
     // ROS publishers
-    rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr outputMessage_pub;
+    rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr driverResponsePub;
     // ROS subscribers
-    rclcpp::Subscription<std_msgs::msg::UInt8MultiArray>::SharedPtr inputMessage_sub;
+    rclcpp::Subscription<std_msgs::msg::UInt8MultiArray>::SharedPtr driverRequestSub;
     // Other
     serial::Serial port;  // serial port
     // Message containers
-    std_msgs::msg::UInt8MultiArray inputMessage;   // Hardware bridge -> Protocol_driver
-    std_msgs::msg::UInt8MultiArray outputMessage;  // Protocol_driver -> Hardware bridge
-    // get json config
-    json ros_config;
-    json com_config;
+    std_msgs::msg::UInt8MultiArray driverRequestMsg;   // Hardware bridge -> Protocol_driver
+    std_msgs::msg::UInt8MultiArray driverResponseMsg;  // Protocol_driver -> Hardware bridge
 };
 
 #endif  // STINGRAY_COMMUNICATION_UART_DRIVER_NODELET_H

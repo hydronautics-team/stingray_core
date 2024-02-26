@@ -19,7 +19,7 @@
   <depend>std_srvs</depend>
   <depend>nav_msgs</depend>
   <depend>serial</depend>
-  <depend>stingray_communication_msgs</depend>
+  <depend>stingray_core_interfaces</depend>
   <depend>boost</depend>
 
   <test_depend>ament_lint_auto</test_depend>

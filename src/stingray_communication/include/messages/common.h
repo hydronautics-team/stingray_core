@@ -17,10 +17,13 @@ using json = nlohmann::json;
 struct AbstractMessage {
     AbstractMessage();
 
-    virtual void serialize(std::vector<uint8_t> &container){
+    const static uint8_t type = 0xFF;
+    const static uint8_t length = 0;
+
+    virtual void pack(std::vector<uint8_t> &container){
         UNUSED(container);
     };
-    virtual bool deserialize(std::vector<uint8_t> &container){
+    virtual bool parse(std::vector<uint8_t> &container){
         UNUSED(container);
         return false;
     };

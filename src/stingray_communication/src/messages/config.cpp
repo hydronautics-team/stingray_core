@@ -97,7 +97,7 @@ ResponseConfigMessage::ResponseConfigMessage() : AbstractMessage() {
 }
 
 // pull message from byte-vector (pult to raspberry_cm4)
-bool RequestConfigMessage::deserialize(std::vector<uint8_t>& input) {
+bool RequestConfigMessage::parse(std::vector<uint8_t>& input) {
     popFromVector(input, checksum, true);
     uint16_t checksum_calc = getChecksum16b(input);
     if (checksum_calc != checksum) {
@@ -160,7 +160,7 @@ bool RequestConfigMessage::deserialize(std::vector<uint8_t>& input) {
 }
 
 // form byte-vector (raspberry_cm4 to pult)
-void ResponseConfigMessage::serialize(std::vector<uint8_t>& container) {
+void ResponseConfigMessage::pack(std::vector<uint8_t>& container) {
     pushToVector(container, depth);
     pushToVector(container, roll);
     pushToVector(container, pitch);

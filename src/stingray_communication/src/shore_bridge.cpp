@@ -1,4 +1,4 @@
-#include "gui_bridge.h"
+#include "shore_bridge.h"
 #include <ament_index_cpp/get_package_share_directory.hpp>
 
 GuiBridgeSender::GuiBridgeSender(boost::asio::io_service& io_service) : Node("GuiBridgeSender"), _io_service(io_service), _send_socket(io_service) {
@@ -58,7 +58,7 @@ void GuiBridgeReceiver::from_gui_callback(const boost::system::error_code& error
         return;
     }
     std::string str(request_buffer.begin(), request_buffer.end());
-    RCLCPP_INFO(this->get_logger(), "Received from gui %s", str);
+    // RCLCPP_INFO(this->get_logger(), "Received from gui %s", str);
     // for (auto msg : request_buffer) {
     //     RCLCPP_INFO(this->get_logger(), "Received from gui %c", msg);
     // }

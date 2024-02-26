@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(stingray_communication_msgs)
+project(stingray_core_interfaces)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -7,18 +7,17 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(geometry_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(
   ${PROJECT_NAME}
-  "msg/HardwareInfo.msg"
-  "srv/SetFloat64.srv"
+  "msg/UVState.msg"
   "srv/SetDeviceAction.srv"
-  "srv/SetHorizontalMove.srv"
-  "srv/SetInt16.srv"
+  "srv/SetTwist.srv"
   "srv/SetStabilization.srv"
-  DEPENDENCIES std_msgs)
+  DEPENDENCIES std_msgs geometry_msgs)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

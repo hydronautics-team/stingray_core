@@ -17,7 +17,7 @@ def generate_launch_description():
         # ),
         Node(
             package='stingray_communication',
-            executable='gui_bridge',
-            name='gui_bridge'
+            executable='shore_bridge',
+            name='shore_bridge'
         )
     ])

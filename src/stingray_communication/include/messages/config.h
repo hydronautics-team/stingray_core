@@ -65,7 +65,7 @@ struct RequestConfigMessage : public AbstractMessage {
     bool current_pitch;
     bool current_yaw;
 
-    bool deserialize(std::vector<uint8_t>& input) override; // pult to raspberry_cm4
+    bool parse(std::vector<uint8_t>& input) override; // pult to raspberry_cm4
 };
 
 // stm -> cm4 -> pult
@@ -106,7 +106,7 @@ struct ResponseConfigMessage : public AbstractMessage {
 
     uint16_t checksum; // 136(message) + 2(checksum) = 138 dyte
 
-    void serialize(std::vector<uint8_t>& container) override; // raspberry_cm4 to pult
+    void pack(std::vector<uint8_t>& container) override; // raspberry_cm4 to pult
 };
 
 #endif  // STINGRAY_MESSAGES_CONFIG_H

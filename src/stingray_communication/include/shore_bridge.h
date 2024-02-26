@@ -1,5 +1,5 @@
-#ifndef STINGRAY_COMMUNICATION_GUI_BRIDGE
-#define STINGRAY_COMMUNICATION_GUI_BRIDGE
+#ifndef STINGRAY_COMMUNICATION_shore_bridge
+#define STINGRAY_COMMUNICATION_shore_bridge
 
 #include <boost/array.hpp>
 #include <boost/asio.hpp>
@@ -68,4 +68,4 @@ class GuiBridgeReceiver : public rclcpp::Node {
     boost::array<uint8_t, 1024> request_buffer;
 };
 
-#endif  // STINGRAY_COMMUNICATION_GUI_BRIDGE
+#endif  // STINGRAY_COMMUNICATION_shore_bridge

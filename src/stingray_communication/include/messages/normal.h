@@ -7,76 +7,57 @@
 struct RequestNormalMessage : public AbstractMessage {
     RequestNormalMessage();
 
+    const static uint8_t length = 31; // 1(type) + 28(message) + 2(checksum) = 31 dyte
+
+    // parsel start
     const static uint8_t type = 0xA5;
 
-    const static uint8_t length = 34; // 1(type) + 30(message) + 2(checksum) = 33 dyte
-
-    uint8_t flags; // [0]thrusters_on, [1]reset_imu, [2]reset_depth, [3]rgb_light_on, [4]lower_light_on,
-
-    float march; // NED coordinate system
-    float lag;
+    uint8_t flags; // [0]reset_imu, [1]reset_pc, [2]enable_thrusters
+    uint8_t stab_flags; // [0]depth, [1]roll, [2]pitch, [3]yaw
+    float surge; // NED coordinate system
+    float sway;
     float depth;
     float roll;
     float pitch;
     float yaw;
-
-    uint8_t stab_flags; // [0]march, [1]lag, [2]depth, [3]roll, [4]pitch, [5]yaw
-    uint8_t control_mode; // [0]handle , [1]auto (set depth and yaw, pitch and roll = 0), [2]maneuverable (set depth, yaw, pitch and roll)
-
-    uint8_t power_lower_light; // 0-255
-    uint8_t r_rgb_light; // 0-255
-    uint8_t g_rgb_light;
-    uint8_t b_rgb_light;
+    int8_t dropper;
+	int8_t grabber;
 
     uint16_t checksum;
+    // parsel end
 
-    bool thrusters_on;
-    bool reset_imu;
-    bool reset_depth;
-    bool rgb_light_on;
-    bool lower_light_on;
-
-    bool stab_march;
-    bool stab_lag;
     bool stab_depth;
     bool stab_roll;
     bool stab_pitch;
     bool stab_yaw;
+    bool reset_imu;
+	bool reset_pc;
+    bool enable_thrusters;
 
-    bool control_handle;
-    bool control_auto;
-    bool control_maneuverable;
-
-    void serialize(std::vector<uint8_t>& container) override; // raspberry_cm4 to STM
-    bool deserialize(std::vector<uint8_t>& input) override; // pult to raspberry_cm4
+    void pack(std::vector<uint8_t>& container) override; // raspberry_cm4 to STM
+    bool parse(std::vector<uint8_t>& input) override; // pult to raspberry_cm4
 };
 
 // stm -> cm4 -> pult
 struct ResponseNormalMessage : public AbstractMessage {
     ResponseNormalMessage();
 
-    const static uint8_t length = 88; // 88(message) + 2(checksum) = 90 dyte
+    const static uint8_t length = 30; // 28(message) + 2(checksum) = 30 dyte
 
-    float_t depth;
-    float_t roll;
-    float_t pitch;
-    float_t yaw;
-
-    float_t distance_l; // distance from laser rangefinder
-    float_t distance_r;
-
-    float_t speed_down; // speed signal from jetson
-    float_t speed_right;
-
-    float_t current_logic_electronics; // from jetson + raspberry dc-dc
-    float_t current_vma[8];
-    float_t voltage_battery_cell[4];
-    float_t voltage_battery; // 56
+    float roll;
+    float pitch;
+    float yaw;
+    float roll_speed;
+    float pitch_speed;
+    float yaw_speed;
+    float depth;
+    int8_t dropper;
+	int8_t grabber;
 
     uint16_t checksum;
 
-    void serialize(std::vector<uint8_t>& container) override; // raspberry_cm4 to pult
-    bool deserialize(std::vector<uint8_t>& input) override; // STM to raspberry_cm4
+    void pack(std::vector<uint8_t>& container) override; // raspberry_cm4 to pult
+    bool parse(std::vector<uint8_t>& input) override; // STM to raspberry_cm4
 };
 
 #endif  // STINGRAY_MESSAGES_NORMAL_H
