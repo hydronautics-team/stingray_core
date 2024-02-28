@@ -10,6 +10,7 @@
 #include <std_msgs/msg/int32.hpp>
 #include <std_msgs/msg/u_int8_multi_array.hpp>
 #include <std_srvs/srv/set_bool.hpp>
+#include <std_srvs/srv/trigger.hpp>
 #include "std_msgs/msg/string.hpp"
 
 #include <sstream>
@@ -37,8 +38,8 @@ public:
 private:
     void setTwistCallback(const std::shared_ptr<stingray_core_interfaces::srv::SetTwist::Request> request,
         std::shared_ptr<stingray_core_interfaces::srv::SetTwist::Response> response);
-    void resetImuCallback(const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
-        std::shared_ptr<std_srvs::srv::SetBool::Response> response);
+    void resetImuCallback(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+        std::shared_ptr<std_srvs::srv::Trigger::Response> response);
     void enableThrustersCallback(const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
         std::shared_ptr<std_srvs::srv::SetBool::Response> response);
     void deviceActionCallback(const std::shared_ptr<stingray_core_interfaces::srv::SetDeviceAction::Request> request,
@@ -58,7 +59,7 @@ private:
     // ROS services
     rclcpp::Service<stingray_core_interfaces::srv::SetTwist>::SharedPtr setTwistSrv;
     rclcpp::Service<stingray_core_interfaces::srv::SetStabilization>::SharedPtr setStabilizationSrv;
-    rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr resetImuSrv;
+    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr resetImuSrv;
     rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr enableThrustersSrv;
     rclcpp::Service<stingray_core_interfaces::srv::SetDeviceAction>::SharedPtr setDeviceActionSrv;
     // Message containers
