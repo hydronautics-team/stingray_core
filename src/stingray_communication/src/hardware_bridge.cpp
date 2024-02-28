@@ -167,6 +167,11 @@ void HardwareBridge::driverResponseCallback(const std_msgs::msg::UInt8MultiArray
         uvStateMsg.depth = responseMessage.depth;
         uvStateMsg.dropper = responseMessage.dropper;
         uvStateMsg.grabber = responseMessage.grabber;
+        uvStateMsg.depth_stabilization = requestMessage.stab_depth;
+        uvStateMsg.roll_stabilization = requestMessage.stab_roll;
+        uvStateMsg.pitch_stabilization = requestMessage.stab_pitch;
+        uvStateMsg.yaw_stabilization = requestMessage.stab_yaw;
+
         uvStatePub->publish(uvStateMsg);
         RCLCPP_INFO(this->get_logger(), "Received message: %f %f %f %f %f %f %f %d %d", responseMessage.roll, responseMessage.pitch, responseMessage.yaw, responseMessage.roll_speed, responseMessage.pitch_speed, responseMessage.yaw_speed, responseMessage.depth, responseMessage.dropper, responseMessage.grabber);
     } else
