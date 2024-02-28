@@ -15,7 +15,7 @@ using json = nlohmann::json;
 /** Abstract class for all messages
  */
 struct AbstractMessage {
-    AbstractMessage();
+    AbstractMessage() = default;
 
     const static uint8_t type = 0xFF;
     const static uint8_t length = 0;
@@ -27,8 +27,6 @@ struct AbstractMessage {
         UNUSED(container);
         return false;
     };
-
-    json config;
 };
 
 void pushToVector(std::vector<uint8_t> &vector, int8_t var);
