@@ -14,7 +14,7 @@ UartDriver::UartDriver() : Node("UartDriver") {
     this->declare_parameter("driver_request_topic", "/stingray/topics/driver_request");
     this->declare_parameter("driver_response_topic", "/stingray/topics/driver_response");
     // com params
-    this->declare_parameter("device", "/dev/ttyUSB0");
+    this->declare_parameter("device", "/dev/ttyS0");
     this->declare_parameter("baudrate", 57600);
     this->declare_parameter("data_bits", 8);
     this->declare_parameter("stop_bits", 1);

@@ -18,6 +18,10 @@ def generate_launch_description():
         Node(
             package='stingray_communication',
             executable='uart_driver',
-            name='uart_driver'
+            name='uart_driver',
+            parameters=[
+                {'device': '/dev/ttyS0'},
+                {'baudrate': 115200},
+            ]
         ),
     ])
