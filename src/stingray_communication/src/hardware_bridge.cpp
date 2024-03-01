@@ -40,7 +40,7 @@ HardwareBridge::HardwareBridge() : Node("HardwareBridge") {
     this->setStabilizationSrv = this->create_service<stingray_core_interfaces::srv::SetStabilization>(
         this->get_parameter("set_stabilization_srv").as_string(),
         std::bind(&HardwareBridge::setStabilizationCallback, this, std::placeholders::_1, std::placeholders::_2));
-    this->resetImuSrv = this->create_service<std_srvs::srv::SetBool>(
+    this->resetImuSrv = this->create_service<std_srvs::srv::Trigger>(
         this->get_parameter("reset_imu_srv").as_string(), std::bind(&HardwareBridge::resetImuCallback, this, std::placeholders::_1, std::placeholders::_2));
     this->enableThrustersSrv = this->create_service<std_srvs::srv::SetBool>(
         this->get_parameter("enable_thrusters_srv").as_string(), std::bind(&HardwareBridge::enableThrustersCallback, this, std::placeholders::_1, std::placeholders::_2));
@@ -66,36 +66,35 @@ void HardwareBridge::setTwistCallback(const std::shared_ptr<stingray_core_interf
     if (requestMessage.stab_depth) {
         requestMessage.depth = request->depth;
     } else {
-        RCLCPP_ERROR(this->get_logger(), "Depth stabilization is not enabled");
+        // RCLCPP_WARN(this->get_logger(), "Depth stabilization is not enabled");
         requestMessage.depth = 0;
     }
     if (requestMessage.stab_yaw) {
-        requestMessage.yaw = responseMessage.yaw + request->yaw;
+        requestMessage.yaw = request->yaw;
     } else {
-        RCLCPP_ERROR(this->get_logger(), "Yaw stabilization is not enabled");
+        // RCLCPP_WARN(this->get_logger(), "Yaw stabilization is not enabled");
         requestMessage.yaw = 0;
     }
     if (requestMessage.stab_roll) {
-        requestMessage.roll = responseMessage.roll + request->roll;
+        requestMessage.roll = request->roll;
     } else {
-        RCLCPP_ERROR(this->get_logger(), "Roll stabilization is not enabled");
+        // RCLCPP_WARN(this->get_logger(), "Roll stabilization is not enabled");
         requestMessage.roll = 0;
     }
     if (requestMessage.stab_pitch) {
-        requestMessage.pitch = responseMessage.pitch + request->pitch;
+        requestMessage.pitch = request->pitch;
     } else {
-        RCLCPP_ERROR(this->get_logger(), "Pitch stabilization is not enabled");
+        // RCLCPP_WARN(this->get_logger(), "Pitch stabilization is not enabled");
         requestMessage.pitch = 0;
     }
 
     response->success = true;
 }
 
-
-void HardwareBridge::resetImuCallback(const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
-    std::shared_ptr<std_srvs::srv::SetBool::Response> response) {
-    RCLCPP_INFO(this->get_logger(), "Resetting IMU to: %d", request->data);
-    requestMessage.reset_imu = request->data;
+void HardwareBridge::resetImuCallback(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+    RCLCPP_INFO(this->get_logger(), "Resetting IMU");
+    requestMessage.reset_imu = true;
 
     response->success = true;
 }
@@ -167,6 +166,11 @@ void HardwareBridge::driverResponseCallback(const std_msgs::msg::UInt8MultiArray
         uvStateMsg.depth = responseMessage.depth;
         uvStateMsg.dropper = responseMessage.dropper;
         uvStateMsg.grabber = responseMessage.grabber;
+        uvStateMsg.depth_stabilization = requestMessage.stab_depth;
+        uvStateMsg.roll_stabilization = requestMessage.stab_roll;
+        uvStateMsg.pitch_stabilization = requestMessage.stab_pitch;
+        uvStateMsg.yaw_stabilization = requestMessage.stab_yaw;
+
         uvStatePub->publish(uvStateMsg);
         RCLCPP_INFO(this->get_logger(), "Received message: %f %f %f %f %f %f %f %d %d", responseMessage.roll, responseMessage.pitch, responseMessage.yaw, responseMessage.roll_speed, responseMessage.pitch_speed, responseMessage.yaw_speed, responseMessage.depth, responseMessage.dropper, responseMessage.grabber);
     } else

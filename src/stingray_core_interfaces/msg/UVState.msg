@@ -7,3 +7,7 @@ float32 yaw_speed
 float32 depth
 float32 dropper
 float32 grabber
+bool depth_stabilization
+bool roll_stabilization
+bool pitch_stabilization
+bool yaw_stabilization
