@@ -20,7 +20,7 @@ def generate_launch_description():
             executable='uart_driver',
             name='uart_driver',
             parameters=[
-                {'device': '/dev/ttyS0'},
+                {'device': '/dev/ttyTHS0'},
                 {'baudrate': 115200},
             ]
         ),
