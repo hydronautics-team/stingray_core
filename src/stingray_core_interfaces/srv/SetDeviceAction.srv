@@ -1,6 +1,7 @@
 # Request
 uint8 device
-int32 value
+int32 velocity
+bool to_be_opened
 ---
 # Response
 bool success
