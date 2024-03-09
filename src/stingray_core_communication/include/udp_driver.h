@@ -1,5 +1,5 @@
-#ifndef STINGRAY_COMMUNICATION_UDP_DRIVER
-#define STINGRAY_COMMUNICATION_UDP_DRIVER
+#ifndef STINGRAY_CORE_COMMUNICATION_UDP_DRIVER
+#define STINGRAY_CORE_COMMUNICATION_UDP_DRIVER
 
 #include <boost/array.hpp>
 #include <boost/asio.hpp>
@@ -59,4 +59,4 @@ class UDPBridgeReceiver : public rclcpp::Node {
     boost::array<uint8_t, 1024> request_buffer;
 };
 
-#endif  // STINGRAY_COMMUNICATION_UDP_DRIVER
+#endif  // STINGRAY_CORE_COMMUNICATION_UDP_DRIVER

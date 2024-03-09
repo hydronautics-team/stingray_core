@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(stingray_communication)
+project(stingray_core_communication)
 
 
 if (CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")

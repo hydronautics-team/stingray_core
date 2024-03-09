@@ -1,5 +1,5 @@
-#ifndef STINGRAY_COMMUNICATION_UART_BRIDGE_H
-#define STINGRAY_COMMUNICATION_UART_BRIDGE_H
+#ifndef STINGRAY_CORE_COMMUNICATION_UART_DRIVER
+#define STINGRAY_CORE_COMMUNICATION_UART_DRIVER
 
 #include <serial/serial.h>
 
@@ -34,4 +34,4 @@ class UartDriver : public rclcpp::Node {
     std_msgs::msg::UInt8MultiArray driverResponseMsg;  // Protocol_driver -> Hardware bridge
 };
 
-#endif  // STINGRAY_COMMUNICATION_UART_DRIVER_NODELET_H
+#endif  // STINGRAY_CORE_COMMUNICATION_UART_DRIVER

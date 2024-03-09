@@ -1,5 +1,5 @@
-#ifndef STINGRAY_COMMUNICATION_HARDWARE_BRIDGE_H
-#define STINGRAY_COMMUNICATION_HARDWARE_BRIDGE_H
+#ifndef STINGRAY_CORE_COMMUNICATION_HARDWARE_BRIDGE_H
+#define STINGRAY_CORE_COMMUNICATION_HARDWARE_BRIDGE_H
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/string.hpp>
@@ -68,4 +68,4 @@ private:
     rclcpp::TimerBase::SharedPtr publishingTimer; // Timer for publishing messages
 };
 
-#endif // STINGRAY_COMMUNICATION_HARDWARE_BRIDGE_H
+#endif // STINGRAY_CORE_COMMUNICATION_HARDWARE_BRIDGE_H
