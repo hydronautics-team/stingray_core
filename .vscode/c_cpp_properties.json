@@ -12,7 +12,7 @@
             "includePath": [
                 "/opt/ros/iron/include/**",
                 "/usr/include/**",
-                "${workspaceFolder}/src/stingray_communication/include",
+                "${workspaceFolder}/src/stingray_core_communication/include",
                 "${workspaceFolder}/install/stingray_core_interfaces/include/stingray_core_interfaces",
                 "/opt/ros/iron/include/geometry_msgs",
                 "${workspaceFolder}/src/serial/include"

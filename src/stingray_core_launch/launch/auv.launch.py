@@ -3,7 +3,6 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-# from stingray_config.resources import load_config
 
 
 def generate_launch_description():
@@ -11,14 +10,14 @@ def generate_launch_description():
 
     return LaunchDescription([
         Node(
-            package='stingray_communication',
+            package='stingray_core_communication',
             executable='hardware_bridge',
             name='hardware_bridge',
             respawn=True,
             respawn_delay=0.5,
         ),
         Node(
-            package='stingray_communication',
+            package='stingray_core_communication',
             executable='udp_driver',
             name='udp_driver',
             parameters=[

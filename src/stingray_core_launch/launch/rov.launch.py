@@ -3,7 +3,6 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-# from stingray_config.resources import load_config
 
 
 def generate_launch_description():
@@ -11,12 +10,12 @@ def generate_launch_description():
 
     return LaunchDescription([
         # Node(
-        #     package='stingray_communication',
+        #     package='stingray_core_communication',
         #     executable='uart_driver',
         #     name='uart_driver'
         # ),
         Node(
-            package='stingray_communication',
+            package='stingray_core_communication',
             executable='shore_bridge',
             name='shore_bridge'
         )
