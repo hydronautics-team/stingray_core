@@ -141,7 +141,7 @@ void HardwareBridge::driverRequestCallback() {
     }
     // Publish messages
     driverRequestPub->publish(driverRequestMsg);
-    RCLCPP_INFO(this->get_logger(), "Sent message: %f %f %f %f %f %f %d %d", requestMessage.surge, requestMessage.sway, requestMessage.roll, requestMessage.pitch, requestMessage.yaw, requestMessage.depth, requestMessage.dropper, requestMessage.grabber);
+    RCLCPP_INFO(this->get_logger(), "Sent message: %d %d %d %d %d %f %f %f %f %f %f %d %d", requestMessage.reset_imu, requestMessage.stab_depth, requestMessage.stab_roll, requestMessage.stab_pitch, requestMessage.stab_yaw, requestMessage.surge, requestMessage.sway, requestMessage.roll, requestMessage.pitch, requestMessage.yaw, requestMessage.depth, requestMessage.dropper, requestMessage.grabber);
 
     requestMessage.reset_imu = false;
 }
@@ -169,7 +169,7 @@ void HardwareBridge::driverResponseCallback(const std_msgs::msg::UInt8MultiArray
         uvStateMsg.yaw_stabilization = requestMessage.stab_yaw;
 
         uvStatePub->publish(uvStateMsg);
-        RCLCPP_INFO(this->get_logger(), "Received message: %f %f %f %f %d %d", responseMessage.roll, responseMessage.pitch, responseMessage.yaw, responseMessage.depth, responseMessage.dropper, responseMessage.grabber);
+        RCLCPP_INFO(this->get_logger(), "Received message: %d %d %d %d %d %f %f %f %f %d %d", requestMessage.reset_imu, requestMessage.stab_depth, requestMessage.stab_roll, requestMessage.stab_pitch, requestMessage.stab_yaw, responseMessage.roll, responseMessage.pitch, responseMessage.yaw, responseMessage.depth, responseMessage.dropper, responseMessage.grabber);
     } else
         RCLCPP_ERROR(this->get_logger(), "Wrong checksum");
 }

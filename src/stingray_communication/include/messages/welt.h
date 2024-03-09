@@ -7,7 +7,7 @@
 struct WeltMessage : public AbstractMessage {
     WeltMessage();
 
-    const static uint8_t length = 31; // 31(message) + 2(checksum) = 31 dyte
+    const static uint8_t length = 33; // 31(message) + 2(checksum) = 31 dyte
 
     uint8_t reset_imu;
     uint8_t stab_depth;

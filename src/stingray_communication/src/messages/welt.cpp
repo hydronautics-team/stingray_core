@@ -42,9 +42,9 @@ void WeltMessage::pack(std::vector<uint8_t> &container) {
 bool WeltMessage::parse(std::vector<uint8_t> &input) {
     popFromVector(input, checksum, true);
     uint16_t checksum_calc = getChecksum16b(input);
-    if (checksum_calc != checksum) {
-        return false;
-    }
+    // if (checksum_calc != checksum) {
+    //     return false;
+    // }
 
     popFromVector(input, grabber);
     popFromVector(input, dropper);

@@ -1,4 +1,4 @@
-#include "udp_bridge.h"
+#include "udp_driver.h"
 #include "messages/welt.h"
 
 UDPBridgeSender::UDPBridgeSender(boost::asio::io_service& io_service) : Node("UDPBridgeSender"), _io_service(io_service), _send_socket(io_service) {
@@ -76,11 +76,11 @@ void UDPBridgeReceiver::driver_response_callback(const boost::system::error_code
         RCLCPP_ERROR(this->get_logger(), "Receive failed: %s", error.message().c_str());
         return;
     }
-    std::string str(request_buffer.begin(), request_buffer.end());
-
     driverResponseMsg.data.clear();
-    for (int i = 0; i < WeltMessage::length; i++)
+    for (int i = 0; i < WeltMessage::length; i++) {
+        RCLCPP_INFO(this->get_logger(), "Receive: %f", request_buffer[i]);
         driverResponseMsg.data.push_back(request_buffer[i]);
+    }
 
     // Publish messages
     driverResponsePub->publish(driverResponseMsg);

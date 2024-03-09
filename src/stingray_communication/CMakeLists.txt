@@ -31,6 +31,8 @@ add_executable(uart_driver
         src/messages/config.cpp
         src/messages/direct.cpp
         src/messages/normal.cpp
+        src/messages/welt.cpp
+        include/messages/welt.h
         include/messages/common.h
         include/messages/config.h
         include/messages/direct.h
@@ -49,12 +51,14 @@ add_executable(hardware_bridge
         include/messages/config.h
         include/messages/direct.h
         include/messages/normal.h
+        src/messages/welt.cpp
+        include/messages/welt.h
         )
 ament_target_dependencies(hardware_bridge rclcpp std_msgs std_srvs serial stingray_core_interfaces  nlohmann_json ament_index_cpp)
 
-add_executable(shore_bridge
-        src/shore_bridge.cpp
-        include/shore_bridge.h
+add_executable(udp_driver
+        src/udp_driver.cpp
+        include/udp_driver.h
         src/messages/common.cpp
         src/messages/config.cpp
         src/messages/direct.cpp
@@ -63,8 +67,10 @@ add_executable(shore_bridge
         include/messages/config.h
         include/messages/direct.h
         include/messages/normal.h
+        src/messages/welt.cpp
+        include/messages/welt.h
         )
-ament_target_dependencies(shore_bridge Boost rclcpp std_msgs std_srvs serial stingray_core_interfaces  nlohmann_json ament_index_cpp)
+ament_target_dependencies(udp_driver Boost rclcpp std_msgs std_srvs serial stingray_core_interfaces  nlohmann_json ament_index_cpp)
 
 add_library(
         messages SHARED
@@ -76,6 +82,8 @@ add_library(
         include/messages/config.h
         include/messages/direct.h
         include/messages/normal.h
+        src/messages/welt.cpp
+        include/messages/welt.h
 )
 
 # this line to exports the library
@@ -109,7 +117,7 @@ messages
 install(TARGETS
         hardware_bridge
         uart_driver
-        shore_bridge
+        udp_driver
         DESTINATION lib/${PROJECT_NAME})
 
 ament_export_dependencies(Boost)

@@ -13,15 +13,21 @@ def generate_launch_description():
         Node(
             package='stingray_communication',
             executable='hardware_bridge',
-            name='hardware_bridge'
+            name='hardware_bridge',
+            respawn=True,
+            respawn_delay=0.5,
         ),
         Node(
             package='stingray_communication',
-            executable='uart_driver',
-            name='uart_driver',
+            executable='udp_driver',
+            name='udp_driver',
             parameters=[
-                {'device': '/dev/ttyTHS0'},
-                {'baudrate': 115200},
-            ]
+                {'send_to_ip': '192.168.1.11'},
+                {'send_to_port': 13053},
+                {'receive_from_ip': "192.168.1.173"},
+                {'receive_from_port': 13050},
+            ],
+            respawn=True,
+            respawn_delay=0.5,
         ),
     ])
