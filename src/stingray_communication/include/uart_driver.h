@@ -7,12 +7,10 @@
 #include <string>
 #include <vector>
 
-#include "nlohmann/json.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/u_int16.hpp"
 #include "std_msgs/msg/u_int8_multi_array.hpp"
 
-using json = nlohmann::json;
 using std::placeholders::_1;
 
 class UartDriver : public rclcpp::Node {

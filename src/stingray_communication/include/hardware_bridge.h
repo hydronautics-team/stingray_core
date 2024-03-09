@@ -21,11 +21,8 @@
 #include "stingray_core_interfaces/srv/set_device_action.hpp"
 #include "stingray_core_interfaces/srv/set_stabilization.hpp"
 #include "stingray_core_interfaces/msg/uv_state.hpp"
-#include "messages/common.h"
-#include "messages/normal.h"
-#include "nlohmann/json.hpp"
+#include "messages/welt.h"
 
-using json = nlohmann::json;
 using namespace std::chrono_literals;
 using std::placeholders::_1;
 using std::placeholders::_2;
@@ -65,8 +62,8 @@ private:
     // Message containers
     stingray_core_interfaces::msg::UVState uvStateMsg; // UV state
     std_msgs::msg::UInt8MultiArray driverRequestMsg; // Hardware bridge -> Protocol_bridge
-    RequestNormalMessage requestMessage;
-    ResponseNormalMessage responseMessage;
+    WeltMessage requestMessage;
+    WeltMessage responseMessage;
     // Other
     rclcpp::TimerBase::SharedPtr publishingTimer; // Timer for publishing messages
 };

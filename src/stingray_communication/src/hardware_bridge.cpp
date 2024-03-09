@@ -5,8 +5,6 @@
  */
 
 #include "hardware_bridge.h"
-#include <ament_index_cpp/get_package_share_directory.hpp>
-
 #include <fstream>
 
 HardwareBridge::HardwareBridge() : Node("HardwareBridge") {
@@ -49,8 +47,8 @@ HardwareBridge::HardwareBridge() : Node("HardwareBridge") {
 
     // Output message container
     driverRequestMsg.layout.dim.push_back(std_msgs::msg::MultiArrayDimension());
-    driverRequestMsg.layout.dim[0].size = RequestNormalMessage::length;
-    driverRequestMsg.layout.dim[0].stride = RequestNormalMessage::length;
+    driverRequestMsg.layout.dim[0].size = WeltMessage::length;
+    driverRequestMsg.layout.dim[0].stride = WeltMessage::length;
     driverRequestMsg.layout.dim[0].label = "driverRequestMsg";
 
     // Initializing timer for publishing messages. Callback interval: 0.05 ms
@@ -102,7 +100,7 @@ void HardwareBridge::resetImuCallback(const std::shared_ptr<std_srvs::srv::Trigg
 void HardwareBridge::enableThrustersCallback(const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
     std::shared_ptr<std_srvs::srv::SetBool::Response> response) {
     RCLCPP_INFO(this->get_logger(), "Enabling thrusters: %d", request->data);
-    requestMessage.enable_thrusters = request->data;
+    // requestMessage.enable_thrusters = request->data;
 
     response->success = true;
 }
@@ -138,7 +136,7 @@ void HardwareBridge::driverRequestCallback() {
     std::vector<uint8_t> output_vector;
     requestMessage.pack(output_vector);
     driverRequestMsg.data.clear();
-    for (int i = 0; i < RequestNormalMessage::length; i++) {
+    for (int i = 0; i < WeltMessage::length; i++) {
         driverRequestMsg.data.push_back(output_vector[i]);
     }
     // Publish messages
@@ -146,12 +144,11 @@ void HardwareBridge::driverRequestCallback() {
     RCLCPP_INFO(this->get_logger(), "Sent message: %f %f %f %f %f %f %d %d", requestMessage.surge, requestMessage.sway, requestMessage.roll, requestMessage.pitch, requestMessage.yaw, requestMessage.depth, requestMessage.dropper, requestMessage.grabber);
 
     requestMessage.reset_imu = false;
-    requestMessage.reset_pc = false;
 }
 
 void HardwareBridge::driverResponseCallback(const std_msgs::msg::UInt8MultiArray &msg) {
     std::vector<uint8_t> received_vector;
-    for (int i = 0; i < ResponseNormalMessage::length; i++) {
+    for (int i = 0; i < WeltMessage::length; i++) {
         received_vector.push_back(msg.data[i]);
     }
     bool ok = responseMessage.parse(received_vector);
@@ -160,9 +157,9 @@ void HardwareBridge::driverResponseCallback(const std_msgs::msg::UInt8MultiArray
         uvStateMsg.roll = responseMessage.roll;
         uvStateMsg.pitch = responseMessage.pitch;
         uvStateMsg.yaw = responseMessage.yaw;
-        uvStateMsg.roll_speed = responseMessage.roll_speed;
-        uvStateMsg.pitch_speed = responseMessage.pitch_speed;
-        uvStateMsg.yaw_speed = responseMessage.yaw_speed;
+        // uvStateMsg.roll_speed = responseMessage.roll_speed;
+        // uvStateMsg.pitch_speed = responseMessage.pitch_speed;
+        // uvStateMsg.yaw_speed = responseMessage.yaw_speed;
         uvStateMsg.depth = responseMessage.depth;
         uvStateMsg.dropper = responseMessage.dropper;
         uvStateMsg.grabber = responseMessage.grabber;
@@ -172,7 +169,7 @@ void HardwareBridge::driverResponseCallback(const std_msgs::msg::UInt8MultiArray
         uvStateMsg.yaw_stabilization = requestMessage.stab_yaw;
 
         uvStatePub->publish(uvStateMsg);
-        RCLCPP_INFO(this->get_logger(), "Received message: %f %f %f %f %f %f %f %d %d", responseMessage.roll, responseMessage.pitch, responseMessage.yaw, responseMessage.roll_speed, responseMessage.pitch_speed, responseMessage.yaw_speed, responseMessage.depth, responseMessage.dropper, responseMessage.grabber);
+        RCLCPP_INFO(this->get_logger(), "Received message: %f %f %f %f %d %d", responseMessage.roll, responseMessage.pitch, responseMessage.yaw, responseMessage.depth, responseMessage.dropper, responseMessage.grabber);
     } else
         RCLCPP_ERROR(this->get_logger(), "Wrong checksum");
 }
