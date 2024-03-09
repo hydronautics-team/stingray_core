@@ -1,4 +1,4 @@
-#include "messages/direct.h"
+#include "stingray_core_communication/messages/direct.h"
 
 // pult -> cm4 -> stm
 RequestDirectMessage::RequestDirectMessage() : AbstractMessage() {

@@ -1,5 +1,5 @@
-#include "udp_driver.h"
-#include "messages/welt.h"
+#include "stingray_core_communication/udp_driver.h"
+#include "stingray_core_communication/messages/welt.h"
 
 UDPBridgeSender::UDPBridgeSender(boost::asio::io_service& io_service) : Node("UDPBridgeSender"), _io_service(io_service), _send_socket(io_service) {
 
@@ -96,19 +96,19 @@ void UDPBridgeReceiver::try_receive() {
         boost::bind(&UDPBridgeReceiver::driver_response_callback, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
 }
 
-int main(int argc, char* argv[]) {
-    rclcpp::init(argc, argv);
-    rclcpp::executors::MultiThreadedExecutor executor;
-    boost::asio::io_service io_service;
-    auto sender = std::make_shared<UDPBridgeSender>(io_service);
-    auto receiver = std::make_shared<UDPBridgeReceiver>(io_service);
-    std::thread s([&] {
-        receiver->try_receive();
-        io_service.run();
-        });
-    executor.add_node(sender);
-    executor.add_node(receiver);
-    executor.spin();
-    rclcpp::shutdown();
-    return 0;
-}
+// int main(int argc, char* argv[]) {
+//     rclcpp::init(argc, argv);
+//     rclcpp::executors::MultiThreadedExecutor executor;
+//     boost::asio::io_service io_service;
+//     auto sender = std::make_shared<UDPBridgeSender>(io_service);
+//     auto receiver = std::make_shared<UDPBridgeReceiver>(io_service);
+//     std::thread s([&] {
+//         receiver->try_receive();
+//         io_service.run();
+//         });
+//     executor.add_node(sender);
+//     executor.add_node(receiver);
+//     executor.spin();
+//     rclcpp::shutdown();
+//     return 0;
+// }

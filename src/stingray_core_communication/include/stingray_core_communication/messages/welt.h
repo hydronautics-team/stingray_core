@@ -1,7 +1,7 @@
 #ifndef STINGRAY_MESSAGES_NORMAL_H
 #define STINGRAY_MESSAGES_NORMAL_H
 
-#include "messages/common.h"
+#include "stingray_core_communication/messages/common.h"
 
 // pult -> cm4 -> stm
 struct WeltMessage : public AbstractMessage {

@@ -4,7 +4,7 @@
  * - receives byte array from protocol_bridge, parses it and publishes it
  */
 
-#include "hardware_bridge.h"
+#include "stingray_core_communication/hardware_bridge.h"
 #include <fstream>
 
 HardwareBridge::HardwareBridge() : Node("HardwareBridge") {
@@ -176,10 +176,10 @@ void HardwareBridge::driverResponseCallback(const std_msgs::msg::UInt8MultiArray
 
 
 
-int main(int argc, char *argv[]) {
-    rclcpp::init(argc, argv);
-    std::shared_ptr<rclcpp::Node> node = std::make_shared<HardwareBridge>();
-    rclcpp::spin(node);
-    rclcpp::shutdown();
-    return 0;
-}
+// int main(int argc, char *argv[]) {
+//     rclcpp::init(argc, argv);
+//     std::shared_ptr<rclcpp::Node> node = std::make_shared<HardwareBridge>();
+//     rclcpp::spin(node);
+//     rclcpp::shutdown();
+//     return 0;
+// }

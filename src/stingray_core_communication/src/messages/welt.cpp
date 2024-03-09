@@ -1,4 +1,4 @@
-#include "messages/welt.h"
+#include "stingray_core_communication/messages/welt.h"
 
 WeltMessage::WeltMessage() : AbstractMessage() {
     reset_imu = 0;

@@ -1,7 +1,7 @@
 #ifndef STINGRAY_MESSAGES_DIRECT_H
 #define STINGRAY_MESSAGES_DIRECT_H
 
-#include "messages/common.h"
+#include "stingray_core_communication/messages/common.h"
 
 struct RequestDirectMessage : public AbstractMessage {
     RequestDirectMessage();

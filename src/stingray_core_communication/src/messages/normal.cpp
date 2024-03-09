@@ -1,4 +1,4 @@
-#include "messages/normal.h"
+#include "stingray_core_communication/messages/normal.h"
 
 RequestNormalMessage::RequestNormalMessage() : AbstractMessage() {
     flags = 0;

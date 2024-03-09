@@ -5,8 +5,8 @@
  */
 
 #include <fstream>
-#include "uart_driver.h"
-#include "messages/normal.h"
+#include "stingray_core_communication/uart_driver.h"
+#include "stingray_core_communication/messages/normal.h"
 
 UartDriver::UartDriver() : Node("UartDriver") {
     // ROS PARAMETERS
@@ -177,10 +177,10 @@ void UartDriver::inputMessage_callback(const std_msgs::msg::UInt8MultiArray::Sha
     }
 }
 
-int main(int argc, char *argv[]) {
-    rclcpp::init(argc, argv);
-    std::shared_ptr<rclcpp::Node> node = std::make_shared<UartDriver>();
-    rclcpp::spin(node);
-    rclcpp::shutdown();
-    return 0;
-}
+// int main(int argc, char *argv[]) {
+//     rclcpp::init(argc, argv);
+//     std::shared_ptr<rclcpp::Node> node = std::make_shared<UartDriver>();
+//     rclcpp::spin(node);
+//     rclcpp::shutdown();
+//     return 0;
+// }
