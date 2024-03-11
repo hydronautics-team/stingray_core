@@ -9,6 +9,8 @@ RequestNormalMessage::RequestNormalMessage() : AbstractMessage() {
     roll = 0;
     pitch = 0;
     yaw = 0;
+    dropper = 0;
+    grabber = 0;
 
     checksum = 0;
 
@@ -83,9 +85,6 @@ ResponseNormalMessage::ResponseNormalMessage() {
     roll = 0;
     pitch = 0;
     yaw = 0;
-    roll_speed = 0;
-    pitch_speed = 0;
-    yaw_speed = 0;
     depth = 0;
     dropper = 0;
     grabber = 0;
@@ -98,9 +97,6 @@ void ResponseNormalMessage::pack(std::vector<uint8_t> &container) {
     pushToVector(container, roll);
     pushToVector(container, pitch);
     pushToVector(container, yaw);
-    pushToVector(container, roll_speed);
-    pushToVector(container, pitch_speed);
-    pushToVector(container, yaw_speed);
     pushToVector(container, depth);
     pushToVector(container, dropper);
     pushToVector(container, grabber);
@@ -122,9 +118,6 @@ bool ResponseNormalMessage::parse(std::vector<uint8_t> &input) {
     popFromVector(input, grabber);
     popFromVector(input, dropper);
     popFromVector(input, depth);
-    popFromVector(input, yaw_speed);
-    popFromVector(input, pitch_speed);
-    popFromVector(input, roll_speed);
     popFromVector(input, yaw); 
     popFromVector(input, pitch); 
     popFromVector(input, roll); 

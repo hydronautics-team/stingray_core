@@ -42,14 +42,11 @@ struct RequestNormalMessage : public AbstractMessage {
 struct ResponseNormalMessage : public AbstractMessage {
     ResponseNormalMessage();
 
-    const static uint8_t length = 32; // 30(message) + 2(checksum) = 30 dyte
+    const static uint8_t length = 20; // 30(message) + 2(checksum) = 30 dyte
 
     float roll;
     float pitch;
     float yaw;
-    float roll_speed;
-    float pitch_speed;
-    float yaw_speed;
     float depth;
     int8_t dropper;
 	int8_t grabber;
