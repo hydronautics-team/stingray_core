@@ -1,6 +1,6 @@
 FROM ros:iron-ros-base-jammy
 
-RUN apt update && apt install -y --no-install-recommends git wget nlohmann-json3-dev ros-iron-ament-index-cpp libboost-system-dev ros-iron-diagnostic-updater python3-pip
+RUN apt update && apt install -y --no-install-recommends git wget ros-iron-ament-index-cpp libboost-system-dev ros-iron-diagnostic-updater python3-pip
 RUN pip3 install pyserial
 
 WORKDIR /additional_packages_ws/src
