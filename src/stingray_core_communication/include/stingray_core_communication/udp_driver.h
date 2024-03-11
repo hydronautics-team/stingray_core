@@ -118,6 +118,9 @@ public:
 
 private:
     void driver_response_callback(const boost::system::error_code &error, size_t bytes_transferred) {
+        if (!rclcpp::ok()){
+            rclcpp::shutdown();
+        }
         // Make output message
         if (error) {
             RCLCPP_ERROR(_node->get_logger(), "Receive failed: %s", error.message().c_str());
