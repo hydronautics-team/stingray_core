@@ -1,0 +1,2 @@
+float32 device
+bool is_opened
