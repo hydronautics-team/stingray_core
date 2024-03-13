@@ -45,7 +45,7 @@ public:
         _node->declare_parameter("set_twist_srv", "/stingray/services/set_twist");
         _node->declare_parameter("set_stabilization_srv", "/stingray/services/set_stabilization");
         _node->declare_parameter("reset_imu_srv", "/stingray/services/reset_imu");
-        _node->declare_parameter("enable_thrusters_srv", "/stingray/services/enable_thrusters_srv");
+        _node->declare_parameter("enable_thrusters_srv", "/stingray/services/enable_thrusters");
         _node->declare_parameter("set_device_srv", "/stingray/services/set_device");
 
         // ROS publishers
