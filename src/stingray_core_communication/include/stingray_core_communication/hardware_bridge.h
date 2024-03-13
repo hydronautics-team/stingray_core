@@ -17,9 +17,11 @@
 #include <vector>
 
 #include "stingray_core_interfaces/srv/set_twist.hpp"
-#include "stingray_core_interfaces/srv/set_device_action.hpp"
+#include "stingray_core_interfaces/srv/set_device.hpp"
 #include "stingray_core_interfaces/srv/set_stabilization.hpp"
 #include "stingray_core_interfaces/msg/uv_state.hpp"
+#include "stingray_core_interfaces/msg/device_state.hpp"
+#include "stingray_core_interfaces/msg/device_state_array.hpp"
 #include "stingray_core_communication/messages/common.h"
 
 using namespace std::chrono_literals;
@@ -36,19 +38,24 @@ public:
         // topic names
         _node->declare_parameter("driver_request_topic", "/stingray/topics/driver_request");
         _node->declare_parameter("uv_state_topic", "/stingray/topics/uv_state");
+        _node->declare_parameter("device_state_array_topic", "/stingray/topics/device_state_array");
         _node->declare_parameter("driver_response_topic", "/stingray/topics/driver_response");
+        
         // service names
         _node->declare_parameter("set_twist_srv", "/stingray/services/set_twist");
         _node->declare_parameter("set_stabilization_srv", "/stingray/services/set_stabilization");
         _node->declare_parameter("reset_imu_srv", "/stingray/services/reset_imu");
         _node->declare_parameter("enable_thrusters_srv", "/stingray/services/enable_thrusters_srv");
-        _node->declare_parameter("set_device_action_srv", "/stingray/services/set_device_action");
+        _node->declare_parameter("set_device_srv", "/stingray/services/set_device");
 
         // ROS publishers
         this->driverRequestPub = _node->create_publisher<std_msgs::msg::UInt8MultiArray>(
             _node->get_parameter("driver_request_topic").as_string(), 1000);
         this->uvStatePub = _node->create_publisher<stingray_core_interfaces::msg::UVState>(
             _node->get_parameter("uv_state_topic").as_string(), 1000);
+        this->deviceStateArrayPub = _node->create_publisher<stingray_core_interfaces::msg::DeviceStateArray>(
+            _node->get_parameter("device_state_array_topic").as_string(), 1000);
+        
         // ROS subscribers
         this->driverResponseSub = _node->create_subscription<std_msgs::msg::UInt8MultiArray>(
             _node->get_parameter("driver_response_topic").as_string(), 1000,
@@ -65,8 +72,8 @@ public:
             _node->get_parameter("reset_imu_srv").as_string(), std::bind(&HardwareBridge::resetImuCallback, this, std::placeholders::_1, std::placeholders::_2));
         this->enableThrustersSrv = _node->create_service<std_srvs::srv::SetBool>(
             _node->get_parameter("enable_thrusters_srv").as_string(), std::bind(&HardwareBridge::enableThrustersCallback, this, std::placeholders::_1, std::placeholders::_2));
-        this->setDeviceActionSrv = _node->create_service<stingray_core_interfaces::srv::SetDeviceAction>(
-            _node->get_parameter("set_device_action_srv").as_string(), std::bind(&HardwareBridge::deviceActionCallback, this, std::placeholders::_1, std::placeholders::_2));
+        this->setDeviceActionSrv = _node->create_service<stingray_core_interfaces::srv::SetDevice>(
+            _node->get_parameter("set_device_srv").as_string(), std::bind(&HardwareBridge::deviceActionCallback, this, std::placeholders::_1, std::placeholders::_2));
 
         // Output message container
         driverRequestMsg.layout.dim.push_back(std_msgs::msg::MultiArrayDimension());
@@ -128,10 +135,10 @@ private:
         response->success = true;
     }
 
-    void deviceActionCallback(const std::shared_ptr<stingray_core_interfaces::srv::SetDeviceAction::Request> request,
-        std::shared_ptr<stingray_core_interfaces::srv::SetDeviceAction::Response> response) {
+    void deviceActionCallback(const std::shared_ptr<stingray_core_interfaces::srv::SetDevice::Request> request,
+        std::shared_ptr<stingray_core_interfaces::srv::SetDevice::Response> response) {
         RCLCPP_INFO(_node->get_logger(), "Setting device [%d] action value to %d", request->device, request->value);
-        // requestMessage.dev[request->device] = request->value;
+        requestMessage.dev[request->device] = request->value;
 
         response->success = true;
     }
@@ -159,7 +166,7 @@ private:
         }
         // Publish messages
         driverRequestPub->publish(driverRequestMsg);
-        RCLCPP_INFO(_node->get_logger(), "Sent message: %d %d %d %d %d %f %f %f %f %f %f %d %d", requestMessage.reset_imu, requestMessage.stab_depth, requestMessage.stab_roll, requestMessage.stab_pitch, requestMessage.stab_yaw, requestMessage.surge, requestMessage.sway, requestMessage.roll, requestMessage.pitch, requestMessage.yaw, requestMessage.depth, requestMessage.dropper, requestMessage.grabber);
+        RCLCPP_INFO(_node->get_logger(), "Sent message: %d %d %d %d %d %f %f %f %f %f %f %d %d", requestMessage.reset_imu, requestMessage.stab_depth, requestMessage.stab_roll, requestMessage.stab_pitch, requestMessage.stab_yaw, requestMessage.surge, requestMessage.sway, requestMessage.roll, requestMessage.pitch, requestMessage.yaw, requestMessage.depth, requestMessage.dev[0], requestMessage.dev[1]);
 
         requestMessage.reset_imu = false;
     }
@@ -175,15 +182,21 @@ private:
             uvStateMsg.pitch = responseMessage.pitch;
             uvStateMsg.yaw = responseMessage.yaw;
             uvStateMsg.depth = responseMessage.depth;
-            uvStateMsg.dropper = responseMessage.dropper;
-            uvStateMsg.grabber = responseMessage.grabber;
             uvStateMsg.depth_stabilization = requestMessage.stab_depth;
             uvStateMsg.roll_stabilization = requestMessage.stab_roll;
             uvStateMsg.pitch_stabilization = requestMessage.stab_pitch;
             uvStateMsg.yaw_stabilization = requestMessage.stab_yaw;
+            stingray_core_interfaces::msg::DeviceStateArray deviceStateArrayMsg;
+            for (int i = 0; i < ResponseMessage::dev_amount; i++) {
+                stingray_core_interfaces::msg::DeviceState deviceStateMsg;
+                deviceStateMsg.device = i;
+                deviceStateMsg.value = responseMessage.dev[i];
+                deviceStateArrayMsg.states.push_back(deviceStateMsg);
+            }
 
             uvStatePub->publish(uvStateMsg);
-            RCLCPP_INFO(_node->get_logger(), "Received message: %d %d %d %d %d %f %f %f %f %d %d", requestMessage.reset_imu, requestMessage.stab_depth, requestMessage.stab_roll, requestMessage.stab_pitch, requestMessage.stab_yaw, responseMessage.roll, responseMessage.pitch, responseMessage.yaw, responseMessage.depth, responseMessage.dropper, responseMessage.grabber);
+            deviceStateArrayPub->publish(deviceStateArrayMsg);
+            RCLCPP_INFO(_node->get_logger(), "Received message: %d %d %d %d %d %f %f %f %f %d %d", requestMessage.reset_imu, requestMessage.stab_depth, requestMessage.stab_roll, requestMessage.stab_pitch, requestMessage.stab_yaw, responseMessage.roll, responseMessage.pitch, responseMessage.yaw, responseMessage.depth, responseMessage.dev[0], responseMessage.dev[1]);
         } else
             RCLCPP_ERROR(_node->get_logger(), "Wrong checksum");
     }
@@ -191,6 +204,7 @@ private:
     // ROS publishers
     rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr driverRequestPub;
     rclcpp::Publisher<stingray_core_interfaces::msg::UVState>::SharedPtr uvStatePub;
+    rclcpp::Publisher<stingray_core_interfaces::msg::DeviceStateArray>::SharedPtr deviceStateArrayPub;
 
     // ROS subscribers
     rclcpp::Subscription<std_msgs::msg::UInt8MultiArray>::SharedPtr driverResponseSub;
@@ -200,7 +214,7 @@ private:
     rclcpp::Service<stingray_core_interfaces::srv::SetStabilization>::SharedPtr setStabilizationSrv;
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr resetImuSrv;
     rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr enableThrustersSrv;
-    rclcpp::Service<stingray_core_interfaces::srv::SetDeviceAction>::SharedPtr setDeviceActionSrv;
+    rclcpp::Service<stingray_core_interfaces::srv::SetDevice>::SharedPtr setDeviceActionSrv;
     // Message containers
     stingray_core_interfaces::msg::UVState uvStateMsg; // UV state
     std_msgs::msg::UInt8MultiArray driverRequestMsg; // Hardware bridge -> Protocol_bridge

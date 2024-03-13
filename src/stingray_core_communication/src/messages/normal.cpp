@@ -9,13 +9,13 @@ RequestNormalMessage::RequestNormalMessage() : AbstractMessage() {
     roll = 0;
     pitch = 0;
     yaw = 0;
-    dropper = 0;
-    grabber = 0;
+    for (int i = 0; i < dev_amount; i++) {
+        dev[i] = 0;
+    }
 
     checksum = 0;
 
     reset_imu = false;
-    reset_pc = false;
     enable_thrusters = false;
 
     stab_depth = false;
@@ -29,8 +29,7 @@ void RequestNormalMessage::pack(std::vector<uint8_t> &container) {
     pushToVector(container, type);
 
     setBit(flags, 0, reset_imu);
-    setBit(flags, 1, reset_pc);
-    setBit(flags, 2, enable_thrusters);
+    setBit(flags, 1, enable_thrusters);
     pushToVector(container, flags);
 
     setBit(stab_flags, 0, depth);
@@ -45,8 +44,10 @@ void RequestNormalMessage::pack(std::vector<uint8_t> &container) {
     pushToVector(container, roll);
     pushToVector(container, pitch);
     pushToVector(container, yaw);
-    pushToVector(container, dropper);
-    pushToVector(container, grabber);
+
+    for (int i = 0; i < dev_amount; i++) {
+        pushToVector(container, dev[i]);
+    }
 
     uint16_t checksum = getChecksum16b(container);
     pushToVector(container, checksum);  // do i need to revert bytes here?
@@ -60,6 +61,10 @@ bool RequestNormalMessage::parse(std::vector<uint8_t> &input) {
         return false;
     }
 
+    for (int i = 0; i < dev_amount; i++) {
+        popFromVector(input, dev[dev_amount - i]);
+    }
+
     popFromVector(input, yaw);
     popFromVector(input, pitch);
     popFromVector(input, roll);
@@ -70,8 +75,7 @@ bool RequestNormalMessage::parse(std::vector<uint8_t> &input) {
     popFromVector(input, flags);
 
     reset_imu = pickBit(flags, 0);
-    reset_pc = pickBit(flags, 1);
-    enable_thrusters = pickBit(flags, 2);
+    enable_thrusters = pickBit(flags, 1);
 
     stab_depth = pickBit(stab_flags, 0);
     stab_roll = pickBit(stab_flags, 1);
@@ -86,8 +90,9 @@ ResponseNormalMessage::ResponseNormalMessage() {
     pitch = 0;
     yaw = 0;
     depth = 0;
-    dropper = 0;
-    grabber = 0;
+    for (int i = 0; i < dev_amount; i++) {
+        dev[i] = 0;
+    }
 
     checksum = 0;
 }
@@ -98,8 +103,9 @@ void ResponseNormalMessage::pack(std::vector<uint8_t> &container) {
     pushToVector(container, pitch);
     pushToVector(container, yaw);
     pushToVector(container, depth);
-    pushToVector(container, dropper);
-    pushToVector(container, grabber);
+    for (int i = 0; i < dev_amount; i++) {
+        pushToVector(container, dev[i]);
+    }
 
     uint16_t checksum = getChecksum16b(container);
     pushToVector(container, checksum);  // do i need to revert bytes here?
@@ -111,16 +117,17 @@ bool ResponseNormalMessage::parse(std::vector<uint8_t> &input) {
 
     uint16_t checksum_calc = getChecksum16b(input);
 
-    // if (checksum_calc != checksum) {
-    //     return false;
-    // }
+    if (checksum_calc != checksum) {
+        return false;
+    }
 
-    popFromVector(input, grabber);
-    popFromVector(input, dropper);
+    for (int i = 0; i < dev_amount; i++) {
+        popFromVector(input, dev[dev_amount - i]);
+    }
     popFromVector(input, depth);
-    popFromVector(input, yaw); 
-    popFromVector(input, pitch); 
-    popFromVector(input, roll); 
+    popFromVector(input, yaw);
+    popFromVector(input, pitch);
+    popFromVector(input, roll);
 
     return true;
 }
