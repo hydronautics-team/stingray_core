@@ -1,7 +1,7 @@
 #ifndef STINGRAY_MESSAGES_CONFIG_H
 #define STINGRAY_MESSAGES_CONFIG_H
 
-#include "messages/common.h"
+#include "stingray_core_communication/messages/common.h"
 
 // pult -> cm4 -> stm
 struct RequestConfigMessage : public AbstractMessage {

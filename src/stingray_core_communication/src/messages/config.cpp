@@ -1,4 +1,4 @@
-#include "messages/config.h"
+#include "stingray_core_communication/messages/config.h"
 
 // pult -> cm4 -> stm
 RequestConfigMessage::RequestConfigMessage() : AbstractMessage() {

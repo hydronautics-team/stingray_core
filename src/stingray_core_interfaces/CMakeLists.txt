@@ -14,7 +14,9 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(
   ${PROJECT_NAME}
   "msg/UVState.msg"
-  "srv/SetDeviceAction.srv"
+  "msg/DeviceState.msg"
+  "msg/DeviceStateArray.msg"
+  "srv/SetDevice.srv"
   "srv/SetTwist.srv"
   "srv/SetStabilization.srv"
   DEPENDENCIES std_msgs geometry_msgs)

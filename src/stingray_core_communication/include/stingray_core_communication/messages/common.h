@@ -3,14 +3,12 @@
 
 #include <stdint.h>
 #include <unistd.h>
-
+#include <cmath>
 #include <fstream>
 #include <vector>
 
-#include "nlohmann/json.hpp"
 
 #define UNUSED(x) (void)(x)
-using json = nlohmann::json;
 
 /** Abstract class for all messages
  */
@@ -20,10 +18,10 @@ struct AbstractMessage {
     const static uint8_t type = 0xFF;
     const static uint8_t length = 0;
 
-    virtual void pack(std::vector<uint8_t> &container){
+    virtual void pack(std::vector<uint8_t> &container) {
         UNUSED(container);
     };
-    virtual bool parse(std::vector<uint8_t> &container){
+    virtual bool parse(std::vector<uint8_t> &container) {
         UNUSED(container);
         return false;
     };
