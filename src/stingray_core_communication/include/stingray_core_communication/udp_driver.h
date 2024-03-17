@@ -128,7 +128,7 @@ private:
         }
         driverResponseMsg.data.clear();
         for (int i = 0; i < ResponseMessage::length; i++) {
-            RCLCPP_INFO(_node->get_logger(), "Receive: %f", request_buffer[i]);
+            // RCLCPP_INFO(_node->get_logger(), "Receive: %f", request_buffer[i]);
             driverResponseMsg.data.push_back(request_buffer[i]);
         }
 

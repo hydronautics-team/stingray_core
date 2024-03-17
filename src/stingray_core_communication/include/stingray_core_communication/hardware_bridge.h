@@ -82,7 +82,7 @@ public:
         driverRequestMsg.layout.dim[0].label = "driverRequestMsg";
 
         // Initializing timer for publishing messages. Callback interval: 0.05 ms
-        this->publishingTimer = _node->create_wall_timer(500ms, std::bind(&HardwareBridge::driverRequestCallback, this));
+        this->publishingTimer = _node->create_wall_timer(50ms, std::bind(&HardwareBridge::driverRequestCallback, this));
     }
 
     std::shared_ptr<rclcpp::Node> _node;
