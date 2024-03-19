@@ -166,7 +166,7 @@ private:
         }
         // Publish messages
         driverRequestPub->publish(driverRequestMsg);
-        RCLCPP_INFO(_node->get_logger(), "Sent message: %d %d %d %d %d %f %f %f %f %f %f %d %d", requestMessage.reset_imu, requestMessage.stab_depth, requestMessage.stab_roll, requestMessage.stab_pitch, requestMessage.stab_yaw, requestMessage.surge, requestMessage.sway, requestMessage.roll, requestMessage.pitch, requestMessage.yaw, requestMessage.depth, requestMessage.dev[0], requestMessage.dev[1]);
+        // RCLCPP_INFO(_node->get_logger(), "Sent message: %d %d %d %d %d %f %f %f %f %f %f %d %d", requestMessage.reset_imu, requestMessage.stab_depth, requestMessage.stab_roll, requestMessage.stab_pitch, requestMessage.stab_yaw, requestMessage.surge, requestMessage.sway, requestMessage.roll, requestMessage.pitch, requestMessage.yaw, requestMessage.depth, requestMessage.dev[0], requestMessage.dev[1]);
 
         requestMessage.reset_imu = false;
     }
@@ -196,7 +196,7 @@ private:
 
             uvStatePub->publish(uvStateMsg);
             deviceStateArrayPub->publish(deviceStateArrayMsg);
-            RCLCPP_INFO(_node->get_logger(), "Received message: %d %d %d %d %d %f %f %f %f %d %d", requestMessage.reset_imu, requestMessage.stab_depth, requestMessage.stab_roll, requestMessage.stab_pitch, requestMessage.stab_yaw, responseMessage.roll, responseMessage.pitch, responseMessage.yaw, responseMessage.depth, responseMessage.dev[0], responseMessage.dev[1]);
+            // RCLCPP_INFO(_node->get_logger(), "Received message: %d %d %d %d %d %f %f %f %f %d %d", requestMessage.reset_imu, requestMessage.stab_depth, requestMessage.stab_roll, requestMessage.stab_pitch, requestMessage.stab_yaw, responseMessage.roll, responseMessage.pitch, responseMessage.yaw, responseMessage.depth, responseMessage.dev[0], responseMessage.dev[1]);
         } else
             RCLCPP_ERROR(_node->get_logger(), "Wrong checksum");
     }
