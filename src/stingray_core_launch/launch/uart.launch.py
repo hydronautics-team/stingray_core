@@ -54,6 +54,18 @@ def generate_launch_description():
     baudrate_arg = DeclareLaunchArgument(
         "baudrate", default_value="115200"
     )
+    data_bits_arg = DeclareLaunchArgument(
+        "data_bits", default_value="8"
+    )
+    stop_bits_arg = DeclareLaunchArgument(
+        "stop_bits", default_value="1"
+    )
+    parity_arg = DeclareLaunchArgument(
+        "parity", default_value="none"
+    )
+    serial_timeout_arg = DeclareLaunchArgument(
+        "serial_timeout", default_value="1000"
+    )
 
     return LaunchDescription([
         driver_request_topic_arg,
@@ -67,6 +79,10 @@ def generate_launch_description():
         set_device_srv_arg,
         device_arg,
         baudrate_arg,
+        data_bits_arg,
+        stop_bits_arg,
+        parity_arg,
+        serial_timeout_arg,
         Node(
             package='stingray_core_communication',
             executable='hardware_bridge_node',
@@ -94,10 +110,10 @@ def generate_launch_description():
                 {'driver_response_topic': LaunchConfiguration("driver_response_topic")},
                 {'device': LaunchConfiguration("device")},
                 {'baudrate': LaunchConfiguration("baudrate")},
-                {'data_bits': 8},
-                {'stop_bits': 1},
-                {'parity': "none"},
-                {'serial_timeout': 1000},
+                {'data_bits': LaunchConfiguration("data_bits")},
+                {'stop_bits': LaunchConfiguration("stop_bits")},
+                {'parity': LaunchConfiguration("parity")},
+                {'serial_timeout': LaunchConfiguration("serial_timeout")},
             ],
             respawn=True,
             respawn_delay=0.5,
