@@ -32,10 +32,10 @@ void RequestNormalMessage::pack(std::vector<uint8_t> &container) {
     setBit(flags, 1, enable_thrusters);
     pushToVector(container, flags);
 
-    setBit(stab_flags, 0, depth);
-    setBit(stab_flags, 1, roll);
-    setBit(stab_flags, 2, pitch);
-    setBit(stab_flags, 3, yaw);
+    setBit(stab_flags, 0, stab_depth);
+    setBit(stab_flags, 1, stab_roll);
+    setBit(stab_flags, 2, stab_pitch);
+    setBit(stab_flags, 3, stab_yaw);
     pushToVector(container, stab_flags);
 
     pushToVector(container, surge);
@@ -57,9 +57,9 @@ void RequestNormalMessage::pack(std::vector<uint8_t> &container) {
 bool RequestNormalMessage::parse(std::vector<uint8_t> &input) {
     popFromVector(input, checksum, true);
     uint16_t checksum_calc = getChecksum16b(input);
-    if (checksum_calc != checksum) {
-        return false;
-    }
+    // if (checksum_calc != checksum) {
+    //     return false;
+    // }
 
     for (int i = 0; i < dev_amount; i++) {
         popFromVector(input, dev[dev_amount - i]);
@@ -117,9 +117,9 @@ bool ResponseNormalMessage::parse(std::vector<uint8_t> &input) {
 
     uint16_t checksum_calc = getChecksum16b(input);
 
-    if (checksum_calc != checksum) {
-        return false;
-    }
+    // if (checksum_calc != checksum) {
+    //     return false;
+    // }
 
     for (int i = 0; i < dev_amount; i++) {
         popFromVector(input, dev[dev_amount - i]);
