@@ -156,7 +156,7 @@ private:
     bool receiveData() {
         std::vector<uint8_t> answer;
         if (port.available() < ResponseMessage::length) {
-            RCLCPP_ERROR(_node->get_logger(), "port.available() < ResponseMessage::length: %d", port.available());
+            // RCLCPP_ERROR(_node->get_logger(), "port.available() < ResponseMessage::length: %d", port.available());
             // auto available = port.available();
             // port.read(answer, available);
             // for (int i = 0; i < available; i++) {
@@ -169,9 +169,9 @@ private:
         driverResponseMsg.data.clear();
         for (int i = 0; i < ResponseMessage::length; i++) {
             driverResponseMsg.data.push_back(answer[i]);
-            RCLCPP_INFO(_node->get_logger(), "byte: %d", answer[i]);
+            // RCLCPP_INFO(_node->get_logger(), "byte: %d", answer[i]);
         }
-        RCLCPP_DEBUG(_node->get_logger(), "RECEIVE FROM STM");
+        // RCLCPP_DEBUG(_node->get_logger(), "RECEIVE FROM STM");
 
         return true;
     }
