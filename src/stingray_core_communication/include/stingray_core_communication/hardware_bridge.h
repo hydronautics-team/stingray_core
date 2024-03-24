@@ -100,7 +100,13 @@ private:
             requestMessage.depth = 0;
         }
         if (requestMessage.stab_yaw) {
-            requestMessage.yaw = request->yaw;
+            float request_yaw = std::fmod(request->yaw, 360) + yaw_delta;
+            if (request_yaw > 180) {
+                request_yaw = -(request_yaw - 180);
+            } else if (request_yaw < -180) {
+                request_yaw = -(request_yaw + 180);
+            }
+            requestMessage.yaw = request_yaw;
         } else {
             // RCLCPP_WARN(_node->get_logger(), "Yaw stabilization is not enabled");
             requestMessage.yaw = 0;
@@ -166,7 +172,7 @@ private:
         }
         // Publish messages
         driverRequestPub->publish(driverRequestMsg);
-        // RCLCPP_INFO(_node->get_logger(), "Sent message: %d %d %d %d %d %f %f %f %f %f %f %d %d", requestMessage.reset_imu, requestMessage.stab_depth, requestMessage.stab_roll, requestMessage.stab_pitch, requestMessage.stab_yaw, requestMessage.surge, requestMessage.sway, requestMessage.roll, requestMessage.pitch, requestMessage.yaw, requestMessage.depth, requestMessage.dev[0], requestMessage.dev[1]);
+        RCLCPP_INFO(_node->get_logger(), "Sent yaw: %f", requestMessage.yaw);
 
         requestMessage.reset_imu = false;
     }
@@ -180,7 +186,18 @@ private:
             stingray_core_interfaces::msg::UVState uvStateMsg;
             uvStateMsg.roll = responseMessage.roll;
             uvStateMsg.pitch = responseMessage.pitch;
-            uvStateMsg.yaw = responseMessage.yaw;
+            if (!inited_yaw) {
+                yaw_delta = responseMessage.yaw;
+                inited_yaw = true;
+            } else {
+                if (last_response_yaw < -150 && responseMessage.yaw > 150) {
+                    yaw_counter--;
+                } else if (last_response_yaw > 150 && responseMessage.yaw < -150) {
+                    yaw_counter++;
+                }
+            }
+            last_response_yaw = responseMessage.yaw;
+            uvStateMsg.yaw = yaw_counter * 360 + responseMessage.yaw - yaw_delta;
             uvStateMsg.depth = responseMessage.depth;
             uvStateMsg.depth_stabilization = requestMessage.stab_depth;
             uvStateMsg.roll_stabilization = requestMessage.stab_roll;
@@ -196,7 +213,8 @@ private:
 
             uvStatePub->publish(uvStateMsg);
             deviceStateArrayPub->publish(deviceStateArrayMsg);
-            // RCLCPP_INFO(_node->get_logger(), "Received message: %d %d %d %d %d %f %f %f %f %d %d", requestMessage.reset_imu, requestMessage.stab_depth, requestMessage.stab_roll, requestMessage.stab_pitch, requestMessage.stab_yaw, responseMessage.roll, responseMessage.pitch, responseMessage.yaw, responseMessage.depth, responseMessage.dev[0], responseMessage.dev[1]);
+            RCLCPP_INFO(_node->get_logger(), "Received yaw: %f", responseMessage.yaw);
+            RCLCPP_INFO(_node->get_logger(), "Absolute yaw: %f", uvStateMsg.yaw);
         } else
             RCLCPP_ERROR(_node->get_logger(), "Wrong checksum");
     }
@@ -222,6 +240,11 @@ private:
     ResponseMessage responseMessage;
     // Other
     rclcpp::TimerBase::SharedPtr publishingTimer; // Timer for publishing messages
+
+    float yaw_delta = 0.0;
+    float last_response_yaw = 0.0;
+    int yaw_counter = 0;
+    bool inited_yaw = false;
 };
 
 #endif // STINGRAY_CORE_COMMUNICATION_HARDWARE_BRIDGE_H
