@@ -1,4 +1,4 @@
-FROM ros@sha256:6dd9fb81134cfe4696e09d9c9541e6d41b7853cda69080633391d763e1fca0b8
+FROM ros:iron-ros-base-jammy
 
 RUN apt update && apt install -y --no-install-recommends git wget libboost-system-dev
 
