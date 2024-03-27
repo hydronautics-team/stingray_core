@@ -44,7 +44,7 @@ struct RequestNormalMessage : public AbstractMessage {
 struct ResponseNormalMessage : public AbstractMessage {
     ResponseNormalMessage();
 
-    const static uint8_t length = 20; // 30(message) + 2(checksum) = 30 dyte
+    const static uint8_t length = 28; // 26(message) + 2(checksum) = 30 dyte
     /// Number of the devs
     static const uint8_t dev_amount = 2;
 
@@ -52,6 +52,8 @@ struct ResponseNormalMessage : public AbstractMessage {
     float roll;
     float pitch;
     float yaw;
+    float surge_accel;
+    float sway_accel;
     float depth;
     int8_t dev[dev_amount];
 

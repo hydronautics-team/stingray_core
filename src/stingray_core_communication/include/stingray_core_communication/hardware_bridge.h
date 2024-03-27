@@ -198,6 +198,8 @@ private:
             }
             last_response_yaw = responseMessage.yaw;
             uvStateMsg.yaw = yaw_counter * 360 + responseMessage.yaw - yaw_delta;
+            uvStateMsg.surge_accel = responseMessage.surge_accel;
+            uvStateMsg.sway_accel = responseMessage.sway_accel;
             uvStateMsg.depth = responseMessage.depth;
             uvStateMsg.depth_stabilization = requestMessage.stab_depth;
             uvStateMsg.roll_stabilization = requestMessage.stab_roll;
@@ -214,6 +216,8 @@ private:
             uvStatePub->publish(uvStateMsg);
             deviceStateArrayPub->publish(deviceStateArrayMsg);
             RCLCPP_INFO(_node->get_logger(), "Received yaw: %f", responseMessage.yaw);
+            RCLCPP_INFO(_node->get_logger(), "Received surge_accel: %f", responseMessage.surge_accel);
+            RCLCPP_INFO(_node->get_logger(), "Received sway_accel: %f", responseMessage.sway_accel);
             RCLCPP_INFO(_node->get_logger(), "Absolute yaw: %f", uvStateMsg.yaw);
         } else
             RCLCPP_ERROR(_node->get_logger(), "Wrong checksum");

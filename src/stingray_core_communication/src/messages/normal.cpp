@@ -89,6 +89,8 @@ ResponseNormalMessage::ResponseNormalMessage() {
     roll = 0;
     pitch = 0;
     yaw = 0;
+    surge_accel = 0.0;
+    sway_accel = 0.0;
     depth = 0;
     for (int i = 0; i < dev_amount; i++) {
         dev[i] = 0;
@@ -102,6 +104,8 @@ void ResponseNormalMessage::pack(std::vector<uint8_t> &container) {
     pushToVector(container, roll);
     pushToVector(container, pitch);
     pushToVector(container, yaw);
+    pushToVector(container, surge_accel);
+    pushToVector(container, sway_accel);
     pushToVector(container, depth);
     for (int i = 0; i < dev_amount; i++) {
         pushToVector(container, dev[i]);
@@ -125,6 +129,8 @@ bool ResponseNormalMessage::parse(std::vector<uint8_t> &input) {
         popFromVector(input, dev[dev_amount - i]);
     }
     popFromVector(input, depth);
+    popFromVector(input, sway_accel);
+    popFromVector(input, surge_accel);
     popFromVector(input, yaw);
     popFromVector(input, pitch);
     popFromVector(input, roll);
