@@ -172,7 +172,7 @@ private:
         }
         // Publish messages
         driverRequestPub->publish(driverRequestMsg);
-        RCLCPP_INFO(_node->get_logger(), "Sent yaw: %f", requestMessage.yaw);
+        // RCLCPP_INFO(_node->get_logger(), "Sent yaw: %f", requestMessage.yaw);
 
         requestMessage.reset_imu = false;
     }
@@ -215,10 +215,10 @@ private:
 
             uvStatePub->publish(uvStateMsg);
             deviceStateArrayPub->publish(deviceStateArrayMsg);
-            RCLCPP_INFO(_node->get_logger(), "Received yaw: %f", responseMessage.yaw);
-            RCLCPP_INFO(_node->get_logger(), "Received surge_accel: %f", responseMessage.surge_accel);
-            RCLCPP_INFO(_node->get_logger(), "Received sway_accel: %f", responseMessage.sway_accel);
-            RCLCPP_INFO(_node->get_logger(), "Absolute yaw: %f", uvStateMsg.yaw);
+            // RCLCPP_INFO(_node->get_logger(), "Received yaw: %f", responseMessage.yaw);
+            // RCLCPP_INFO(_node->get_logger(), "Received surge_accel: %f", responseMessage.surge_accel);
+            // RCLCPP_INFO(_node->get_logger(), "Received sway_accel: %f", responseMessage.sway_accel);
+            // RCLCPP_INFO(_node->get_logger(), "Absolute yaw: %f", uvStateMsg.yaw);
         } else
             RCLCPP_ERROR(_node->get_logger(), "Wrong checksum");
     }
