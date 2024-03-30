@@ -100,7 +100,7 @@ private:
             requestMessage.depth = 0;
         }
         if (requestMessage.stab_yaw) {
-            float request_yaw = std::fmod(request->yaw, 360) + yaw_delta;
+            float request_yaw = std::fmod(uvStateMsg.yaw + request->yaw, 360);
             if (request_yaw > 180) {
                 request_yaw = -(request_yaw - 180);
             } else if (request_yaw < -180) {
@@ -183,7 +183,6 @@ private:
         }
         bool ok = responseMessage.parse(received_vector);
         if (ok) {
-            stingray_core_interfaces::msg::UVState uvStateMsg;
             uvStateMsg.roll = responseMessage.roll;
             uvStateMsg.pitch = responseMessage.pitch;
             if (!inited_yaw) {
