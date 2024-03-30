@@ -53,14 +53,14 @@ public:
 
 private:
     void driver_request_callback(const std_msgs::msg::UInt8MultiArray &msg) {
-        RCLCPP_INFO(_node->get_logger(), "Received from driver");
+        // RCLCPP_INFO(_node->get_logger(), "Received from driver");
 
         boost::system::error_code err;
         std::vector<uint8_t> to_send;
         for (int i = 0; i < RequestMessage::length; i++)
             to_send.push_back(msg.data[i]);
         _send_socket.send_to(boost::asio::buffer(to_send), _send_endpoint, 0, err);
-        RCLCPP_INFO(_node->get_logger(), "Sent to gui %s", err.message().c_str());
+        // RCLCPP_INFO(_node->get_logger(), "Sent to gui %s", err.message().c_str());
     }
 
     // ROS subscribers
