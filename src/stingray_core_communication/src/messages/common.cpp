@@ -23,6 +23,16 @@ void pushToVector(std::vector<uint8_t> &vector, uint8_t var) { vector.push_back(
  * @param[in]  var     Variable to transform.
  * @param[in]  revert  Revert bytes or not.
  */
+void pushToVector(std::vector<uint8_t> &vector, char var) {
+    uint8_t buf = *reinterpret_cast<uint8_t *>(&var);
+    vector.push_back(buf);
+}
+
+/** @brief Overloaded transform to string function, transforms value to string bitwise correctly
+ *
+ * @param[in]  var     Variable to transform.
+ * @param[in]  revert  Revert bytes or not.
+ */
 void pushToVector(std::vector<uint8_t> &vector, int16_t var, bool revert) {
     uint8_t *ptr = reinterpret_cast<uint8_t *>(&var);
     if (revert) {
@@ -92,6 +102,19 @@ void popFromVector(std::vector<uint8_t> &vector, uint8_t &output) {
     output = vector.back();
     vector.pop_back();
 }
+
+/** @brief Overloaded pick from string, picks value from the end of the string bitwise correctly
+ *
+ * @param[out] &container  Link to container string with bytes.
+ * @param[out] &value      Link to variable in which the data will be stored.
+ * @param[in]  revert      Revert bytes or not.
+ */
+void popFromVector(std::vector<uint8_t> &vector, char &output) {
+    uint8_t out_raw = vector.back();
+    vector.pop_back();
+    output = *reinterpret_cast<char *>(&out_raw);
+}
+
 
 /** @brief Overloaded pick from string, picks value from the end of the string bitwise correctly
  *
