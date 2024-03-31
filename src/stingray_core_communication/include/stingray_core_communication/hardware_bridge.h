@@ -159,6 +159,9 @@ private:
         requestMessage.stab_roll = request->roll_stabilization;
         requestMessage.stab_pitch = request->pitch_stabilization;
         requestMessage.stab_yaw = request->yaw_stabilization;
+        yaw_counter = 0;
+        last_response_yaw = 0;
+        inited_yaw = false;
 
         response->success = true;
     }
