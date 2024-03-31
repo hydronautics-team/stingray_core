@@ -100,13 +100,12 @@ private:
             requestMessage.depth = 0;
         }
         if (requestMessage.stab_yaw) {
-            float request_yaw = std::fmod(uvStateMsg.yaw + request->yaw, 360);
-            if (request_yaw > 180) {
-                request_yaw = -(request_yaw - 180);
-            } else if (request_yaw < -180) {
-                request_yaw = -(request_yaw + 180);
-            }
-            requestMessage.yaw = request_yaw;
+            RCLCPP_INFO(_node->get_logger(), "Received yaw: %f", responseMessage.yaw);
+            RCLCPP_INFO(_node->get_logger(), "Delta yaw: %f", yaw_delta);
+            RCLCPP_INFO(_node->get_logger(), "Request yaw: %f", requestMessage.yaw);
+            RCLCPP_INFO(_node->get_logger(), "uvState yaw: %f", uvStateMsg.yaw);
+            RCLCPP_INFO(_node->get_logger(), "Final request yaw: %f", yaw_delta);
+            requestMessage.yaw = uvStateMsg.yaw + yaw_delta + request->yaw;
         } else {
             // RCLCPP_WARN(_node->get_logger(), "Yaw stabilization is not enabled");
             requestMessage.yaw = 0;
@@ -159,9 +158,16 @@ private:
         requestMessage.stab_roll = request->roll_stabilization;
         requestMessage.stab_pitch = request->pitch_stabilization;
         requestMessage.stab_yaw = request->yaw_stabilization;
-        yaw_counter = 0;
-        last_response_yaw = 0;
-        inited_yaw = false;
+        RCLCPP_INFO(_node->get_logger(), "Received yaw: %f", responseMessage.yaw);
+        RCLCPP_INFO(_node->get_logger(), "Delta yaw: %f", yaw_delta);
+        RCLCPP_INFO(_node->get_logger(), "Request yaw: %f", requestMessage.yaw);
+        RCLCPP_INFO(_node->get_logger(), "uvState yaw: %f", uvStateMsg.yaw);
+        // yaw_counter = 0;
+        yaw_delta = responseMessage.yaw;
+        uvStateMsg.yaw = 0;
+        requestMessage.yaw = uvStateMsg.yaw + yaw_delta;
+
+        RCLCPP_INFO(_node->get_logger(), "After enable stab yaw delta: %f", yaw_delta);
 
         response->success = true;
     }
@@ -191,15 +197,17 @@ private:
             if (!inited_yaw) {
                 yaw_delta = responseMessage.yaw;
                 inited_yaw = true;
-            } else {
-                if (last_response_yaw < -150 && responseMessage.yaw > 150) {
-                    yaw_counter--;
-                } else if (last_response_yaw > 150 && responseMessage.yaw < -150) {
-                    yaw_counter++;
-                }
-            }
-            last_response_yaw = responseMessage.yaw;
-            uvStateMsg.yaw = yaw_counter * 360 + responseMessage.yaw - yaw_delta;
+            } 
+            // else {
+            //     if (last_response_yaw < -150 && responseMessage.yaw > 150) {
+            //         yaw_counter--;
+            //     } else if (last_response_yaw > 150 && responseMessage.yaw < -150) {
+            //         yaw_counter++;
+            //     }
+            // }
+            // last_response_yaw = responseMessage.yaw;
+            // uvStateMsg.yaw = yaw_counter * 360 + responseMessage.yaw - yaw_delta;
+            uvStateMsg.yaw = responseMessage.yaw - yaw_delta;
             uvStateMsg.surge_accel = responseMessage.surge_accel;
             uvStateMsg.sway_accel = responseMessage.sway_accel;
             uvStateMsg.depth = responseMessage.depth;
@@ -217,10 +225,6 @@ private:
 
             uvStatePub->publish(uvStateMsg);
             deviceStateArrayPub->publish(deviceStateArrayMsg);
-            // RCLCPP_INFO(_node->get_logger(), "Received yaw: %f", responseMessage.yaw);
-            // RCLCPP_INFO(_node->get_logger(), "Received surge_accel: %f", responseMessage.surge_accel);
-            // RCLCPP_INFO(_node->get_logger(), "Received sway_accel: %f", responseMessage.sway_accel);
-            // RCLCPP_INFO(_node->get_logger(), "Absolute yaw: %f", uvStateMsg.yaw);
         } else
             RCLCPP_ERROR(_node->get_logger(), "Wrong checksum");
     }
