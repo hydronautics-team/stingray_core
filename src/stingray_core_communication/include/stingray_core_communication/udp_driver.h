@@ -109,7 +109,7 @@ public:
     std::shared_ptr<rclcpp::Node> _node;
 
     void try_receive() {
-        RCLCPP_INFO(_node->get_logger(), "Trying to receive from gui...");
+        // RCLCPP_INFO(_node->get_logger(), "Trying to receive from gui...");
         // std::this_thread::sleep_for(std::chrono::milliseconds(500));
         _receive_socket.async_receive_from(
             boost::asio::buffer(request_buffer), _receive_endpoint,
