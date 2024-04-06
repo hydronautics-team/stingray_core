@@ -222,6 +222,7 @@ private:
                 uvStateMsg.flare_seq.clear();
                 uvStateMsg.flare_seq.push_back(responseMessage.flare_seq[i]);
             }
+            RCLCPP_INFO(_node->get_logger(), "\n");
             for (int i = 0; i < ResponseMessage::dev_amount; i++) {
                 stingray_core_interfaces::msg::DeviceState deviceStateMsg;
                 deviceStateMsg.device = i;
