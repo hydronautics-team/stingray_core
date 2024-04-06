@@ -216,6 +216,10 @@ private:
             uvStateMsg.pitch_stabilization = requestMessage.stab_pitch;
             uvStateMsg.yaw_stabilization = requestMessage.stab_yaw;
             stingray_core_interfaces::msg::DeviceStateArray deviceStateArrayMsg;
+            for (int i = 0; i < ResponseMessage::flare_amount; i++) {
+                uvStateMsg.flare_seq.clear();
+                uvStateMsg.flare_seq.push_back(responseMessage.flare_seq[i]);
+            }
             for (int i = 0; i < ResponseMessage::dev_amount; i++) {
                 stingray_core_interfaces::msg::DeviceState deviceStateMsg;
                 deviceStateMsg.device = i;

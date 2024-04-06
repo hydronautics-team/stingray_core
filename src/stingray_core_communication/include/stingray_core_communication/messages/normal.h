@@ -47,6 +47,7 @@ struct ResponseNormalMessage : public AbstractMessage {
     const static uint8_t length = 28; // 26(message) + 2(checksum) = 30 dyte
     /// Number of the devs
     static const uint8_t dev_amount = 2;
+    static const uint8_t flare_amount = 0;
 
     // parsel start
     float roll;
@@ -56,6 +57,8 @@ struct ResponseNormalMessage : public AbstractMessage {
     float sway_accel;
     float depth;
     int8_t dev[dev_amount];
+    char flare_seq[flare_amount];
+
 
     uint16_t checksum;
     // parsel end
