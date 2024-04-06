@@ -4,6 +4,7 @@ float32 yaw
 float32 surge_accel
 float32 sway_accel
 float32 depth
+char[] flare_seq
 bool depth_stabilization
 bool roll_stabilization
 bool pitch_stabilization
