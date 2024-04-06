@@ -100,11 +100,11 @@ private:
             requestMessage.depth = 0;
         }
         if (requestMessage.stab_yaw) {
-            RCLCPP_INFO(_node->get_logger(), "Received yaw: %f", responseMessage.yaw);
-            RCLCPP_INFO(_node->get_logger(), "Delta yaw: %f", yaw_delta);
-            RCLCPP_INFO(_node->get_logger(), "Request yaw: %f", requestMessage.yaw);
-            RCLCPP_INFO(_node->get_logger(), "uvState yaw: %f", uvStateMsg.yaw);
-            RCLCPP_INFO(_node->get_logger(), "Final request yaw: %f", yaw_delta);
+            // RCLCPP_INFO(_node->get_logger(), "Received yaw: %f", responseMessage.yaw);
+            // RCLCPP_INFO(_node->get_logger(), "Delta yaw: %f", yaw_delta);
+            // RCLCPP_INFO(_node->get_logger(), "Request yaw: %f", requestMessage.yaw);
+            // RCLCPP_INFO(_node->get_logger(), "uvState yaw: %f", uvStateMsg.yaw);
+            // RCLCPP_INFO(_node->get_logger(), "Final request yaw: %f", yaw_delta);
             requestMessage.yaw = uvStateMsg.yaw + yaw_delta + request->yaw;
         } else {
             // RCLCPP_WARN(_node->get_logger(), "Yaw stabilization is not enabled");
@@ -158,16 +158,16 @@ private:
         requestMessage.stab_roll = request->roll_stabilization;
         requestMessage.stab_pitch = request->pitch_stabilization;
         requestMessage.stab_yaw = request->yaw_stabilization;
-        RCLCPP_INFO(_node->get_logger(), "Received yaw: %f", responseMessage.yaw);
-        RCLCPP_INFO(_node->get_logger(), "Delta yaw: %f", yaw_delta);
-        RCLCPP_INFO(_node->get_logger(), "Request yaw: %f", requestMessage.yaw);
-        RCLCPP_INFO(_node->get_logger(), "uvState yaw: %f", uvStateMsg.yaw);
+        // RCLCPP_INFO(_node->get_logger(), "Received yaw: %f", responseMessage.yaw);
+        // RCLCPP_INFO(_node->get_logger(), "Delta yaw: %f", yaw_delta);
+        // RCLCPP_INFO(_node->get_logger(), "Request yaw: %f", requestMessage.yaw);
+        // RCLCPP_INFO(_node->get_logger(), "uvState yaw: %f", uvStateMsg.yaw);
         // yaw_counter = 0;
         yaw_delta = responseMessage.yaw;
         uvStateMsg.yaw = 0;
         requestMessage.yaw = uvStateMsg.yaw + yaw_delta;
 
-        RCLCPP_INFO(_node->get_logger(), "After enable stab yaw delta: %f", yaw_delta);
+        // RCLCPP_INFO(_node->get_logger(), "After enable stab yaw delta: %f", yaw_delta);
 
         response->success = true;
     }
