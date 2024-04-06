@@ -181,7 +181,8 @@ private:
         }
         // Publish messages
         driverRequestPub->publish(driverRequestMsg);
-        // RCLCPP_INFO(_node->get_logger(), "Sent yaw: %f", requestMessage.yaw);
+        RCLCPP_INFO(_node->get_logger(), "requestMessage.dev[0]: %d", requestMessage.dev[0]);
+        RCLCPP_INFO(_node->get_logger(), "requestMessage.dev[1]: %d", requestMessage.dev[1]);
 
         requestMessage.reset_imu = false;
     }
@@ -216,13 +217,12 @@ private:
             uvStateMsg.pitch_stabilization = requestMessage.stab_pitch;
             uvStateMsg.yaw_stabilization = requestMessage.stab_yaw;
             stingray_core_interfaces::msg::DeviceStateArray deviceStateArrayMsg;
+            uvStateMsg.flare_seq.clear();
             for (int i = 0; i < ResponseMessage::flare_amount; i++) {
-                RCLCPP_INFO(_node->get_logger(), "Flare: %c", responseMessage.flare_seq[i]);
-
-                uvStateMsg.flare_seq.clear();
+                // RCLCPP_INFO(_node->get_logger(), "Flare: %c", responseMessage.flare_seq[i]);
                 uvStateMsg.flare_seq.push_back(responseMessage.flare_seq[i]);
             }
-            RCLCPP_INFO(_node->get_logger(), "\n");
+            // RCLCPP_INFO(_node->get_logger(), "\n");
             for (int i = 0; i < ResponseMessage::dev_amount; i++) {
                 stingray_core_interfaces::msg::DeviceState deviceStateMsg;
                 deviceStateMsg.device = i;

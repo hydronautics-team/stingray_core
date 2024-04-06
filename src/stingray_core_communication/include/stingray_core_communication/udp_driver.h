@@ -57,8 +57,9 @@ private:
 
         boost::system::error_code err;
         std::vector<uint8_t> to_send;
-        for (int i = 0; i < RequestMessage::length; i++)
+        for (int i = 0; i < RequestMessage::length; i++) {
             to_send.push_back(msg.data[i]);
+        }
         _send_socket.send_to(boost::asio::buffer(to_send), _send_endpoint, 0, err);
         // RCLCPP_INFO(_node->get_logger(), "Sent to gui %s", err.message().c_str());
     }
