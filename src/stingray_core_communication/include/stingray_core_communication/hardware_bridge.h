@@ -217,6 +217,8 @@ private:
             uvStateMsg.yaw_stabilization = requestMessage.stab_yaw;
             stingray_core_interfaces::msg::DeviceStateArray deviceStateArrayMsg;
             for (int i = 0; i < ResponseMessage::flare_amount; i++) {
+                RCLCPP_INFO(_node->get_logger(), "Flare: %c", responseMessage.flare_seq[i]);
+
                 uvStateMsg.flare_seq.clear();
                 uvStateMsg.flare_seq.push_back(responseMessage.flare_seq[i]);
             }
