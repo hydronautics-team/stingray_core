@@ -181,8 +181,8 @@ private:
         }
         // Publish messages
         driverRequestPub->publish(driverRequestMsg);
-        RCLCPP_INFO(_node->get_logger(), "requestMessage.dev[0]: %d", requestMessage.dev[0]);
-        RCLCPP_INFO(_node->get_logger(), "requestMessage.dev[1]: %d", requestMessage.dev[1]);
+        // RCLCPP_INFO(_node->get_logger(), "requestMessage.dev[0]: %d", requestMessage.dev[0]);
+        // RCLCPP_INFO(_node->get_logger(), "requestMessage.dev[1]: %d", requestMessage.dev[1]);
 
         requestMessage.reset_imu = false;
     }
