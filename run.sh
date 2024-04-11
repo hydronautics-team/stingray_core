@@ -1,0 +1,1 @@
+source install/setup.bash && ros2 launch stingray_core_launch auv.launch.py
