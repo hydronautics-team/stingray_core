@@ -5,13 +5,14 @@
 **hardware_bridge** - middle layer between low level protocol (UART, UDP, ...) and ROS communication.
 
 **uart_driver** - implementation of low level communication via UART
+
 **udp_driver** - implementation of low level communication via UDP
 
 ![stingray_core architecture](docs/arch.jpg)
 
 ## Basic usage
 
-### Run just UART driver 
+### Example: run UART driver 
 
 **From command line:**
 
@@ -34,7 +35,7 @@ The example in [uart.launch.py](src/stingray_core_launch/launch/uart.launch.py)
 - **parity** - uart parity
 - **serial_timeout** - serial timeout
 
-### Run UART communication with hardware bridge
+### Example: run UART driver with hardware bridge
 
 ```python
 from launch.actions import IncludeLaunchDescription
