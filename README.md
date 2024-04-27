@@ -10,6 +10,25 @@
 
 ![stingray_core architecture](docs/arch.jpg)
 
+## Dependencies
+
+- [serial](https://github.com/jinmenglei/serial.git) - for communication with stm32 and etc.
+
+
+## Docker
+
+run
+
+```bash
+./docker_run.sh
+```
+
+rebuild
+
+```bash
+./docker_build.sh
+```
+
 ## Basic usage
 
 ### Example: run UART driver 
