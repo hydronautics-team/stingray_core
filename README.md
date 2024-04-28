@@ -17,13 +17,15 @@
 
 ## Docker
 
-run
+**run**
 
 ```bash
 ./docker_run.sh
 ```
 
-rebuild
+specify --device in .sh file
+
+**rebuild**
 
 ```bash
 ./docker_build.sh
@@ -31,7 +33,11 @@ rebuild
 
 ## Basic usage
 
-### Example: run UART driver 
+> Put your serialized request parcel in **driver_request_topic**
+> 
+> Get your serialized response parcel from **driver_response_topic**
+
+### Example: UART communication 
 
 **From command line:**
 
@@ -39,9 +45,7 @@ rebuild
 ros2 launch stingray_core_communication uart_driver_node
 ```
 
-**From launch file:**
-
-The example in [uart.launch.py](src/stingray_core_launch/launch/uart.launch.py)
+This node uses normal.h message struct. It sends request message via serial port and recieves the answer. The node must send the request (even empty uint8 array) to get the answer.
 
 **Arguments:**
 
@@ -54,7 +58,28 @@ The example in [uart.launch.py](src/stingray_core_launch/launch/uart.launch.py)
 - **parity** - uart parity
 - **serial_timeout** - serial timeout
 
+### Example: UDP communication 
+
+**From command line:**
+
+```bash
+ros2 launch stingray_core_communication udp_driver_node
+```
+
+This node uses normal.h message struct. It sends request message via serial port and recieves the answer. The node must send the request (even empty uint8 array) to get the answer.
+
+**Arguments:**
+
+- **driver_request_topic** - from which topic to get input parcel
+- **driver_response_topic** - to which topic to put the output parcel from device
+- **send_to_ip** - receiver IP
+- **send_to_port** - receiver port
+- **receive_from_ip** - sender IP
+- **receive_from_port** - sender port
+
 ### Example: run UART driver with hardware bridge
+
+The example in [uart.launch.py](src/stingray_core_launch/launch/uart.launch.py)
 
 ```python
 from launch.actions import IncludeLaunchDescription
