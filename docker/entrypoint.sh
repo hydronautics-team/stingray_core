@@ -4,7 +4,7 @@ set -e
 # Проверяем, существует ли файл setup.bash
 if [ -f install/setup.bash ]; then
   echo "[INFO] Код уже сбилжен"
-  source install/setup.bash
+  source /stingray_core/install/setup.bash
   source "/additional_packages/install/setup.bash"
 else
   echo "[INFO] Файл install/setup.bash не найден. Запускаем сборку..."
@@ -17,7 +17,7 @@ else
     exit 1
   fi
   echo "[INFO] Сборка завершена успешно. Выполняем source install/setup.bash..."
-  source install/setup.bash
+  source /stingray_core/install/setup.bash
   source "/additional_packages/install/setup.bash"
 fi
 

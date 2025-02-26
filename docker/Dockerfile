@@ -16,7 +16,8 @@ COPY stingray_core/docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x  /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 
-# RUN echo 'source /opt/ros/jazzy/setup.bash' >> /root/.bashrc
+# RUN echo 'source /opt/ros/humble/setup.bash' >> /root/.bashrc
 # RUN echo 'source /additional_packages/install/setup.bash' >> /root/.bashrc
+# RUN echo 'source /stingray_core/install/setup.bash' >> /root/.bashrc
 
 CMD ["bash"]
