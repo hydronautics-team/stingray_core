@@ -1,4 +1,4 @@
-FROM ros:jazzy-ros-base@sha256:ed03918373b3b3a4d20d370b923bd52246eb64eafc541dba69b6a5e44925d140
+FROM ros:humble-ros-base@sha256:e1af917f820be2e14ebacd00e503b3f40b1287e89119391e45873c98e61e45c5
 
 RUN apt update && apt install -y --no-install-recommends git wget libboost-system-dev
 
@@ -6,11 +6,13 @@ WORKDIR /additional_packages/src
 RUN git clone https://github.com/jinmenglei/serial.git
 
 WORKDIR /additional_packages
-RUN /bin/bash -c "source /opt/ros/jazzy/setup.bash && colcon build"
+RUN /bin/bash -c "source /opt/ros/humble/setup.bash && colcon build"
 
+COPY stingray_core /stingray_core
 WORKDIR /stingray_core
+RUN /bin/bash -c "source /opt/ros/humble/setup.bash && source /additional_packages/install/setup.bash && colcon build"
 
-COPY entrypoint.sh /entrypoint.sh
+COPY stingray_core/docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x  /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 

@@ -9,7 +9,7 @@ if [ -f install/setup.bash ]; then
 else
   echo "[INFO] Файл install/setup.bash не найден. Запускаем сборку..."
   # Выполняем сборку, при ошибке удаляем build, install, log и выходим
-  source "/opt/ros/jazzy/setup.bash"
+  source "/opt/ros/humble/setup.bash"
   source "/additional_packages/install/setup.bash"
   if ! colcon build --packages-skip serial; then
     echo "[ERROR] Сборка завершилась с ошибкой. Удаляем build, install, log..."

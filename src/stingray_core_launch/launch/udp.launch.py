@@ -95,8 +95,23 @@ def generate_launch_description():
         ),
         Node(
             package='stingray_core_communication',
-            executable='udp_driver_node',
-            # name='udp_driver_node',
+            executable='udp_driver_receiver_node',
+            name='udp_driver_receiver_node',
+            parameters=[
+                {'driver_request_topic': LaunchConfiguration("driver_request_topic")},
+                {'driver_response_topic': LaunchConfiguration("driver_response_topic")},
+                {'send_to_ip': LaunchConfiguration("send_to_ip")},
+                {'send_to_port': LaunchConfiguration("send_to_port")},
+                {'receive_from_ip': LaunchConfiguration("receive_from_ip")},
+                {'receive_from_port': LaunchConfiguration("receive_from_port")},
+            ],
+            respawn=True,
+            respawn_delay=0.5,
+        ),
+        Node(
+            package='stingray_core_communication',
+            executable='udp_driver_sender_node',
+            name='udp_driver_sender_node',
             parameters=[
                 {'driver_request_topic': LaunchConfiguration("driver_request_topic")},
                 {'driver_response_topic': LaunchConfiguration("driver_response_topic")},
