@@ -1,7 +1,10 @@
 FROM hydronautics/serial:humble
 
-# clone and build core
-RUN git clone -b sauvc25 https://github.com/hydronautics-team/stingray_core.git
+# задаём аргумент, по умолчанию sauvc25
+ARG STINGRAY_CORE_BRANCH=master
+
+# клонируем нужную ветку stingray_core
+RUN git clone -b ${STINGRAY_CORE_BRANCH} https://github.com/hydronautics-team/stingray_core.git
 WORKDIR /stingray_core
 RUN /bin/bash -c "source /opt/ros/humble/setup.bash && source /additional_packages/install/setup.bash && colcon build --packages-select stingray_core_launch stingray_core_interfaces stingray_core_communication"
 
