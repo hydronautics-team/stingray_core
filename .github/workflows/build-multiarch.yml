@@ -27,8 +27,8 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v2
         with:
-          context: ../
-          file: stingray_core/docker/Dockerfile
+          context: .
+          file: docker/Dockerfile
           push: true
           # Можно тегировать образ по имени ветки, чтобы отличать сборки
           tags: hydronautics/stingray_core:latest
