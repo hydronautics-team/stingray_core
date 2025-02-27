@@ -1,9 +1,5 @@
 FROM hydronautics/serial:humble
 
-# задаём аргумент, по умолчанию sauvc25
-ARG STINGRAY_CORE_BRANCH=master
-
-# клонируем нужную ветку stingray_core
 WORKDIR /stingray_core
 COPY . /stingray_core
 RUN /bin/bash -c "source /opt/ros/humble/setup.bash && source /additional_packages/install/setup.bash && colcon build --packages-select stingray_core_launch stingray_core_interfaces stingray_core_communication"

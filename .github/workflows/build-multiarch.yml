@@ -6,6 +6,7 @@ on:
 
 jobs:
   build:
+    if: startsWith(github.event.head_commit.message, 'build:')
     runs-on: ubuntu-latest
 
     steps:
@@ -33,8 +34,5 @@ jobs:
           # Можно тегировать образ по имени ветки, чтобы отличать сборки
           tags: hydronautics/stingray_core:latest
           platforms: linux/amd64,linux/arm64
-          # Передаём имя ветки в Dockerfile как build-arg
-          build-args: |
-            STINGRAY_CORE_BRANCH=${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
