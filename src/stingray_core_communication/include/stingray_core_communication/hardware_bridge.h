@@ -212,6 +212,9 @@ private:
             uvStateMsg.surge_accel = responseMessage.surge_accel;
             uvStateMsg.sway_accel = responseMessage.sway_accel;
             uvStateMsg.depth = responseMessage.depth;
+            uvStateMsg.distance_from_bottom = responseMessage.distance_from_bottom;
+            uvStateMsg.peleng_angle = responseMessage.peleng_angle;
+            uvStateMsg.distance_from_start = responseMessage.distance_from_start;
             uvStateMsg.depth_stabilization = requestMessage.stab_depth;
             uvStateMsg.roll_stabilization = requestMessage.stab_roll;
             uvStateMsg.pitch_stabilization = requestMessage.stab_pitch;

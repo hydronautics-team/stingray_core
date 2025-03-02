@@ -5,6 +5,7 @@ float32 surge_accel
 float32 sway_accel
 float32 depth
 float32 distance_from_bottom
+int32 peleng_angle
 float32 distance_from_start
 char[] flare_seq
 bool depth_stabilization
