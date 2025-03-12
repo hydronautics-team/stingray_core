@@ -199,16 +199,20 @@ private:
                 yaw_delta = responseMessage.yaw;
                 inited_yaw = true;
             } 
-            // else {
-            //     if (last_response_yaw < -150 && responseMessage.yaw > 150) {
-            //         yaw_counter--;
-            //     } else if (last_response_yaw > 150 && responseMessage.yaw < -150) {
-            //         yaw_counter++;
-            //     }
-            // }
-            // last_response_yaw = responseMessage.yaw;
-            // uvStateMsg.yaw = yaw_counter * 360 + responseMessage.yaw - yaw_delta;
-            uvStateMsg.yaw = responseMessage.yaw - yaw_delta;
+            // >> for -inf to inf yaw angle
+            else {
+                if (last_response_yaw < -150 && responseMessage.yaw > 150) {
+                    yaw_counter--;
+                } else if (last_response_yaw > 150 && responseMessage.yaw < -150) {
+                    yaw_counter++;
+                }
+            }
+
+            last_response_yaw = responseMessage.yaw;
+            uvStateMsg.yaw = yaw_counter * 360 + responseMessage.yaw - yaw_delta; 
+            // << -inf to inf yaw angle
+
+            // uvStateMsg.yaw = responseMessage.yaw - yaw_delta; // for -180 to 180 yaw angle
             uvStateMsg.surge_accel = responseMessage.surge_accel;
             uvStateMsg.sway_accel = responseMessage.sway_accel;
             uvStateMsg.depth = responseMessage.depth;
