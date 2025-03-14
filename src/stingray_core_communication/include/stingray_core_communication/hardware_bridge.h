@@ -105,7 +105,8 @@ private:
             // RCLCPP_INFO(_node->get_logger(), "Request yaw: %f", requestMessage.yaw);
             // RCLCPP_INFO(_node->get_logger(), "uvState yaw: %f", uvStateMsg.yaw);
             // RCLCPP_INFO(_node->get_logger(), "Final request yaw: %f", yaw_delta);
-            requestMessage.yaw = uvStateMsg.yaw + yaw_delta + request->yaw;
+            // requestMessage.yaw = uvStateMsg.yaw + yaw_delta + request->yaw;
+            requestMessage.yaw = request->yaw;
         } else {
             // RCLCPP_WARN(_node->get_logger(), "Yaw stabilization is not enabled");
             requestMessage.yaw = 0;
@@ -162,10 +163,10 @@ private:
         // RCLCPP_INFO(_node->get_logger(), "Delta yaw: %f", yaw_delta);
         // RCLCPP_INFO(_node->get_logger(), "Request yaw: %f", requestMessage.yaw);
         // RCLCPP_INFO(_node->get_logger(), "uvState yaw: %f", uvStateMsg.yaw);
-        // yaw_counter = 0;
+        yaw_counter = 0;
         yaw_delta = responseMessage.yaw;
-        uvStateMsg.yaw = 0;
-        requestMessage.yaw = uvStateMsg.yaw + yaw_delta;
+        // uvStateMsg.yaw = 0;
+        // requestMessage.yaw = uvStateMsg.yaw + yaw_delta;
 
         // RCLCPP_INFO(_node->get_logger(), "After enable stab yaw delta: %f", yaw_delta);
 
