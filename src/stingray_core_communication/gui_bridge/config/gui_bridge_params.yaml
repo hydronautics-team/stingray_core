@@ -1,0 +1,9 @@
+udp_receiver_node:
+  ros__parameters:
+    ip: "0.0.0.0"
+    port: 57410
+
+udp_sender_node:
+  ros__parameters:
+    ip: "127.0.0.1"  # IP Raspberry Pi, 127.0.0.1 for localhost
+    port: 57411
