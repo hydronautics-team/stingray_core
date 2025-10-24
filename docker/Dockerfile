@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
     ros-humble-udp-msgs \
     libasio-dev \
     netcat \
+    socat \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /stingray_core
