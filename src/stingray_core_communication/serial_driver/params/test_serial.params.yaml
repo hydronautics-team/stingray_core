@@ -4,11 +4,8 @@ serial_driver:
     fd_hup: true
     baud_rate: 115200
     flow_control: none
-    parity: 0
-    stop_bits: 1
-    character_size: 8
-    loop_rate: 100
-    timeout_ms: 1000
+    parity: none
+    stop_bits: "1"
     topic_name: "serial_data"
 
 serial_bridge:
