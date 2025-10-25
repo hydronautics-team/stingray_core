@@ -1,15 +1,9 @@
-serial_driver:
+/**:
   ros__parameters:
-    device_name: "/dev/pts/2"  # Используйте один из созданных портов
-    fd_hup: true
+    device_name: "/dev/pts/2"
     baud_rate: 115200
-    flow_control: none
-    parity: none
-    stop_bits: "1"
-    topic_name: "serial_data"
-
-serial_bridge:
-  ros__parameters:
-    incoming_ros_messages_topic: "to_device"
-    outgoing_ros_messages_topic: "from_device"
-    use_socket: false
+    flow_control: "none"
+    parity: "none"
+    stop_bits: 1
+    data_bits: 8
+    timeout_ms: 1000
