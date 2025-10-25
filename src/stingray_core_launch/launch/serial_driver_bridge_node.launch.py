@@ -30,15 +30,13 @@ def generate_launch_description():
         output='screen',
     )
 
-    # Автоматическая конфигурация после запуска
     configure_event = EmitEvent(
         event=ChangeState(
             lifecycle_node_matcher=lambda event: event.node_name == 'serial_bridge',
             transition_id=Transition.TRANSITION_CONFIGURE
         )
     )
-
-    # Автоматическая активация после конфигурации
+    
     activate_event = RegisterEventHandler(
         OnStateTransition(
             target_lifecycle_node=serial_bridge_node,

@@ -12,7 +12,6 @@ from launch_ros.event_handlers import OnStateTransition
 from lifecycle_msgs.msg import Transition
 
 def generate_launch_description():
-    # Используем ваш пакет вместо serial_driver
     share_dir = get_package_share_directory('serial_driver')
     
     params_file_arg = DeclareLaunchArgument(
@@ -30,7 +29,6 @@ def generate_launch_description():
         output='screen',
     )
 
-    # Автоматическая конфигурация после запуска
     configure_event = EmitEvent(
         event=ChangeState(
             lifecycle_node_matcher=lambda event: event.node_name == 'serial_bridge',
@@ -38,7 +36,6 @@ def generate_launch_description():
         )
     )
 
-    # Автоматическая активация после конфигурации
     activate_event = RegisterEventHandler(
         OnStateTransition(
             target_lifecycle_node=serial_bridge_node,
