@@ -7,7 +7,6 @@ CONTAINER_NAME=stingray_core
 echo "[INFO] Запуск контейнера $CONTAINER_NAME..."
 
 docker run -it --rm \
-  --user $(id -u):$(id -g) \
   --name $CONTAINER_NAME \
   --network host \
   -v $(pwd):/stingray_core \
