@@ -9,7 +9,7 @@ def generate_launch_description():
     ns_arg = DeclareLaunchArgument('ns', default_value='thruster')
     params_arg = DeclareLaunchArgument(
         'params_file',
-        default_value=f"{get_package_share_directory('stingray_core_communication')}/params/thruster.params .yaml"
+        default_value=f"{get_package_share_directory('stingray_core_communication')}/params/thruster.params.yaml"
     )
 
     serial_lc = IncludeLaunchDescription(
@@ -29,8 +29,8 @@ def generate_launch_description():
             executable='thruster_link_node',
             name='thruster_link',
             output='screen',
-            parameters=[{'device_id': 1}],
-            remappings=[('serial_read','serial_read'), ('serial_write','serial_write')],
+            parameters=[LaunchConfiguration('params_file')],  # Используем переданный файл параметров
+            # Убраны избыточные ремаппинги
         ),
     ])
 
