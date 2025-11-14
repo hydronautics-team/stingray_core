@@ -1,7 +1,7 @@
 #include <chrono>
 #include <functional>
 #include <memory>
-#include <std_msgs/msg/uint8_multi_array.hpp>
+#include <std_msgs/msg/u_int8_multi_array.hpp>
 #include <vector>
 
 #include "rclcpp/rclcpp.hpp"
@@ -22,7 +22,7 @@ public:
 private:
     void thrustersCallback(const std_msgs::msg::UInt8MultiArray::SharedPtr msg)
     {
-        if (msg->data.empty)
+        if (msg->data.empty())
         {
             std::vector<uint8_t> packet = createPacket(msg->data);
             auto serial_msg = std_msgs::msg::UInt8MultiArray();
