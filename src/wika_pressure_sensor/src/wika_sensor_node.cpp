@@ -13,11 +13,11 @@ WikaPressureSensorNode::WikaPressureSensorNode()
 
     depth_pub_ = this->create_publisher<std_msgs::msg::Float64>("depth", 10);
     
-    data_raw_sub_ = this->create_subscription<std_msgs::msg::String>("data_raw", 10,
+    data_raw_sub_ = this->create_subscription<std_msgs::msg::String>("/stingray_core/depth_link_node/data_raw", 10,
         std::bind(&WikaPressureSensorNode::data_raw_callback_, this, std::placeholders::_1));
     
     RCLCPP_INFO(this->get_logger(), "Wika pressure sensor node initialized");
-    RCLCPP_INFO(this->get_logger(), "Depth coefficient: %.3f", depth_coefficient_);
+    RCLCPP_INFO(this->get_logger(), "depth_coefficient: %.3f", depth_coefficient_);
 }
 
 void WikaPressureSensorNode::data_raw_callback_(std_msgs::msg::String::SharedPtr msg)
