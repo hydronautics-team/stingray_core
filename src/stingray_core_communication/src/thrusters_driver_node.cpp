@@ -1,12 +1,14 @@
 #include <chrono>
 #include <functional>
 #include <memory>
-#include <std_msgs/msg/uint8_multi_array.hpp>
 #include <vector>
 
 #include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/u_int8_multi_array.hpp"
+
 namespace stingray_core
 {
+
 class ThrustersDriverNode : public rclcpp::Node
 {
 public:
@@ -22,14 +24,14 @@ public:
 private:
     void thrustersCallback(const std_msgs::msg::UInt8MultiArray::SharedPtr msg)
     {
-        if (msg->data.empty)
+        if (!msg->data.empty())
         {
             std::vector<uint8_t> packet = createPacket(msg->data);
             auto serial_msg = std_msgs::msg::UInt8MultiArray();
             serial_msg.data = packet;
             serial_pub_->publish(serial_msg);
 
-            RCLCPP_DEBUG(this->get_logger(), "Sent %zu bytes to serial", packet.size());
+            RCLCPP_INFO(this->get_logger(), "Sent %zu bytes to serial", packet.size());
         }
     }
 
@@ -43,7 +45,8 @@ private:
         // Заголовок пакета
         packet.push_back(0xFF);
         packet.push_back(0xFD);
-        // Закидываем значения в массив и считаем чек сумму
+
+        // Закидываем значения в массив и считаем контрольную сумму
         uint8_t checksum = 0;
         for (auto value : thrusters)
         {
@@ -54,12 +57,14 @@ private:
 
         return packet;
     }
-}; // namespace rclcpp::Node
+}; // class ThrustersDriverNode
+
 } // namespace stingray_core
+
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
-    auto node = std::make_shared<ThrustersDriverNode>();
+    auto node = std::make_shared<stingray_core::ThrustersDriverNode>();
     rclcpp::spin(node);
     rclcpp::shutdown();
     return 0;
