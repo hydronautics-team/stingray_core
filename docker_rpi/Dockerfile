@@ -1,4 +1,4 @@
-FROM ros:humble-ros-base
+FROM arm32v7/ros:humble-ros-base
 
 # Установим нужные пакеты + утилиты для подсветки терминала
 RUN apt-get update && apt-get install -y \
