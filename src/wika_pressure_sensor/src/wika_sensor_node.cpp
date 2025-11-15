@@ -11,9 +11,9 @@ WikaPressureSensorNode::WikaPressureSensorNode()
     this->declare_parameter<double>("depth_coefficient", 1.0);
     depth_coefficient_ = this->get_parameter("depth_coefficient").as_double();
 
-    depth_pub_ = this->create_publisher<std_msgs::msg::Float64>("/pressure", 10);
+    depth_pub_ = this->create_publisher<std_msgs::msg::Float64>("pressure", 10);
     
-    data_raw_sub_ = this->create_subscription<std_msgs::msg::String>("/data_raw", 10,
+    data_raw_sub_ = this->create_subscription<std_msgs::msg::String>("data_raw", 10,
         std::bind(&WikaPressureSensorNode::data_raw_callback_, this, std::placeholders::_1));
     
     RCLCPP_INFO(this->get_logger(), "Wika pressure sensor node initialized");
