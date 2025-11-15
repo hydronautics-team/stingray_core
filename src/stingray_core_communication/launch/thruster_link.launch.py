@@ -6,40 +6,13 @@ from ament_index_python.packages import get_package_share_directory
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 import os
 
+
 def generate_launch_description():
-    ns_arg = DeclareLaunchArgument('ns', default_value='thruster')
-    params_arg = DeclareLaunchArgument(
-        'params_file',
-        default_value=PathJoinSubstitution([
-            get_package_share_directory('stingray_core_communication'),
-            'params',
-            'thruster.params.yaml'
-        ])
-    )
-
-    serial_lc = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            PathJoinSubstitution([
-                get_package_share_directory('stingray_core_communication'),
-                'launch',
-                'serial_bridge_lc.launch.py'
-            ])
-        ),
-        launch_arguments={
-            'ns': LaunchConfiguration('ns'),
-            'params_file': LaunchConfiguration('params_file')
-        }.items()
-    )
-
-    link_node = GroupAction([
-        PushRosNamespace(LaunchConfiguration('ns')),
+    return LaunchDescription([
         Node(
-            package='stingray_core_communication',
-            executable='thrusters_driver_node',
-            name='thrusters_driver',
-            output='screen',
-            parameters=[LaunchConfiguration('params_file')],
-        ),
+            package='stingray_core_communication',                 # твой пакет
+            executable='thrusters_driver_node',      # имя исполняемого файла после сборки
+            name='thrusters_driver_node',
+            output='screen'
+        )
     ])
-
-    return LaunchDescription([ns_arg, params_arg, serial_lc, link_node])
