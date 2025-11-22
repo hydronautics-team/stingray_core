@@ -1,16 +1,14 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>wika_pressure_sensor</name>
+  <name>pressure_sensor</name>
   <version>1.0.0</version>
-  <description>WIKA pressure sensor data parser node</description>
-  <maintainer email="p.v.elesin@gmail.com">waspishraccoon</maintainer>
-  <license>TODO: License declaration</license>
+  <description>Pressure sensor data parser node</description>
+  <maintainer email="p.v.elesin@gmail.com">Pavel Elesin</maintainer>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>rclcpp</depend>
-  <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
 
   <exec_depend>launch</exec_depend>
