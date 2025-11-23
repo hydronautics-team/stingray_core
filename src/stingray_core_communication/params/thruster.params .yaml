@@ -1,0 +1,14 @@
+serial_bridge:
+  ros__parameters:
+    device_name: /dev/tty
+    baud_rate: 115200
+    flow_control: "none"   # Допустимые значения: "none", "software", "hardware"
+    parity: 0              # 0: нет, 1: нечетный, 2: четный
+    stop_bits: 1           # 1 или 2
+
+thrusters_driver:
+  ros__parameters:
+    # Параметры для драйвера двигателей, если нужны
+    min_thrust: 100
+    max_thrust: 200
+    thruster_count: 12
