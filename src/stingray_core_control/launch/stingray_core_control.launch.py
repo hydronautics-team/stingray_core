@@ -18,6 +18,7 @@ def generate_launch_description():
     topic_loop_flags = LaunchConfiguration('topic_loop_flags')
     topic_pressure_sensor = LaunchConfiguration('topic_pressure_sensor')
     topic_control_data = LaunchConfiguration('topic_control_data')
+    # thruster_direction_matrix = LaunchConfiguration('thruster_direction_matrix')
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -61,6 +62,12 @@ def generate_launch_description():
             default_value='/control/data',
             description='Topic for external control data (Twist)'
         ),
+        
+        # DeclareLaunchArgument(
+        #     'thruster_direction_matrix',
+        #     default_value='',
+        #     description='Override thruster direction matrix (optional)'
+        # ),  
 
         Node(
             package='stingray_core_control',
@@ -76,7 +83,8 @@ def generate_launch_description():
                     'topic_imu_angular_rate': topic_imu_angular_rate,
                     'topic_loop_flags': topic_loop_flags,
                     'topic_pressure_sensor': topic_pressure_sensor,
-                    'topic_control_data': topic_control_data
+                    'topic_control_data': topic_control_data,
+                    # 'thruster_direction_matrix': thruster_direction_matrix,
                 }
             ],
         )
