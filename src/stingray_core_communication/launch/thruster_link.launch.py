@@ -8,10 +8,24 @@ import os
 
 
 def generate_launch_description():
+    # Получаем путь к пакету serial_driver
+    serial_driver_dir = get_package_share_directory('serial_driver')
+
+    # Создаем действие для включения лаунч файла serial_driver
+    serial_bridge_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(serial_driver_dir, 'launch', 'serial_driver_bridge_node.launch.py')
+        )
+    )
+
     return LaunchDescription([
+        # Запускаем serial_bridge_node через его лаунч файл
+        serial_bridge_launch,
+
+        # Запускаем ваш узел thrusters_driver_node
         Node(
-            package='stingray_core_communication',                 # твой пакет
-            executable='thrusters_driver_node',      # имя исполняемого файла после сборки
+            package='stingray_core_communication',
+            executable='thrusters_driver_node',
             name='thrusters_driver_node',
             output='screen'
         )

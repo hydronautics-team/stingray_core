@@ -18,11 +18,11 @@ fi
 
 # запускаем контейнер от текущего пользователя, чтобы файлы в bind-mount были твоими
 docker run -it --rm \
+  --privileged \
   --name "$CONTAINER_NAME" \
   --network ros2-net \
   -v "$(pwd)":/stingray_core \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
+  -v /dev:/dev\
   -e DISPLAY="$DISPLAY" \
-  --device /dev/i2c-0 \
-  --device /dev/i2c-1 \
   "$IMAGE_NAME"
