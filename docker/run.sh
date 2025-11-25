@@ -10,6 +10,8 @@ if [ "$(docker ps -a -q -f name=^/${CONTAINER_NAME}$)" ]; then
     docker rm -f $CONTAINER_NAME
 fi
 
+ROS_DOMAIN_ID=1
+
 # получим gid группы i2c если есть
 I2C_GID=""
 if getent group i2c >/dev/null 2>&1; then
@@ -20,9 +22,10 @@ fi
 docker run -it --rm \
   --privileged \
   --name "$CONTAINER_NAME" \
-  --network ros2-net \
+  --network host \
   -v "$(pwd)":/stingray_core \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
   -v /dev:/dev\
   -e DISPLAY="$DISPLAY" \
+  -e ROS_DOMAIN_ID=$ROS_DOMAIN_ID \
   "$IMAGE_NAME"
