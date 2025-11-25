@@ -51,8 +51,8 @@ private:
         {
             packet.push_back(value);
         }
-        packet.push_back(150);
-        packet.push_back(150);
+        // packet.push_back(150);
+        // packet.push_back(150);
 
         return packet;
     }
