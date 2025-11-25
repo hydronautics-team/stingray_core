@@ -15,7 +15,7 @@ public:
     ThrustersDriverNode() : Node("thrusters_driver_node")
     {
         thrusters_sub_ = this->create_subscription<std_msgs::msg::UInt8MultiArray>(
-            "/thrusters/cmd", 10, std::bind(&ThrustersDriverNode::thrustersCallback, this, std::placeholders::_1));
+            "/thruster/cmd", 10, std::bind(&ThrustersDriverNode::thrustersCallback, this, std::placeholders::_1));
 
         serial_pub_ = this->create_publisher<std_msgs::msg::UInt8MultiArray>("serial_write", 10);
         RCLCPP_INFO(this->get_logger(), "Thrusters driver node initialized");

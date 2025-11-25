@@ -248,7 +248,7 @@ class StingrayCoreControlNode(Node):
             v = 0.0
             for j in range(6):
                 v += row[j] * control_signals[j]
-            v_int = max(0, min(255, int(v)))
+            v_int = max(100, min(200, int(v + 150)))
             result.append(v_int)
 
         return result
