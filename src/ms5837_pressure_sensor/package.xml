@@ -4,6 +4,7 @@
   <name>ms5837_pressure_sensor</name>
   <version>1.0.0</version>
   <description>ROS 2 driver package for MS5837 pressure and temperature sensor.</description>
+  <license>FIXME</license>
 
   <maintainer email="p.v.elesin@gmail.com">Waspish Raccoon</maintainer>
 
