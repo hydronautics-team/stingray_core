@@ -6,7 +6,6 @@
   <description>ROS 2 driver package for MS5837 pressure and temperature sensor.</description>
 
   <maintainer email="p.v.elesin@gmail.com">Waspish Raccoon</maintainer>
-  <license>TODO: License declaration</license>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
