@@ -1,0 +1,98 @@
+stingray_core_control_node:
+  ros__parameters:
+    # thrusters:
+    #   - top_front_left
+    #   - top_front_right
+    #   - top_rear_left
+    #   - top_rear_right
+    #   - bottom_front_left
+    #   - bottom_front_right
+    #   - bottom_rear_left
+    #   - bottom_rear_right
+    #   - middle_left
+    #   - middle_right
+
+    # # оси управления
+    # axes:
+    #   - u_surge
+    #   - u_sway
+    #   - u_heave
+    #   - u_roll
+    #   - u_pitch
+    #   - u_yaw
+
+    thrusters: ["top_front_left", "top_front_right", "top_rear_left", "top_rear_right", "bottom_front_left", "bottom_front_right", "bottom_rear_left", "bottom_rear_right", "middle_left", "middle_right"]
+    
+    # оси управления
+    axes: ["u_surge", "u_sway", "u_heave", "u_roll", "u_pitch", "u_yaw"]
+
+    # коэффициенты для каждого двигателя по каждой оси
+    top_front_left_u_surge: 1
+    top_front_left_u_sway: 0
+    top_front_left_u_heave: 0
+    top_front_left_u_roll: 0
+    top_front_left_u_pitch: 0
+    top_front_left_u_yaw: 0
+
+    top_front_right_u_surge: 1
+    top_front_right_u_sway: 0
+    top_front_right_u_heave: 0
+    top_front_right_u_roll: 0
+    top_front_right_u_pitch: 0
+    top_front_right_u_yaw: 0
+
+    top_rear_left_u_surge: 1
+    top_rear_left_u_sway: 0
+    top_rear_left_u_heave: 0
+    top_rear_left_u_roll: 0
+    top_rear_left_u_pitch: 0
+    top_rear_left_u_yaw: 0
+
+    top_rear_right_u_surge: 1
+    top_rear_right_u_sway: 0
+    top_rear_right_u_heave: 0
+    top_rear_right_u_roll: 0
+    top_rear_right_u_pitch: 0
+    top_rear_right_u_yaw: 0
+
+    bottom_front_left_u_surge: 1
+    bottom_front_left_u_sway: 0
+    bottom_front_left_u_heave: 0
+    bottom_front_left_u_roll: 0
+    bottom_front_left_u_pitch: 0
+    bottom_front_left_u_yaw: 0
+
+    bottom_front_right_u_surge: 1
+    bottom_front_right_u_sway: 0
+    bottom_front_right_u_heave: 0
+    bottom_front_right_u_roll: 0
+    bottom_front_right_u_pitch: 0
+    bottom_front_right_u_yaw: 0
+
+    bottom_rear_left_u_surge: 1
+    bottom_rear_left_u_sway: 0
+    bottom_rear_left_u_heave: 0
+    bottom_rear_left_u_roll: 0
+    bottom_rear_left_u_pitch: 0
+    bottom_rear_left_u_yaw: 0
+
+    bottom_rear_right_u_surge: 1
+    bottom_rear_right_u_sway: 0
+    bottom_rear_right_u_heave: 0
+    bottom_rear_right_u_roll: 0
+    bottom_rear_right_u_pitch: 0
+    bottom_rear_right_u_yaw: 0
+
+    middle_left_u_surge: 1
+    middle_left_u_sway: 0
+    middle_left_u_heave: 0
+    middle_left_u_roll: 0
+    middle_left_u_pitch: 0
+    middle_left_u_yaw: 0
+
+    middle_right_u_surge: 1
+    middle_right_u_sway: 0
+    middle_right_u_heave: 0
+    middle_right_u_roll: 0
+    middle_right_u_pitch: 0
+    middle_right_u_yaw: 0

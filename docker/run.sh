@@ -5,6 +5,9 @@ set -e
 IMAGE_NAME="stingray_core"
 CONTAINER_NAME="stingray_core"
 
+xhost +si:localuser:root
+
+
 if [ "$(docker ps -a -q -f name=^/${CONTAINER_NAME}$)" ]; then
     echo "Container '$CONTAINER_NAME' already exists. Removing..."
     docker rm -f $CONTAINER_NAME

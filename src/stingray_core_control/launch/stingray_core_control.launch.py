@@ -11,6 +11,9 @@ def generate_launch_description():
     params_file = os.path.join(
         package_prefix, "params", "stingray_core_control_node.yaml"
     )
+    params_file_thruster = os.path.join(
+        package_prefix, "params", "thruster_matrix.yaml"
+    )
     rate_hz = LaunchConfiguration('rate_hz')
     topic_imu_angular = LaunchConfiguration('topic_imu_angular')
     topic_imu_linear_accel = LaunchConfiguration('topic_imu_linear_accel')
@@ -62,7 +65,6 @@ def generate_launch_description():
             default_value='/control/data',
             description='Topic for external control data (Twist)'
         ),
-        
         # DeclareLaunchArgument(
         #     'thruster_direction_matrix',
         #     default_value='',
@@ -76,6 +78,7 @@ def generate_launch_description():
             output='screen',
             parameters=[
                 params_file,
+                params_file_thruster,
                 {
                     'rate_hz': rate_hz,
                     'topic_imu_angular': topic_imu_angular,
