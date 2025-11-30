@@ -32,7 +32,7 @@ devel_isolated/
 .project
 .cproject
 
-# qcreator stuff
+# qtcreator stuff
 CMakeLists.txt.user
 
 srv/_*.py
