@@ -1,0 +1,3 @@
+# use only ""
+post_start_commands:
+  - echo "source /stingray-core/configs/.profile" >> ~/.profile

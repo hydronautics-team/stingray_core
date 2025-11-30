@@ -1,6 +1,5 @@
 FROM osrf/ros:humble-desktop-full
 # Add timezone
-ENV USER=$(whoami)
 ENV TZ=Europe/Moscow
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 # Update & Upgrade
@@ -36,6 +35,8 @@ RUN useradd -ms /bin/bash $NEW_USER
 RUN usermod -aG sudo $NEW_USER
 RUN passwd -d $NEW_USER
 USER $NEW_USER
+
+RUN mkdir -p ~/.ssh
 
 WORKDIR /stingray-core
 CMD ["tail", "-f", "/dev/null"]
