@@ -12,7 +12,10 @@ from pathlib import Path
 PROJECT_NAME = "stingray-core"
 IMAGE_NAME = "hydronautics/" + PROJECT_NAME + ":dev"
 CONTAINER_NAME = PROJECT_NAME + "-dev"
-COMMANDS_FILE = "configs/post_start_commands.yaml"
+COMMANDS_FILES = (
+    "configs/post_start_commands.yaml",
+    "context/post_start_commands.yaml",
+)
 
 
 def run_cmd(cmd, capture_output=True, shell=False):
@@ -100,38 +103,39 @@ def copy_to_container(path: Path):
         exit(f"❌ Ошибка {path} в контейнер {CONTAINER_NAME}.")
 
 
-def load_commands_from_yaml() -> list[str]:
+def load_commands_from_yaml(path: Path) -> list[str]:
     """Загружает список команд из YAML-файла."""
-    if not os.path.exists(COMMANDS_FILE):
-        click.echo(
-            f"⚠️ Файл {COMMANDS_FILE} не найден. Пропускаем выполнение post-start команд."
-        )
+    if not os.path.exists(path):
+        click.echo(f"⚠️ Файл {path} не найден. Пропускаем выполнение post-start команд.")
         return []
     try:
-        with open(COMMANDS_FILE, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
         commands = data.get("post_start_commands", [])
         if not isinstance(commands, list):
             click.echo(
-                f"⚠️ Поле 'post_start_commands' в {COMMANDS_FILE} должно быть списком. Пропускаем."
+                f"⚠️ Поле 'post_start_commands' в {path} должно быть списком. Пропускаем."
             )
             return []
         return commands
     except Exception as e:
-        click.echo(f"❌ Ошибка при чтении {COMMANDS_FILE}: {e}")
+        click.echo(f"❌ Ошибка при чтении {path}: {e}")
         return []
 
 
 def execute_post_start_commands():
     """Выполняет команды после запуска контейнера."""
-    commands = load_commands_from_yaml()
+    commands: list[str] = []
+    for commands_yaml in COMMANDS_FILES:
+        commands.extend(load_commands_from_yaml(commands_yaml))
+
     if not commands:
         return
-    click.echo("Выполняем post-start команды...")
+    click.echo("Выполняем post-start команды...\n⎯⎯⎯⎯⎯⎯⎯")
     for cmd in commands:
-        click.echo(f"{cmd}")
+        click.echo(f"\033[0;34m{cmd}\033[0m")
         result = run_cmd(
-            f"docker exec {CONTAINER_NAME} bash -c '{cmd}'",
+            f"docker exec -t {CONTAINER_NAME} bash -c '{cmd} && echo ⎯⎯⎯⎯⎯⎯⎯'",
             shell=True,
             capture_output=False,
         )
@@ -283,7 +287,6 @@ def down():
             "--format",
             "{{.Names}}",
         ],
-        capture_output=True,
     )
     if CONTAINER_NAME in result.stdout:
         click.echo(f"Останавливаем контейнер {CONTAINER_NAME}...")
@@ -312,9 +315,12 @@ def status():
 
     click.echo(f"📦 Контейнер: {CONTAINER_NAME}")
     if result.stdout:
-        click.echo(f"✅ Статус: {result.stdout.strip()}")
+        if "Up" in result.stdout:
+            click.echo(f"✅ Статус: {result.stdout.strip()}")
+        else:
+            click.echo(f"⚠️ Статус: {result.stdout.strip()}")
     else:
-        click.echo("⚠️  Статус: Не существует.")  # тут нужно два пробела!
+        click.echo("❌  Статус: Не существует.")  # тут нужно два пробела!
 
 
 if __name__ == "__main__":
