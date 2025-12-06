@@ -14,6 +14,9 @@ def generate_launch_description():
     params_file_thruster = os.path.join(
         package_prefix, "params", "thruster_matrix.yaml"
     )
+    params_file_controllers = os.path.join(
+        package_prefix, "params", "controllers.yaml"
+    )
     rate_hz = LaunchConfiguration('rate_hz')
     topic_imu_angular = LaunchConfiguration('topic_imu_angular')
     topic_imu_linear_accel = LaunchConfiguration('topic_imu_linear_accel')
@@ -79,6 +82,7 @@ def generate_launch_description():
             parameters=[
                 params_file,
                 params_file_thruster,
+                params_file_controllers,
                 {
                     'rate_hz': rate_hz,
                     'topic_imu_angular': topic_imu_angular,
