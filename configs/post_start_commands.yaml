@@ -1,3 +1,4 @@
 # use only ""
 post_start_commands:
-  - echo "source /stingray-core/configs/.profile" >> ~/.profile
+  - echo "source /stingray-core/configs/.prepare-bash" >> ~/.bashrc
+  - mkdir -p /stingray-core/context/vscode-server && ln -s /stingray-core/context/vscode-server ~/.vscode-server 

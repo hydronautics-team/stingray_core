@@ -17,10 +17,10 @@
 ## Basic usage
 
 > Put your serialized request parcel in **driver_request_topic**
-> 
+>
 > Get your serialized response parcel from **driver_response_topic**
 
-### Example: UART communication 
+### Example: UART communication
 
 **From command line:**
 
@@ -41,7 +41,7 @@ This node uses normal.h message struct. It sends request message via serial port
 - **parity** - uart parity
 - **serial_timeout** - serial timeout
 
-### Example: UDP communication 
+### Example: UDP communication
 
 **From command line:**
 
@@ -214,6 +214,7 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 ```
+
 ### 4. Change CMakeLists.txt
 
 Add this lines to **CMakeLists.txt**

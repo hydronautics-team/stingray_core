@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 
-import subprocess
-import click
-import sys
 import os
+import subprocess
+import sys
 from enum import Enum, auto
-import yaml
 from pathlib import Path
+
+import click
+import yaml
 
 # Параметры
 PROJECT_NAME = "stingray-core"
 IMAGE_NAME = "hydronautics/" + PROJECT_NAME + ":dev"
 CONTAINER_NAME = PROJECT_NAME + "-dev"
+BOOST_VERSION = "1.89.0"
 COMMANDS_FILES = (
     Path("configs/post_start_commands.yaml"),
     Path("context/post_start_commands.yaml"),
@@ -22,7 +24,7 @@ def run_cmd(cmd, capture_output=True, shell=False):
     """Выполняет команду и возвращает результат."""
     if capture_output:
         return subprocess.run(cmd, capture_output=True, text=True, shell=shell)
-    return subprocess.run(cmd, shell=shell)
+    return subprocess.run(cmd, text=True, shell=shell)
 
 
 def exit(msg: str):
@@ -35,9 +37,10 @@ def get_user() -> str:
     user = os.environ.get("USER")
     if user is None:
         exit(
-            "❌ Невозможно получить имя пользователя из переменных окружения. Объявите его в переменных или укажите вручную."
+            "❌ Невозможно получить имя пользователя из переменных окружения. "
+            "Объявите его в переменных или укажите вручную."
         )
-    return user
+    return user  # pyright: ignore[reportReturnType]
 
 
 class ContainerStatus(Enum):
@@ -79,9 +82,7 @@ def remove_image() -> bool:
         if del_result.returncode == 0:
             click.echo(f"✅ Старый образ '{IMAGE_NAME}' удалён.")
         else:
-            click.echo(
-                f"⚠️ Не удалось удалить старый образ: {del_result.stderr.strip()}"
-            )
+            click.echo(f"⚠️ Не удалось удалить старый образ: {del_result.stderr.strip()}")
             return False
     else:
         click.echo(f"✅ Старый образ '{IMAGE_NAME}' не найден. Продолжаем...")
@@ -109,13 +110,11 @@ def load_commands_from_yaml(path: Path) -> list[str]:
         click.echo(f"⚠️ Файл {path} не найден.")
         return []
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         commands = data.get("post_start_commands", [])
         if not isinstance(commands, list):
-            click.echo(
-                f"⚠️ Поле 'post_start_commands' в {path} должно быть списком. Пропускаем."
-            )
+            click.echo(f"⚠️ Поле 'post_start_commands' в {path} должно быть списком. Пропускаем.")
             return []
         return commands
     except Exception as e:
@@ -179,9 +178,7 @@ def cli():
 def build(no_cache: bool):
     """Сборка Docker-образа."""
     if check_container_status() != ContainerStatus.NONE:
-        exit(
-            f"❌ Контейнер на базе образа '{IMAGE_NAME}' уже существует. Остановите и удалите его командой 'down/d'."
-        )
+        exit(f"❌ Контейнер на базе образа '{IMAGE_NAME}' уже существует. Остановите и удалите его командой 'down/d'.")
 
     if not remove_image():
         sys.exit(1)
@@ -193,6 +190,8 @@ def build(no_cache: bool):
         IMAGE_NAME,
         "--build-arg",
         f"NEW_USER={get_user()}",
+        "--build-arg",
+        f"BOOST_VERSION={BOOST_VERSION}",
         ".",
     ]
 
@@ -279,7 +278,7 @@ def attach():
     if CONTAINER_NAME in result.stdout:
         click.echo(f"Подключение к контейнеру {CONTAINER_NAME}...")
         run_cmd(
-            ["docker", "exec", "-it", CONTAINER_NAME, "bash", "-l"],
+            ["docker", "exec", "-it", CONTAINER_NAME, "bash"],
             capture_output=False,
         )
     else:
