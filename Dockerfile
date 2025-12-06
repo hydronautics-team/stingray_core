@@ -1,4 +1,7 @@
 FROM osrf/ros:humble-desktop-full
+
+ARG NEW_USER
+
 # Add timezone
 ENV TZ=Europe/Moscow
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
@@ -30,11 +33,17 @@ RUN apt-get update \
 RUN rm -rf /var/lib/apt/lists/*
 
 # Add user
-ARG NEW_USER
 RUN useradd -ms /bin/bash $NEW_USER
 RUN usermod -aG sudo $NEW_USER
 RUN passwd -d $NEW_USER
 USER $NEW_USER
+
+RUN echo "# Color bash invitation" >> ~/.bashrc && \
+    echo "C_GREEN='\[\033[1;32m\]'" >> ~/.bashrc && \
+    echo "C_CYAN='\[\033[1;36m\]'" >> ~/.bashrc && \
+    echo "C_RED='\[\033[1;31m\]'" >> ~/.bashrc && \
+    echo "C_NC='\[\033[0m\]'" >> ~/.bashrc && \
+    echo "export PS1=\"\${C_CYAN}\u@\${C_RED}[DOCKER]\${C_GREEN}:\w\${C_NC}\\\$ \"" >> ~/.bashrc
 
 RUN mkdir -p ~/.ssh
 

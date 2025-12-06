@@ -13,8 +13,8 @@ PROJECT_NAME = "stingray-core"
 IMAGE_NAME = "hydronautics/" + PROJECT_NAME + ":dev"
 CONTAINER_NAME = PROJECT_NAME + "-dev"
 COMMANDS_FILES = (
-    "configs/post_start_commands.yaml",
-    "context/post_start_commands.yaml",
+    Path("configs/post_start_commands.yaml"),
+    Path("context/post_start_commands.yaml"),
 )
 
 
@@ -105,8 +105,8 @@ def copy_to_container(path: Path):
 
 def load_commands_from_yaml(path: Path) -> list[str]:
     """Загружает список команд из YAML-файла."""
-    if not os.path.exists(path):
-        click.echo(f"⚠️ Файл {path} не найден. Пропускаем выполнение post-start команд.")
+    if not path.exists():
+        click.echo(f"⚠️ Файл {path} не найден.")
         return []
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -133,7 +133,12 @@ def execute_post_start_commands():
         return
     click.echo("Выполняем post-start команды...\n⎯⎯⎯⎯⎯⎯⎯")
     for cmd in commands:
+        if cmd is None:
+            click.echo("Команда не указана. Проверьте файл с командами.")
+            continue
+
         click.echo(f"\033[0;34m{cmd}\033[0m")
+
         result = run_cmd(
             f"docker exec -t {CONTAINER_NAME} bash -c '{cmd} && echo ⎯⎯⎯⎯⎯⎯⎯'",
             shell=True,
@@ -211,6 +216,7 @@ def up():
 
     if status == ContainerStatus.UP:
         click.echo(f"✅ Контейнер {CONTAINER_NAME} уже запущен.")
+        return
     elif status == ContainerStatus.STOP:
         click.echo(f"Контейнер {CONTAINER_NAME} остановлен. Запускаем...")
         run_cmd(["docker", "start", CONTAINER_NAME])
@@ -222,14 +228,19 @@ def up():
                 "docker",
                 "run",
                 "-d",
-                "--hostname",
-                "[stingray-core]",
                 "-v",
                 f"{os.getcwd()}:/stingray-core",
                 "-v",
                 f"{os.getenv('SSH_AUTH_SOCK')}:{os.getenv('SSH_AUTH_SOCK')}",
+                "-v",
+                "/tmp/.X11-unix:/tmp/.X11-unix",
+                "-v",
+                "/dev/dri:/dev/dri",
                 "-e",
                 f"SSH_AUTH_SOCK={os.getenv('SSH_AUTH_SOCK')}",
+                "-e",
+                f"DISPLAY={os.getenv('DISPLAY')}",
+                "--ipc=host",
                 "--name",
                 CONTAINER_NAME,
                 "-it",
@@ -249,6 +260,7 @@ def up():
         click.echo(f"✅ Контейнер {CONTAINER_NAME} запущен.")
     else:
         assert False, "unknown container status"
+    run_cmd(["xhost", "+local:docker"])
 
 
 @cli.command()
@@ -293,6 +305,7 @@ def down():
         run_cmd(["docker", "stop", CONTAINER_NAME])
         click.echo(f"Удаляем контейнер {CONTAINER_NAME}...")
         run_cmd(["docker", "rm", CONTAINER_NAME])
+        run_cmd(["xhost", "-local:docker"])
         click.echo(f"✅ Контейнер {CONTAINER_NAME} остановлен и удалён.")
     else:
         click.echo(f"⚠️ Контейнер {CONTAINER_NAME} не найден.")

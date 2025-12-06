@@ -14,23 +14,6 @@
 
 - [serial](https://github.com/jinmenglei/serial.git) - for communication with stm32 and etc.
 
-
-## Docker
-
-**run**
-
-```bash
-./docker_run.sh
-```
-
-specify --device in .sh file
-
-**rebuild**
-
-```bash
-./docker_build.sh
-```
-
 ## Basic usage
 
 > Put your serialized request parcel in **driver_request_topic**
