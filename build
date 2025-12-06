@@ -1,0 +1,19 @@
+#!/bin/bash
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    echo "Этот скрипт должен вызываться в текущей оболочке!"
+    printf "\t . %s\n" "${0##*/}"
+    exit 1
+fi
+
+PATH_TO_ARTIFACTS="/stingray-core/artifacts"
+
+if [[ "$1" == "c" || "$1" == "clear" ]]; then
+    shift
+    rm -rf $PATH_TO_ARTIFACTS
+fi
+
+if COLCON_LOG_PATH="$PATH_TO_ARTIFACTS/log" colcon build --build-base $PATH_TO_ARTIFACTS/build --install-base $PATH_TO_ARTIFACTS/install "$@"
+then
+    source $PATH_TO_ARTIFACTS/install/setup.bash && echo -e "\033[0;32msetup.bash applied\033[0m"
+fi
