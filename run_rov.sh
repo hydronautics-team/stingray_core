@@ -12,6 +12,9 @@ colcon build --packages-select \
     serial_driver \
     io_context \
     asio_cmake_module \
+    ms5837_pressure_sensor \
+    vectornav_msgs \
+    vectornav \
     stingray_core_launch
 
 echo "----------------------------------------"

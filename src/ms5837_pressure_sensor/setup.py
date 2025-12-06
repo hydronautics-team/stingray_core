@@ -1,40 +1,27 @@
 import os
 from glob import glob
-
-from setuptools import setup
+from setuptools import find_packages, setup
 
 package_name = 'ms5837_pressure_sensor'
-submodules = package_name + '/ms5837'
-
-# build a list of the data files
-data_files = []
-data_files.append(("share/ament_index/resource_index/packages", ["resource/" + package_name]))
-data_files.append(("share/" + package_name, ["package.xml"]))
-
-def package_files(directory, data_files):
-    for (path, directories, filenames) in os.walk(directory):
-        for filename in filenames:
-            data_files.append(("share/" + package_name + "/" + path, glob(path + "/**/*.*", recursive=True)))
-    return data_files
-
-data_files = package_files('launch/', data_files)
 
 setup(
     name=package_name,
     version='1.0.0',
-    packages=[package_name, submodules],
-    data_files=data_files,
+    packages=find_packages(exclude=['test']),
+    data_files=[
+        ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
+        ('share/' + package_name, ['package.xml']),
+        (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
+    ],
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='waspishraccoon',
     maintainer_email='p.v.elesin@gmail.com',
     description='ROS 2 driver package for MS5837 pressure and temperature sensor.',
-    license='TODO: License declaration',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'bar30_node = ms5837_pressure_sensor.bar30_component:main',
-            'bar02_node = ms5837_pressure_sensor.bar02_component:main',
+            'ms5837_node = ms5837_pressure_sensor.ms5837_component:main',
         ],
     },
 )

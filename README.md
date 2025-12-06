@@ -1,12 +1,6 @@
 # stingray_core
 
-> UDP, UART drivers for different tasks: communication between upper and lower level control systems, betwen control system and device, between vehicle and shore remote control station. Part of [Stingray framework](https://github.com/hydronautics-team/stingray)
-
-**hardware_bridge** - middle layer between low level protocol (UART, UDP, ...) and ROS communication.
-
-**uart_driver** - implementation of low level communication via UART
-
-**udp_driver** - implementation of low level communication via UDP
+Part of [Stingray framework](https://github.com/hydronautics-team/stingray)
 
 ![stingray_core architecture](docs/arch.jpg)
 
@@ -17,18 +11,75 @@
 
 ## Docker
 
+In ~/stingray_core/
+
 **run**
 
 ```bash
-./docker_run.sh
+./docker/run.sh
 ```
-
-specify --device in .sh file
 
 **rebuild**
 
 ```bash
-./docker_build.sh
+./docker/build.sh
+```
+
+## Run ROV
+
+In ~/stingray_core/
+
+```bash
+./run_rov.sh
+```
+
+## Tests
+
+### Vectornav
+
+**Run with ros2 run (Option 1)**
+
+Terminal 1:
+```bash
+ros2 run vectornav vectornav
+```
+
+Terminal 2:
+```bash
+ros2 topic echo /vectornav/raw/common
+```
+Terminal 3:
+```bash
+ros2 run vectornav vn_sensor_msgs
+```
+
+Terminal 4:
+```bash
+ros2 topic echo /vectornav/imu
+```
+
+**Run with ros2 launch (Option 2, uses parameters from ```vectornav.yaml```)**
+
+Terminal 1:
+```bash
+ros2 launch vectornav vectornav.launch.py
+```
+
+Terminal 2:
+```bash
+ros2 topic echo /vectornav/imu
+```
+
+### ms5837_pressure_sensor
+
+Terminal 1:
+```bash
+ros2 run ms5837_pressure_sensor ms5837_node
+```
+
+Terminal 2:
+```bash
+ros2 topic echo /ms5837/depth
 ```
 
 ## Basic usage
