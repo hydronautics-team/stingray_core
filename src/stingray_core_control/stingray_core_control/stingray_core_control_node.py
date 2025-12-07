@@ -88,24 +88,6 @@ class StingrayCoreControlNode(Node):
 
         self.controllers = {}
 
-        # for axis in self.axes:
-        #     # Получаем список ключей для оси
-        #     self.declare_parameter(axis, ["K_p", "K_1", "K_2", "K_i", "I_min", "I_max", "out_sat", "ap_K", "ap_T"])
-        #     param_keys = self.get_parameter(axis).get_parameter_value().string_array_value
-
-        #     # Загружаем значения параметров для контроллера
-        #     params_dict = {}
-        #     for key in param_keys:
-        #         param_name = f'controllers.{axis}.{key}'
-        #         self.declare_parameter(param_name, 0.0)
-        #         params_dict[key] = self.get_parameter(param_name).value
-
-        #     # Динамически определяем класс контроллера
-        #     ctrl_class = axis_class_map.get(axis, BaseController)
-
-        #     # Инициализация через распаковку словаря
-        #     self.controllers[axis] = ctrl_class(**params_dict)
-
         axis_class_map = {
             'yaw': YawController,
             'pitch': PitchController,
@@ -193,7 +175,6 @@ class StingrayCoreControlNode(Node):
         self.control_mode_flag_roll = False
 
         self.depth = 0.0
-
         # self.yaw_ctrl = YawController(Kp=1.0, K_stage=1.0, out_sat=100.0, ap_K=1.0, ap_T=0.1)
         # self.pitch_ctrl = PitchController(Kp=1.0, K_stage=1.0, out_sat=100.0, ap_K=1.0, ap_T=0.1)
         # self.roll_ctrl = RollController(Kp=1.0, K_stage=1.0, out_sat=100.0, ap_K=1.0, ap_T=0.1)

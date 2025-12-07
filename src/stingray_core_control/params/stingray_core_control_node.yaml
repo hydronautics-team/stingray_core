@@ -7,7 +7,7 @@ stingray_core_control_node:
     topic_imu_linear_accel: "/vectornav/imu_accel"
     topic_imu_angular_rate: "/vectornav/imu_rate"
 
-    thrusters: ["surge_upper_left", "surge_upper_right", "surge_lower_left", "surge_lower_right", "sway_front", "sway_back", "depth_front_left", "depth_front_right", "depth_back_left", "depth_back_right"]
+    thrusters: ["depth_front_left", "depth_front_right", "depth_back_right", "depth_back_left", "surge_lower_right", "surge_lower_left", "sway_back",  "surge_upper_right", "sway_front", "surge_upper_left"]
     axes_u: ["u_surge", "u_sway", "u_heave", "u_roll", "u_pitch", "u_yaw"]
 
     axes: ["surge", "sway", "heave", "roll", "pitch", "yaw"]
