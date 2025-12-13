@@ -622,30 +622,6 @@ bool Vectornav::configure_sensor()
 
   vs_->writeCommunicationProtocolControl(configComm);
 
-  // === ТЕСТ ===
-  // Настройка поворота системы координат
-  vn::math::mat3f rotation_matrix;
-  rotation_matrix(0,0) = 0;   // C00
-  rotation_matrix(0,1) = -1;  // C01
-  rotation_matrix(0,2) = 0;   // C02
-  rotation_matrix(1,0) = 1;   // C10
-  rotation_matrix(1,1) = 0;   // C11
-  rotation_matrix(1,2) = 0;   // C12
-  rotation_matrix(2,0) = 0;   // C20
-  rotation_matrix(2,1) = 0;   // C21
-  rotation_matrix(2,2) = 1;   // C22
-
-  try {
-    vs_->writeReferenceFrameRotation(rotation_matrix);
-    // Сохраняем в энергонезависимую память датчика
-    vs_->writeSettings();
-    RCLCPP_INFO(get_logger(), "Reference frame rotation applied");
-  } catch (const std::exception& e) {
-    RCLCPP_WARN(get_logger(), "Failed to set reference frame rotation: %s", e.what());
-  }
-  // === ТЕСТ END ===
-
-
   auto boRegs = std::vector<std::string>{"BO1", "BO2", "BO3"};
   auto boConfigs = std::vector<vn::sensors::BinaryOutputRegister>();
 
