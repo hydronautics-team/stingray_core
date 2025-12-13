@@ -1,14 +1,14 @@
 stingray_core_control_node:
   ros__parameters:
-    controllers.surge.K_p: 0.9
-    controllers.surge.K_1: 1.0
-    controllers.surge.K_2: 0.1
-    controllers.surge.K_i: 0.01
-    controllers.surge.I_min: -0.2
-    controllers.surge.I_max: 0.2
-    controllers.surge.out_sat: 1.0
+    controllers.surge.K_p: 1.0
+    controllers.surge.K_1: 4.0
+    controllers.surge.K_2: 2.8
+    controllers.surge.K_i: 0.0
+    controllers.surge.I_min: -5.0
+    controllers.surge.I_max: 5.0
+    controllers.surge.out_sat: 1000.0
     controllers.surge.ap_K: 1.0
-    controllers.surge.ap_T: 0.3
+    controllers.surge.ap_T: 0.01
     controllers.sway.K_p: 0.8
     controllers.sway.K_1: 1.0
     controllers.sway.K_2: 0.1

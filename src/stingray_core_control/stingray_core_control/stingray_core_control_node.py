@@ -16,7 +16,7 @@ import yaml
 import os
 
 from geometry_msgs.msg import Twist, Vector3
-from std_msgs.msg import Float32, UInt8, Bool, UInt8MultiArray
+from std_msgs.msg import Float32, Float64, UInt8, Bool, UInt8MultiArray
 
 from .thruster_mixer import ThrusterMixer
 from .controllers import (
@@ -174,17 +174,36 @@ class StingrayCoreControlNode(Node):
         self.control_mode_flag_surge = False
         self.control_mode_flag_sway = False
         self.control_mode_flag_heave = False
-        self.control_mode_flag_yaw = False
+        self.control_mode_flag_yaw = True
         self.control_mode_flag_pitch = False
         self.control_mode_flag_roll = False
 
         self.depth = 0.0
-        # self.yaw_ctrl = YawController(Kp=1.0, K_stage=1.0, out_sat=100.0, ap_K=1.0, ap_T=0.1)
+        self.yaw_ctrl = YawController(
+            K_p=self.controllers['yaw'].K_p,
+            K_1=self.controllers['yaw'].K_1,
+            K_2=self.controllers['yaw'].K_2,
+            K_i=self.controllers['yaw'].K_i,
+            I_max=self.controllers['yaw'].I_max,
+            I_min=self.controllers['yaw'].I_min,
+            out_sat=self.controllers['yaw'].out_sat,
+            ap_K=self.controllers['yaw'].ap_K,
+            ap_T=self.controllers['yaw'].ap_T
+        )
         # self.pitch_ctrl = PitchController(Kp=1.0, K_stage=1.0, out_sat=100.0, ap_K=1.0, ap_T=0.1)
         # self.roll_ctrl = RollController(Kp=1.0, K_stage=1.0, out_sat=100.0, ap_K=1.0, ap_T=0.1)
         # self.depth_ctrl = DepthController(Kp=1.0, K_stage=1.0, out_sat=100.0, ap_K=1.0, ap_T=0.1)
         # self.surge_ctrl = SurgeController(Kp=1.0, out_sat=100.0)
         # self.sway_ctrl = SwayController(Kp=1.0, out_sat=100.0)
+
+        self.declare_parameter('debug_publish', False)
+        self.pub_err_position   = self.create_publisher(Float64, "~/debug/yaw/err_position", 10)
+        self.pub_output_pi      = self.create_publisher(Float64, "~/debug/yaw/output_pi", 10)
+        self.pub_feedback_speed = self.create_publisher(Float64, "~/debug/yaw/feedback_speed", 10)
+        self.pub_error_speed    = self.create_publisher(Float64, "~/debug/yaw/error_speed", 10)
+        self.pub_out            = self.create_publisher(Float64, "~/debug/yaw/out", 10)
+        self.yaw_ctrl.set_debug_hook(self.yaw_debug_cb)
+
 
         self.add_on_set_parameters_callback(self._on_params_changed)
 
@@ -310,17 +329,11 @@ class StingrayCoreControlNode(Node):
 
     def compute_yaw(self):
         dt = self.last_dt
-        return self.yaw_ctrl.update(self.impact_yaw, self.imu_yaw, self.imu_rate_z, dt)
+        return self.yaw_ctrl.update(self.impact_yaw, self.imu_yaw, self.imu_rate_z, dt, self.flag_setup_feedback_speed)
 
 
 
     def _on_params_changed(self, params: list[Parameter]) -> SetParametersResult:
-        """
-        Callback for on_set_parameters.
-        - Сохраняет параметры через save_params (как раньше).
-        - Если изменились параметры вида "<thruster>_<axis_u>", то обновляет соответствующие
-          строки coeffs в self.mixer через update_coeffs (поддерживает частичные обновления).
-        """
         try:
             thruster_params: list[Parameter] = []
             controller_params: list[Parameter] = []
@@ -475,6 +488,17 @@ class StingrayCoreControlNode(Node):
         except Exception as e:
             self.get_logger().error(f"_on_params_changed exception: {e}")
             return SetParametersResult(successful=False, reason=str(e))
+        
+    def yaw_debug_cb(self, data: dict):
+        if not self.get_parameter("debug_publish").value:
+            return
+
+        self.pub_err_position.publish(Float64(data=data["err_position"]))
+        self.pub_output_pi.publish(Float64(data=data["output_pi"]))
+        self.pub_feedback_speed.publish(Float64(data=data["feedback_speed"]))
+        self.pub_error_speed.publish(Float64(data=data["error_speed"]))
+        self.pub_out.publish(Float64(data=data["out"]))
+
 
 
 

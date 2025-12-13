@@ -91,4 +91,5 @@ stingray_core_control_node:
     - out_sat
     - ap_K
     - ap_T
-    flag_setup_feedback_speed: true
+    flag_setup_feedback_speed: false
+    debug_publish: true

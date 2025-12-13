@@ -63,7 +63,9 @@ class BaseController(ABC):
         # internal states
         self.integrator = 0.0     
         self.prev_stage = 0.0     
-        self.ap_out = 0.0         
+        self.ap_out = 0.0     
+
+        self.debug_hook = None    
 
     def reset(self):
         """Сброс внутренних состояний (интегратор, апериодика)."""
@@ -91,6 +93,11 @@ class BaseController(ABC):
         else:
             self.ap_out = self.ap_K * input_val
         return self.ap_out
+    
+    def set_debug_hook(self, hook):
+        """hook(dict) — вызывается, если debug включён"""
+        self.debug_hook = hook
+
 
     @abstractmethod
     def update(self, setpoint: float, measurement: float, measurement_rate: float, dt: float) -> float:
@@ -111,7 +118,8 @@ class YawController(BaseController):
     def update(self, setpoint: float, measurement: float, measurement_rate: float, dt: float, flag_setup_feedback_speed: bool) -> float:
         setspeed = setpoint * flag_setup_feedback_speed
         if flag_setup_feedback_speed:
-            output_pi = 0
+            output_pi = 0.0
+            err_position = 0.0
         else:
             # 1) ошибка (с учётом wrap-around)
             err_position = normalize_angle_deg(setpoint - measurement)
@@ -123,7 +131,7 @@ class YawController(BaseController):
             res_p = stage * self.K_p
 
             # 4) I part (integrate stage * K_i)
-            res_i = self.trapezoidal_integrate(stage * self.K_xi, dt)
+            res_i = self.trapezoidal_integrate(stage * self.K_i, dt)
 
             # 5) PI combined
             output_pi = res_p + res_i
@@ -138,6 +146,18 @@ class YawController(BaseController):
         # 8) saturate final output symmetrically by out_sat (if provided)
         if self.out_sat is not None:
             out = saturation(error_speed, self.out_sat, -self.out_sat)
+        else:
+            out = error_speed
+
+        if self.debug_hook is not None:
+            self.debug_hook({
+                "err_position": err_position,
+                "output_pi": output_pi,
+                "feedback_speed": feedback_speed,
+                "error_speed": error_speed,
+                "out": out,
+            })
+
         return out
 
 class PitchController(BaseController):
