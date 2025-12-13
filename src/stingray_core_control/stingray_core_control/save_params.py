@@ -8,6 +8,15 @@ from rclpy.parameter import Parameter
 PACKAGE_NAME = "stingray_core_control"
 PKG_DIR_NAME = "stingray_core_control"  # каталог пакета в src
 
+def load_existing_yaml(path: Path) -> dict:
+    if path.exists():
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return yaml.safe_load(f) or {}
+        except Exception:
+            return {}
+    return {}
+
 def get_src_param_path(config_name: str) -> Path:
     """Путь к YAML в исходниках (для git)"""
     ws_env = os.environ.get("STINGRAY_WS")
@@ -49,11 +58,23 @@ def save_params(self, param_list: list[Parameter], config_name: str):
                     for a in self.axes_u:
                         if name == f"{thr}_{a}":
                             current_params[name] = p.value
-            else:
+            elif config_name == "controllers":
                 for axis in self.axes:
                     for key in self.param_keys:
                         if name == f'controllers.{axis}.{key}':
                             current_params[name] = p.value
+            elif config_name == "stingray_core_control_node":
+                # читаем существующий YAML и берём все параметры
+                src_file = get_src_param_path(config_name)
+                existing_yaml = load_existing_yaml(src_file)
+
+                node_name = self.get_name()
+                if (
+                    isinstance(existing_yaml, dict)
+                    and node_name in existing_yaml
+                    and 'ros__parameters' in existing_yaml[node_name]
+                ):
+                    current_params.update(existing_yaml[node_name]['ros__parameters'])
 
     except Exception:
         current_params = {p.name: p.value for p in param_list}  # хотя бы param_list

@@ -29,7 +29,7 @@ class BaseController(ABC):
     Абстрактный базовый контроллер.
     Параметры (основные):
       - K_p  : коэффициент P (вспомогательный)
-      - K_1  : стадийный множитель (аналог K[1]-style в твоём коде)
+      - K_1  : стадийный множитель
       - K_2  : множитель ап-части / обратной связи по скорости
       - K_i  : множитель интегратора (интегрируем stage * K_i)
       - I_max, I_min : пределы интегратора (anti-windup)
@@ -61,9 +61,9 @@ class BaseController(ABC):
         self.ap_T = float(ap_T)
 
         # internal states
-        self.integrator = 0.0     # интегратор (аналог X[114])
-        self.prev_stage = 0.0     # предыдущее stage (для trap)
-        self.ap_out = 0.0         # выход апериодического фильтра (аналог X[122])
+        self.integrator = 0.0     
+        self.prev_stage = 0.0     
+        self.ap_out = 0.0         
 
     def reset(self):
         """Сброс внутренних состояний (интегратор, апериодика)."""
@@ -108,35 +108,36 @@ class BaseController(ABC):
 # Angular controllers
 # -----------------------
 class YawController(BaseController):
-    def update(self, setpoint: float, measurement: float, measurement_rate: float, dt: float) -> float:
-        # 1) ошибка (с учётом wrap-around)
-        err = normalize_angle_deg(setpoint - measurement)
+    def update(self, setpoint: float, measurement: float, measurement_rate: float, dt: float, flag_setup_feedback_speed: bool) -> float:
+        setspeed = setpoint * flag_setup_feedback_speed
+        if flag_setup_feedback_speed:
+            output_pi = 0
+        else:
+            # 1) ошибка (с учётом wrap-around)
+            err_position = normalize_angle_deg(setpoint - measurement)
 
-        # 2) stage (предобработка)  = err * K_1
-        stage = err * self.K_1
+            # 2) stage (предобработка)  = err * K_1
+            stage = err_position * self.K_1
 
-        # 3) P part (stage scaled by K_p)
-        res_p = stage * self.K_p
+            # 3) P part (stage scaled by K_p)
+            res_p = stage * self.K_p
 
-        # 4) I part (integrate stage * K_i)
-        res_i = self.trapezoidal_integrate(stage * self.K_i, dt)
-        # ограничим интегратор (если заданы пределы) — здесь upper/lower используют out_sat? обычно отдельные I_max/I_min
-        # но оставляем возможность: res_i лимитируем отдельно по I_max/I_min уже в integrate, поэтому не делаем тут дополнительного
-        # (если нужен отдельный лимит интегратора по out_sat, можно добавить)
+            # 4) I part (integrate stage * K_i)
+            res_i = self.trapezoidal_integrate(stage * self.K_xi, dt)
 
-        # 5) PI combined
-        output_pi = res_p + res_i
+            # 5) PI combined
+            output_pi = res_p + res_i
 
         # 6) aperiodic filter from rate (wz) and scale
         ap = self.aperiodic_step(measurement_rate, dt)
         feedback_speed = ap * self.K_2
 
         # 7) final output (PI minus speed feedback) 
-        out = output_pi - feedback_speed 
+        error_speed = output_pi + setspeed - feedback_speed 
 
         # 8) saturate final output symmetrically by out_sat (if provided)
         if self.out_sat is not None:
-            out = saturation(out, self.out_sat, -self.out_sat)
+            out = saturation(error_speed, self.out_sat, -self.out_sat)
         return out
 
 class PitchController(BaseController):
@@ -191,7 +192,7 @@ class DepthController(BaseController):
             out = saturation(out, self.out_sat, -self.out_sat)
         return out
 
-class UxController(BaseController):
+class SurgeController(BaseController):
     """Controller for surge-like channel. Simpler: optionally only P or PI."""
     def update(self, setpoint: float, measurement: float, measurement_rate: float, dt: float) -> float:
         err = setpoint - measurement
@@ -208,7 +209,7 @@ class UxController(BaseController):
             out = saturation(out, self.out_sat, -self.out_sat)
         return out
 
-class UyController(BaseController):
+class SwayController(BaseController):
     """Controller for sway-like channel. Mirror of Ux."""
     def update(self, setpoint: float, measurement: float, measurement_rate: float, dt: float) -> float:
         err = setpoint - measurement

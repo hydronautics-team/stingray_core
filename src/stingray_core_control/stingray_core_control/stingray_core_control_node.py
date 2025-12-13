@@ -21,7 +21,7 @@ from std_msgs.msg import Float32, UInt8, Bool, UInt8MultiArray
 from .thruster_mixer import ThrusterMixer
 from .controllers import (
     YawController, PitchController, RollController,
-    DepthController, UxController, UyController
+    DepthController, SurgeController, SwayController
 )
 from .save_params import save_params
 from ament_index_python.packages import get_package_share_directory
@@ -35,6 +35,10 @@ class StingrayCoreControlNode(Node):
         self.declare_parameter('rate_hz', 100.0)
         self.rate_hz = float(self.get_parameter(
             'rate_hz').get_parameter_value().double_value)
+        
+        self.declare_parameter('flag_setup_feedback_speed', False)
+        self.flag_setup_feedback_speed = self.get_parameter(
+            'flag_setup_feedback_speed').get_parameter_value().bool_value
 
         self.declare_parameter('topic_imu_angular', '/vectornav/angular')
         self.declare_parameter('topic_imu_linear_accel',
@@ -93,8 +97,8 @@ class StingrayCoreControlNode(Node):
             'pitch': PitchController,
             'roll': RollController,
             'heave': DepthController,
-            'surge': UxController,
-            'sway': UyController
+            'surge': SurgeController,
+            'sway': SwayController
         }
 
         self.declare_parameter('axes', ["surge", "sway", "heave", "roll", "pitch", "yaw"])
@@ -179,8 +183,8 @@ class StingrayCoreControlNode(Node):
         # self.pitch_ctrl = PitchController(Kp=1.0, K_stage=1.0, out_sat=100.0, ap_K=1.0, ap_T=0.1)
         # self.roll_ctrl = RollController(Kp=1.0, K_stage=1.0, out_sat=100.0, ap_K=1.0, ap_T=0.1)
         # self.depth_ctrl = DepthController(Kp=1.0, K_stage=1.0, out_sat=100.0, ap_K=1.0, ap_T=0.1)
-        # self.ux_ctrl = UxController(Kp=1.0, out_sat=100.0)
-        # self.uy_ctrl = UyController(Kp=1.0, out_sat=100.0)
+        # self.surge_ctrl = SurgeController(Kp=1.0, out_sat=100.0)
+        # self.sway_ctrl = SwayController(Kp=1.0, out_sat=100.0)
 
         self.add_on_set_parameters_callback(self._on_params_changed)
 
@@ -204,7 +208,7 @@ class StingrayCoreControlNode(Node):
         dt = now - self.last_time if self.last_time is not None else 0.0
         self.last_time = now
         self.last_dt = dt
-
+        # self.get_logger().info(f"self.flag_setup_feedback_speed={self.flag_setup_feedback_speed}")
         # === 1. Определяем управляющие воздействия ===
         u_surge = self.compute_surge() if self.control_mode_flag_surge else self.impact_surge
         u_sway = self.compute_sway() if self.control_mode_flag_sway else self.impact_sway
@@ -342,20 +346,37 @@ class StingrayCoreControlNode(Node):
                 # 2) controller params: "controllers.<axis>.<key>"
                 matched_controller = False
                 for axis in self.axes:
-                    # param_keys может быть разным для каждой оси, поэтому смотрим текущие ключи из параметров ноды
-                    # используем self.get_parameter(axis) только если он объявлен; но здесь проще — сравниваем префикс
-                    # предполагая, что контроллеры имеют имена controllers.<axis>.<key>
-                    if name.startswith(f'controllers.{axis}.'):
+                    prefix = f'controllers.{axis}.'
+                    if name.startswith(prefix):
                         controller_params.append(p)
+
+                        # имя параметра внутри контроллера
+                        key = name[len(prefix):]
+
+                        # обновляем параметр в объекте контроллера
+                        if axis in self.controllers and hasattr(self.controllers[axis], key):
+                            self.controllers[axis].__dict__[key] = p.value
+                            self.get_logger().info(
+                                f"Controller '{axis}': {key} = {p.value}"
+                            )
+                        else:
+                            self.get_logger().warning(
+                                f"Controller '{axis}' has no param '{key}'"
+                            )
+
                         matched_controller = True
                         break
+
                 if matched_controller:
                     continue
 
                 # Остальные параметры
                 other_params.append(p)
+                if hasattr(self, name):
+                    setattr(self, name, p.value)
+                    self.get_logger().info(f"Node param updated: {name} = {p.value}")
 
-            # Сохраняем изменения в файлы конфигурации как раньше
+            # Сохраняем изменения в файлы конфигурации
             if thruster_params:
                 try:
                     save_params(self, param_list=thruster_params, config_name="thruster_matrix")
@@ -370,7 +391,8 @@ class StingrayCoreControlNode(Node):
 
             if other_params:
                 names = [p.name for p in other_params]
-                self.get_logger().debug(f"Other params changed (not handled specially): {names}")
+                save_params(self, param_list=other_params, config_name="stingray_core_control_node")
+                self.get_logger().info(f"Other params changed (not handled specially): {names}")
 
             # --- Обновляем коэффициенты в mixer для изменённых thruster params ---
             if thruster_params:
