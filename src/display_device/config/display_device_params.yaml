@@ -1,0 +1,6 @@
+panel_device_node:
+  ros__parameters:
+    publish_rate_hz: 60 # FIXME change in the future
+    max_line_length: 15 # FIXME remove in the future
+    dedupe: true
+    display_fields: 13.6 # FIXME change in the future
