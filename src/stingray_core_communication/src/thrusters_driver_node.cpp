@@ -31,7 +31,7 @@ private:
             serial_msg.data = packet;
             serial_pub_->publish(serial_msg);
 
-            RCLCPP_INFO(this->get_logger(), "Sent %zu bytes to serial", packet.size());
+            // RCLCPP_INFO(this->get_logger(), "Sent %zu bytes to serial", packet.size());
         }
     }
 

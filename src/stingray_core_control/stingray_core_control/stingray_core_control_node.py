@@ -17,6 +17,7 @@ import os
 
 from geometry_msgs.msg import Twist, Vector3
 from std_msgs.msg import Float32, Float64, UInt8, Bool, UInt8MultiArray
+from sensor_msgs.msg import Imu
 
 from .thruster_mixer import ThrusterMixer
 from .controllers import (
@@ -63,6 +64,17 @@ class StingrayCoreControlNode(Node):
             'topic_control_data').get_parameter_value().string_value
         self.vectornav_yaw_offset = float(self.get_parameter(
             'vectornav_yaw_offset_deg').get_parameter_value().double_value)
+        
+        # --- yaw zeroing ---
+        self.yaw_zero_offset = 0.0
+
+        self.declare_parameter('topic_zero_yaw', '/imu/zero_yaw')
+        self.topic_zero_yaw = self.get_parameter(
+            'topic_zero_yaw').get_parameter_value().string_value
+
+        self.sub_zero_yaw = self.create_subscription(
+            Bool, self.topic_zero_yaw, self.zero_yaw_callback, 10)
+
         
         if not self.has_parameter('thrusters'):
             self.declare_parameter('thrusters', ["",""])
@@ -134,6 +146,12 @@ class StingrayCoreControlNode(Node):
             Vector3, self.topic_imu_linear_accel, self.imu_linear_accel_callback, qos)
         self.sub_imu_angular_rate = self.create_subscription(
             Vector3, self.topic_imu_angular_rate, self.imu_angular_rate_callback, qos)
+        
+        # --- my orientation publishers ---
+        self.pub_yaw   = self.create_publisher(Float64, '~/orientation/yaw', 10)
+        self.pub_pitch = self.create_publisher(Float64, '~/orientation/pitch', 10)
+        self.pub_roll  = self.create_publisher(Float64, '~/orientation/roll', 10)
+
 
         # loop flags — используем UInt8 (битфлаги)
         self.sub_control_mode_flags = self.create_subscription(
@@ -245,6 +263,12 @@ class StingrayCoreControlNode(Node):
         msg.data = thruster_cmds
         self.pub_thruster_cmd.publish(msg)
 
+        # === 4. Публикуем ориентацию ===
+        self.pub_yaw.publish(Float64(data=self.imu_yaw))
+        self.pub_pitch.publish(Float64(data=self.imu_pitch))
+        self.pub_roll.publish(Float64(data=self.imu_roll))
+
+
         # Логируем статус 1 раз в секунду, а не каждый тик
         if now - self._last_status_log > self._status_log_interval:
             # self.get_logger().info(f"Thrusters command: {thruster_cmds}")
@@ -254,10 +278,14 @@ class StingrayCoreControlNode(Node):
     # --- Колбэки ---
     def imu_angular_callback(self, msg: Vector3):
         try:
+            # компенсированный yaw (после zero)
             self.imu_yaw = self.normalize_angle_deg(
-                float(msg.x) + self.vectornav_yaw_offset)
+                float(msg.x) + self.yaw_zero_offset
+            )
+
             self.imu_pitch = float(msg.y)
             self.imu_roll = float(msg.z)
+
         except Exception as e:
             self.get_logger().warning(f"Error parsing imu_angular msg: {e}")
 
@@ -278,6 +306,14 @@ class StingrayCoreControlNode(Node):
         except Exception as e:
             self.get_logger().warning(
                 f"Error parsing imu_angular_rate msg: {e}")
+    
+    def zero_yaw_callback(self, msg: Bool):
+        if not msg.data:
+            return
+
+        self.yaw_zero_offset = self.imu_yaw
+        self.get_logger().info(
+            f"Yaw zeroed at {self.yaw_zero_offset:.2f} deg")
 
     def pressure_sensor_callback(self, msg: Float32):
         try:
@@ -302,9 +338,9 @@ class StingrayCoreControlNode(Node):
         self.control_mode_flag_sway = bool(flags & (1 << 1))
         self.control_mode_flag_heave = bool(flags & (1 << 2))
         self.control_mode_flag_yaw = bool(flags & (1 << 3))
+        self.get_logger().info(f"control_mode_flag_yaw set to {self.control_mode_flag_yaw}")
         self.control_mode_flag_pitch = bool(flags & (1 << 4))
         self.control_mode_flag_roll = bool(flags & (1 << 5))
-        self.get_logger().debug(f"Loop flags updated: {flags:02x}")
 
     # === Заглушки регуляторов ===
     def compute_surge(self):

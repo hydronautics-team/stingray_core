@@ -194,22 +194,49 @@ class RollController(BaseController):
 # Linear controllers
 # -----------------------
 class DepthController(BaseController):
-    def update(self, setpoint: float, measurement: float, measurement_rate: float, dt: float) -> float:
-        # setpoint, measurement in meters (or same unit)
-        err = setpoint - measurement
-        # stage from err
-        stage = err * self.K_1
-        # P
-        res_p = stage * self.K_p
-        # I
-        res_i = self.trapezoidal_integrate(stage * self.K_i, dt)
-        output_pi = res_p + res_i
-        # aperiodic from vertical speed (measurement_rate)
+    def update(self, setpoint: float, measurement: float, measurement_rate: float, dt: float, flag_setup_feedback_speed: bool) -> float:
+        setspeed = setpoint * flag_setup_feedback_speed
+        if flag_setup_feedback_speed:
+            output_pi = 0.0
+            err_position = 0.0
+        else:
+            # 1) ошибка (с учётом wrap-around)
+            err_position = normalize_angle_deg(setpoint - measurement)
+
+            # 2) stage (предобработка)  = err * K_1
+            stage = err_position * self.K_1
+
+            # 3) P part (stage scaled by K_p)
+            res_p = stage * self.K_p
+
+            # 4) I part (integrate stage * K_i)
+            res_i = self.trapezoidal_integrate(stage * self.K_i, dt)
+
+            # 5) PI combined
+            output_pi = res_p + res_i
+
+        # 6) aperiodic filter from rate (wz) and scale
         ap = self.aperiodic_step(measurement_rate, dt)
         feedback_speed = ap * self.K_2
-        out = output_pi - feedback_speed
+
+        # 7) final output (PI minus speed feedback) 
+        error_speed = output_pi + setspeed - feedback_speed 
+
+        # 8) saturate final output symmetrically by out_sat (if provided)
         if self.out_sat is not None:
-            out = saturation(out, self.out_sat, -self.out_sat)
+            out = saturation(error_speed, self.out_sat, -self.out_sat)
+        else:
+            out = error_speed
+
+        if self.debug_hook is not None:
+            self.debug_hook({
+                "err_position": err_position,
+                "output_pi": output_pi,
+                "feedback_speed": feedback_speed,
+                "error_speed": error_speed,
+                "out": out,
+            })
+
         return out
 
 class SurgeController(BaseController):
