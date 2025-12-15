@@ -322,7 +322,7 @@ class StingrayCoreControlNode(Node):
             self.get_logger().warning(f"Error parsing depth msg: {e}")
 
     def control_data_callback(self, msg: Twist):
-        self.get_logger().info(f"control_data_callback: {msg}")
+        # self.get_logger().info(f"control_data_callback: {msg}")
 
         # impact команды — просто копируем вход
         self.impact_surge = float(msg.linear.x)
