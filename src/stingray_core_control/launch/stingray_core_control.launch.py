@@ -18,7 +18,6 @@ def generate_launch_description():
         package_prefix, "params", "controllers.yaml"
     )
     rate_hz = LaunchConfiguration('rate_hz')
-    topic_imu_angular = LaunchConfiguration('topic_imu_angular')
     topic_imu_linear_accel = LaunchConfiguration('topic_imu_linear_accel')
     topic_imu_angular_rate = LaunchConfiguration('topic_imu_angular_rate')
     topic_loop_flags = LaunchConfiguration('topic_loop_flags')
@@ -31,12 +30,6 @@ def generate_launch_description():
             'rate_hz',
             default_value='100.0',
             description='ToControl loop frequency in Hz'
-        ),
-
-        DeclareLaunchArgument(
-            'topic_imu_angular',
-            default_value='/vectornav/angular',
-            description='Topic for IMU angular (Vector3)'
         ),
 
         DeclareLaunchArgument(
@@ -85,7 +78,6 @@ def generate_launch_description():
                 params_file_controllers,
                 {
                     'rate_hz': rate_hz,
-                    'topic_imu_angular': topic_imu_angular,
                     'topic_imu_linear_accel': topic_imu_linear_accel,
                     'topic_imu_angular_rate': topic_imu_angular_rate,
                     'topic_loop_flags': topic_loop_flags,

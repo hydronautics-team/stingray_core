@@ -18,6 +18,8 @@ import os
 from geometry_msgs.msg import Twist, Vector3
 from std_msgs.msg import Float32, Float64, UInt8, Bool, UInt8MultiArray
 from sensor_msgs.msg import Imu
+from vectornav_msgs.msg import CommonGroup
+from rclpy.qos import qos_profile_sensor_data
 
 from .thruster_mixer import ThrusterMixer
 from .controllers import (
@@ -41,7 +43,7 @@ class StingrayCoreControlNode(Node):
         self.flag_setup_feedback_speed = self.get_parameter(
             'flag_setup_feedback_speed').get_parameter_value().bool_value
 
-        self.declare_parameter('topic_imu_angular', '/vectornav/angular')
+        self.declare_parameter('topic_imu_angular', '/vectornav/raw/common')
         self.declare_parameter('topic_imu_linear_accel',
                                '/vectornav/imu_accel')
         self.declare_parameter('topic_imu_angular_rate', '/vectornav/imu_rate')
@@ -67,6 +69,7 @@ class StingrayCoreControlNode(Node):
         
         # --- yaw zeroing ---
         self.yaw_zero_offset = 0.0
+        self.imu_yaw_raw = 0.0
 
         self.declare_parameter('topic_zero_yaw', '/imu/zero_yaw')
         self.topic_zero_yaw = self.get_parameter(
@@ -141,7 +144,7 @@ class StingrayCoreControlNode(Node):
 
         # --- подписки ---
         self.sub_imu_angular = self.create_subscription(
-            Vector3, self.topic_imu_angular, self.imu_angular_callback, qos)
+            CommonGroup, "/vectornav/raw/common", self.imu_angular_callback, qos_profile_sensor_data)
         self.sub_imu_linear_accel = self.create_subscription(
             Vector3, self.topic_imu_linear_accel, self.imu_linear_accel_callback, qos)
         self.sub_imu_angular_rate = self.create_subscription(
@@ -276,18 +279,22 @@ class StingrayCoreControlNode(Node):
             self._last_status_log = now
 
     # --- Колбэки ---
-    def imu_angular_callback(self, msg: Vector3):
+    def imu_angular_callback(self, msg: CommonGroup):
         try:
-            # компенсированный yaw (после zero)
-            self.imu_yaw = self.normalize_angle_deg(
-                float(msg.x) + self.yaw_zero_offset
-            )
+            ypr: Vector3 = msg.yawpitchroll
 
-            self.imu_pitch = float(msg.y)
-            self.imu_roll = float(msg.z)
+            self.imu_yaw_raw = float(ypr.x)
+
+            self.imu_yaw = self.normalize_angle_deg(
+                self.imu_yaw_raw - self.yaw_zero_offset
+            )
+            self.imu_pitch = float(ypr.y)
+            self.imu_roll  = float(ypr.z)
 
         except Exception as e:
-            self.get_logger().warning(f"Error parsing imu_angular msg: {e}")
+            self.get_logger().warning(
+                f"Error parsing CommonGroup yawpitchroll: {e}"
+            )
 
     def imu_linear_accel_callback(self, msg: Vector3):
         try:
@@ -311,7 +318,7 @@ class StingrayCoreControlNode(Node):
         if not msg.data:
             return
 
-        self.yaw_zero_offset = self.imu_yaw
+        self.yaw_zero_offset = self.imu_yaw_raw
         self.get_logger().info(
             f"Yaw zeroed at {self.yaw_zero_offset:.2f} deg")
 
