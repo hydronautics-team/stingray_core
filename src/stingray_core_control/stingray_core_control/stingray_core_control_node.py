@@ -46,7 +46,7 @@ class StingrayCoreControlNode(Node):
         self.declare_parameter('topic_imu_angular', '/vectornav/raw/common')
         self.declare_parameter('topic_imu_linear_accel',
                                '/vectornav/imu_accel')
-        self.declare_parameter('topic_imu_angular_rate', '/vectornav/imu_rate')
+        self.declare_parameter('topic_imu_angular_rate', '/vectornav/imu')
         self.declare_parameter('topic_loop_flags', '/control/loop_flags')
         self.declare_parameter('topic_pressure_sensor', '/sensors/pressure')
         self.declare_parameter('topic_control_data', '/control/data')
@@ -148,7 +148,7 @@ class StingrayCoreControlNode(Node):
         self.sub_imu_linear_accel = self.create_subscription(
             Vector3, self.topic_imu_linear_accel, self.imu_linear_accel_callback, qos)
         self.sub_imu_angular_rate = self.create_subscription(
-            Vector3, self.topic_imu_angular_rate, self.imu_angular_rate_callback, qos)
+            Imu, self.topic_imu_angular_rate, self.imu_angular_rate_callback, qos)
         
         # --- my orientation publishers ---
         self.pub_yaw   = self.create_publisher(Float64, '~/orientation/yaw', 10)
@@ -305,14 +305,16 @@ class StingrayCoreControlNode(Node):
             self.get_logger().warning(
                 f"Error parsing imu_linear_accel msg: {e}")
 
-    def imu_angular_rate_callback(self, msg: Vector3):
+
+    def imu_angular_rate_callback(self, msg: Imu):
         try:
-            self.imu_rate_x = float(msg.x)
-            self.imu_rate_y = float(msg.y)
-            self.imu_rate_z = float(msg.z)
+            self.imu_rate_x = float(msg.angular_velocity.x)
+            self.imu_rate_y = float(msg.angular_velocity.y)
+            self.imu_rate_z = float(msg.angular_velocity.z)
         except Exception as e:
             self.get_logger().warning(
-                f"Error parsing imu_angular_rate msg: {e}")
+                f"Error parsing imu angular_velocity from Imu msg: {e}"
+            )
     
     def zero_yaw_callback(self, msg: Bool):
         if not msg.data:

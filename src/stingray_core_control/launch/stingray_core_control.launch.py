@@ -40,7 +40,7 @@ def generate_launch_description():
 
         DeclareLaunchArgument(
             'topic_imu_angular_rate',
-            default_value='/vectornav/imu_rate',
+            default_value='/vectornav/imu',
             description='Topic for IMU angular rate (Vector3)'
         ),
 
@@ -79,7 +79,7 @@ def generate_launch_description():
                 {
                     'rate_hz': rate_hz,
                     'topic_imu_linear_accel': topic_imu_linear_accel,
-                    'topic_imu_angular_rate': topic_imu_angular_rate,
+                    # 'topic_imu_angular_rate': topic_imu_angular_rate,
                     'topic_loop_flags': topic_loop_flags,
                     'topic_pressure_sensor': topic_pressure_sensor,
                     'topic_control_data': topic_control_data,
