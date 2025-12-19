@@ -98,6 +98,27 @@ class BaseController(ABC):
         """hook(dict) — вызывается, если debug включён"""
         self.debug_hook = hook
 
+    def apply_params(self, **kwargs):
+        """
+        Обновляет параметры контроллера "на лету".
+        Не трогает внутренние состояния, если явно не указано reset=True.
+        """
+        reset_required = False
+
+        for k, v in kwargs.items():
+            if not hasattr(self, k):
+                continue
+
+            # если меняем динамические параметры — нужен reset
+            if k in ("K_i", "ap_T", "ap_K"):
+                reset_required = True
+
+            setattr(self, k, float(v) if isinstance(v, (int, float)) else v)
+
+        if reset_required:
+            self.reset()
+
+
 
     @abstractmethod
     def update(self, setpoint: float, measurement: float, measurement_rate: float, dt: float) -> float:
@@ -115,7 +136,19 @@ class BaseController(ABC):
 # Angular controllers
 # -----------------------
 class YawController(BaseController):
-    def update(self, setpoint: float, measurement: float, measurement_rate: float, dt: float, flag_setup_feedback_speed: bool) -> float:
+    def update(
+        self,
+        setpoint: float,
+        measurement: float,
+        measurement_rate: float,
+        dt: float,
+        flag_setup_feedback_speed: bool,
+        param_update: dict | None = None
+    ) -> float:
+
+        if param_update:
+            self.apply_params(**param_update)
+
         setspeed = setpoint * flag_setup_feedback_speed
         if flag_setup_feedback_speed:
             output_pi = 0.0
@@ -137,8 +170,9 @@ class YawController(BaseController):
             output_pi = res_p + res_i
 
         # 6) aperiodic filter from rate (wz) and scale
-        ap = self.aperiodic_step(measurement_rate, dt)
+        ap = self.aperiodic_step(57.3 * measurement_rate, dt)
         feedback_speed = ap * self.K_2
+        # feedback_speed = 57.3 *measurement_rate * self.K_2
 
         # 7) final output (PI minus speed feedback) 
         error_speed = output_pi + setspeed - feedback_speed 
@@ -152,7 +186,7 @@ class YawController(BaseController):
         if self.debug_hook is not None:
             self.debug_hook({
                 "err_position": err_position,
-                "output_pi": output_pi,
+                "output_pi": 57.3 *measurement_rate,
                 "feedback_speed": feedback_speed,
                 "error_speed": error_speed,
                 "out": out,

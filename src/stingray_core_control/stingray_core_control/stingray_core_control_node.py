@@ -374,7 +374,21 @@ class StingrayCoreControlNode(Node):
 
     def compute_yaw(self):
         dt = self.last_dt
-        return self.yaw_ctrl.update(self.impact_yaw, self.imu_yaw, self.imu_rate_z, dt, self.flag_setup_feedback_speed)
+        return self.yaw_ctrl.update(
+            self.impact_yaw,
+            self.imu_yaw,
+            self.imu_rate_z,
+            dt,
+            self.flag_setup_feedback_speed,
+            param_update={
+                "K_p": self.controllers["yaw"].K_p,
+                "K_i": self.controllers["yaw"].K_i,
+                "K_1": self.controllers["yaw"].K_1,
+                "K_2": self.controllers["yaw"].K_2,
+                "ap_T": self.controllers["yaw"].ap_T,
+                "ap_K": self.controllers["yaw"].ap_K,
+                "out_sat": self.controllers["yaw"].out_sat,
+            })
 
 
 

@@ -5,7 +5,7 @@ stingray_core_control_node:
     topic_loop_flags: /control/loop_flags
     topic_imu_angular: /vectornav/raw/common/yawpitchroll
     topic_imu_linear_accel: /vectornav/imu_accel
-    topic_imu_angular_rate: /vectornav/imu_rate
+    topic_imu_angular_rate: /vectornav/imu
     thrusters:
     - depth_front_left
     - depth_front_right
@@ -93,3 +93,4 @@ stingray_core_control_node:
     - ap_T
     flag_setup_feedback_speed: false
     debug_publish: true
+    use_sim_time: false

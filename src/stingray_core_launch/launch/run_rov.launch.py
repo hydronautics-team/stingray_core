@@ -35,6 +35,6 @@ def generate_launch_description():
     return LaunchDescription([
         thruster_link,
         core_control,
-        ms5837,
+        # ms5837,
         vectornav
     ])
