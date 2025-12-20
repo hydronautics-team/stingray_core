@@ -195,7 +195,7 @@ class StingrayCoreControlNode(Node):
         self.control_mode_flag_surge = False
         self.control_mode_flag_sway = False
         self.control_mode_flag_heave = False
-        self.control_mode_flag_yaw = True
+        self.control_mode_flag_yaw = False
         self.control_mode_flag_pitch = False
         self.control_mode_flag_roll = False
 
@@ -211,19 +211,31 @@ class StingrayCoreControlNode(Node):
             ap_K=self.controllers['yaw'].ap_K,
             ap_T=self.controllers['yaw'].ap_T
         )
+        self.depth_ctrl = DepthController(
+            K_p=self.controllers['heave'].K_p,
+            K_1=self.controllers['heave'].K_1,
+            K_2=self.controllers['heave'].K_2,
+            K_i=self.controllers['heave'].K_i,
+            I_max=self.controllers['heave'].I_max,
+            I_min=self.controllers['heave'].I_min,
+            out_sat=self.controllers['heave'].out_sat,
+            ap_K=self.controllers['heave'].ap_K,
+            ap_T=self.controllers['heave'].ap_T
+        )
+
         # self.pitch_ctrl = PitchController(Kp=1.0, K_stage=1.0, out_sat=100.0, ap_K=1.0, ap_T=0.1)
         # self.roll_ctrl = RollController(Kp=1.0, K_stage=1.0, out_sat=100.0, ap_K=1.0, ap_T=0.1)
-        # self.depth_ctrl = DepthController(Kp=1.0, K_stage=1.0, out_sat=100.0, ap_K=1.0, ap_T=0.1)
         # self.surge_ctrl = SurgeController(Kp=1.0, out_sat=100.0)
         # self.sway_ctrl = SwayController(Kp=1.0, out_sat=100.0)
 
         self.declare_parameter('debug_publish', False)
-        self.pub_err_position   = self.create_publisher(Float64, "~/debug/yaw/err_position", 10)
-        self.pub_output_pi      = self.create_publisher(Float64, "~/debug/yaw/output_pi", 10)
-        self.pub_feedback_speed = self.create_publisher(Float64, "~/debug/yaw/feedback_speed", 10)
-        self.pub_error_speed    = self.create_publisher(Float64, "~/debug/yaw/error_speed", 10)
-        self.pub_out            = self.create_publisher(Float64, "~/debug/yaw/out", 10)
-        self.yaw_ctrl.set_debug_hook(self.yaw_debug_cb)
+        self.pub_err_position   = self.create_publisher(Float64, "~/debug/err_position", 10)
+        self.pub_output_pi      = self.create_publisher(Float64, "~/debug/output_pi", 10)
+        self.pub_feedback_speed = self.create_publisher(Float64, "~/debug/feedback_speed", 10)
+        self.pub_measurement_rate    = self.create_publisher(Float64, "~/debug/measurement_rate", 10)
+        self.pub_out            = self.create_publisher(Float64, "~/debug/out", 10)
+        self.yaw_ctrl.set_debug_hook(self.debug_cb)
+        self.depth_ctrl.set_debug_hook(self.debug_cb)
 
 
         self.add_on_set_parameters_callback(self._on_params_changed)
@@ -362,7 +374,21 @@ class StingrayCoreControlNode(Node):
 
     def compute_heave(self):
         dt = self.last_dt
-        return self.depth_ctrl.update(self.impact_depth, self.depth, 0.0, dt)
+        return self.depth_ctrl.update(
+            self.impact_depth,
+            self.depth,
+            dt,
+            self.flag_setup_feedback_speed,
+            param_update={
+                "K_p": self.controllers["heave"].K_p,
+                "K_i": self.controllers["heave"].K_i,
+                "K_1": self.controllers["heave"].K_1,
+                "K_2": self.controllers["heave"].K_2,
+                "ap_T": self.controllers["heave"].ap_T,
+                "ap_K": self.controllers["heave"].ap_K,
+                "out_sat": self.controllers["heave"].out_sat,
+            })
+
 
     def compute_roll(self):
         dt = self.last_dt
@@ -548,14 +574,14 @@ class StingrayCoreControlNode(Node):
             self.get_logger().error(f"_on_params_changed exception: {e}")
             return SetParametersResult(successful=False, reason=str(e))
         
-    def yaw_debug_cb(self, data: dict):
+    def debug_cb(self, data: dict):
         if not self.get_parameter("debug_publish").value:
             return
 
         self.pub_err_position.publish(Float64(data=data["err_position"]))
         self.pub_output_pi.publish(Float64(data=data["output_pi"]))
         self.pub_feedback_speed.publish(Float64(data=data["feedback_speed"]))
-        self.pub_error_speed.publish(Float64(data=data["error_speed"]))
+        self.pub_measurement_rate.publish(Float64(data=data["measurement_rate"]))
         self.pub_out.publish(Float64(data=data["out"]))
 
 

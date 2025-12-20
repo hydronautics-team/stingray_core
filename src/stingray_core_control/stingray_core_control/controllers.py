@@ -188,7 +188,7 @@ class YawController(BaseController):
                 "err_position": err_position,
                 "output_pi": 57.3 *measurement_rate,
                 "feedback_speed": feedback_speed,
-                "error_speed": error_speed,
+                "measurement_rate": 57.3 *measurement_rate,
                 "out": out,
             })
 
@@ -228,35 +228,54 @@ class RollController(BaseController):
 # Linear controllers
 # -----------------------
 class DepthController(BaseController):
-    def update(self, setpoint: float, measurement: float, measurement_rate: float, dt: float, flag_setup_feedback_speed: bool) -> float:
-        setspeed = setpoint * flag_setup_feedback_speed
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.prev_depth = 0.0
+
+    def reset(self):
+        super().reset()
+        self.prev_depth = 0.0
+
+    def update(
+        self,
+        setpoint: float,
+        measurement: float,
+        dt: float,
+        flag_setup_feedback_speed: bool,
+        param_update: dict | None = None
+    ) -> float:
+
+        if param_update:
+            self.apply_params(**param_update)
+
+        # защита dt
+        dt = max(min(dt, 0.05), 1e-3)
+
+        # -------- скорость глубины --------
+        depth_rate = (measurement - self.prev_depth) / dt
+        self.prev_depth = measurement
+
+        # -------- режим настройки скорости --------
         if flag_setup_feedback_speed:
             output_pi = 0.0
             err_position = 0.0
+            setspeed = setpoint
         else:
-            # 1) ошибка (с учётом wrap-around)
-            err_position = normalize_angle_deg(setpoint - measurement)
-
-            # 2) stage (предобработка)  = err * K_1
+            # -------- позиционный контур --------
+            err_position = setpoint - measurement
             stage = err_position * self.K_1
-
-            # 3) P part (stage scaled by K_p)
             res_p = stage * self.K_p
-
-            # 4) I part (integrate stage * K_i)
             res_i = self.trapezoidal_integrate(stage * self.K_i, dt)
-
-            # 5) PI combined
             output_pi = res_p + res_i
+            setspeed = 0.0
 
-        # 6) aperiodic filter from rate (wz) and scale
-        ap = self.aperiodic_step(measurement_rate, dt)
+        # -------- ОС по скорости --------
+        ap = self.aperiodic_step(depth_rate, dt)
         feedback_speed = ap * self.K_2
 
-        # 7) final output (PI minus speed feedback) 
-        error_speed = output_pi + setspeed - feedback_speed 
+        # -------- итог --------
+        error_speed = output_pi + setspeed - feedback_speed
 
-        # 8) saturate final output symmetrically by out_sat (if provided)
         if self.out_sat is not None:
             out = saturation(error_speed, self.out_sat, -self.out_sat)
         else:
@@ -265,9 +284,9 @@ class DepthController(BaseController):
         if self.debug_hook is not None:
             self.debug_hook({
                 "err_position": err_position,
-                "output_pi": output_pi,
+                "measurement_rate": depth_rate,
                 "feedback_speed": feedback_speed,
-                "error_speed": error_speed,
+                "output_pi": output_pi,
                 "out": out,
             })
 
