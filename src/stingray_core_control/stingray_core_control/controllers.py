@@ -186,7 +186,7 @@ class YawController(BaseController):
         if self.debug_hook is not None:
             self.debug_hook({
                 "err_position": err_position,
-                "output_pi": 57.3 *measurement_rate,
+                "output_pi": output_pi,
                 "feedback_speed": feedback_speed,
                 "measurement_rate": 57.3 *measurement_rate,
                 "out": out,
@@ -195,33 +195,132 @@ class YawController(BaseController):
         return out
 
 class PitchController(BaseController):
-    def update(self, setpoint: float, measurement: float, measurement_rate: float, dt: float) -> float:
-        # same structure as yaw but error normalized for angles
-        err = normalize_angle_deg(setpoint - measurement)
-        stage = err * self.K_1
-        res_p = stage * self.K_p
-        res_i = self.trapezoidal_integrate(stage * self.K_i, dt)
-        output_pi = res_p + res_i
+    def update(
+        self,
+        setpoint: float,
+        measurement: float,
+        measurement_rate: float,
+        dt: float,
+        flag_setup_feedback_speed: bool,
+        param_update: dict | None = None
+    ) -> float:
+
+        if param_update:
+            self.apply_params(**param_update)
+
+        dt = max(min(dt, 0.05), 1e-3)
+
+        # --- позиционный контур ---
+        if flag_setup_feedback_speed:
+            err_position = 0.0
+            output_pi = 0.0
+            setspeed = setpoint
+        else:
+            err_position = normalize_angle_deg(setpoint - measurement)
+            stage = err_position * self.K_1
+            res_p = stage * self.K_p
+            res_i = self.trapezoidal_integrate(stage * self.K_i, dt)
+            output_pi = res_p + res_i
+            setspeed = 0.0
+
+        # --- ОС по скорости ---
         ap = self.aperiodic_step(measurement_rate, dt)
         feedback_speed = ap * self.K_2
-        out = output_pi - feedback_speed
+
+        error_speed = output_pi + setspeed - feedback_speed
+
         if self.out_sat is not None:
-            out = saturation(out, self.out_sat, -self.out_sat)
+            out = saturation(error_speed, self.out_sat, -self.out_sat)
+        else:
+            out = error_speed
+
+        # --- DEBUG ---
+        if self.debug_hook is not None:
+            self.debug_hook({
+                "err_position": err_position,
+                "output_pi": output_pi,
+                "measurement_rate": measurement_rate,
+                "feedback_speed": feedback_speed,
+                "error_speed": error_speed,
+                "out": out,
+            })
+
         return out
 
 class RollController(BaseController):
-    def update(self, setpoint: float, measurement: float, measurement_rate: float, dt: float) -> float:
-        # same as pitch
-        err = normalize_angle_deg(setpoint - measurement)
-        stage = err * self.K_1
-        res_p = stage * self.K_p
-        res_i = self.trapezoidal_integrate(stage * self.K_i, dt)
-        output_pi = res_p + res_i
+    def __init__(
+        self,
+        *args,
+        grav_bias: float = 0.0,
+        grav_gain: float = 0.0,
+        grav_offset_deg: float = 0.0,
+        **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        self.grav_bias = grav_bias
+        self.grav_gain = grav_gain
+        self.grav_offset_deg = grav_offset_deg
+
+    def update(
+        self,
+        setpoint: float,
+        measurement: float,
+        measurement_rate: float,
+        dt: float,
+        flag_setup_feedback_speed: bool,
+        param_update: dict | None = None
+    ) -> float:
+
+        if param_update:
+            self.apply_params(**param_update)
+
+        dt = max(min(dt, 0.05), 1e-3)
+
+        # -------- режим настройки скорости --------
+        if flag_setup_feedback_speed:
+            output_pi = 0.0
+            err_position = 0.0
+            setspeed = setpoint
+        else:
+            # -------- позиционный контур --------
+            err_position = normalize_angle_deg(setpoint - measurement)
+            stage = err_position * self.K_1
+            res_p = stage * self.K_p
+            res_i = self.trapezoidal_integrate(stage * self.K_i, dt)
+            output_pi = res_p + res_i
+            setspeed = 0.0
+
+        # -------- гравитационная компенсация --------
+        grav = (
+            self.grav_bias
+            + math.sin(math.radians(measurement - self.grav_offset_deg))
+            * self.grav_gain
+        )
+
+        # -------- ОС по скорости --------
         ap = self.aperiodic_step(measurement_rate, dt)
         feedback_speed = ap * self.K_2
-        out = output_pi - feedback_speed
+
+        # -------- итог --------
+        error_speed = output_pi + grav + setspeed - feedback_speed
+
         if self.out_sat is not None:
-            out = saturation(out, self.out_sat, -self.out_sat)
+            out = saturation(error_speed, self.out_sat, -self.out_sat)
+        else:
+            out = error_speed
+
+        if self.debug_hook is not None:
+            self.debug_hook({
+                "err_position": err_position,
+                "output_pi": output_pi,
+                "measurement_rate": measurement_rate,
+                "feedback_speed": feedback_speed,
+                "grav": grav,
+                "error_speed": error_speed,
+                "out": out,
+            })
+
+
         return out
 
 # -----------------------

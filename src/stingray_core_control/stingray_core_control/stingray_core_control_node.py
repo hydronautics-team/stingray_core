@@ -223,7 +223,18 @@ class StingrayCoreControlNode(Node):
             ap_T=self.controllers['heave'].ap_T
         )
 
-        # self.pitch_ctrl = PitchController(Kp=1.0, K_stage=1.0, out_sat=100.0, ap_K=1.0, ap_T=0.1)
+        self.pitch_ctrl = PitchController(
+            K_p=self.controllers['heave'].K_p,
+            K_1=self.controllers['heave'].K_1,
+            K_2=self.controllers['heave'].K_2,
+            K_i=self.controllers['heave'].K_i,
+            I_max=self.controllers['heave'].I_max,
+            I_min=self.controllers['heave'].I_min,
+            out_sat=self.controllers['heave'].out_sat,
+            ap_K=self.controllers['heave'].ap_K,
+            ap_T=self.controllers['heave'].ap_T
+        )
+
         # self.roll_ctrl = RollController(Kp=1.0, K_stage=1.0, out_sat=100.0, ap_K=1.0, ap_T=0.1)
         # self.surge_ctrl = SurgeController(Kp=1.0, out_sat=100.0)
         # self.sway_ctrl = SwayController(Kp=1.0, out_sat=100.0)
@@ -392,11 +403,25 @@ class StingrayCoreControlNode(Node):
 
     def compute_roll(self):
         dt = self.last_dt
-        return self.roll_ctrl.update(self.impact_roll, self.imu_roll, self.imu_rate_x, dt)
+        # return self.roll_ctrl.update(self.impact_roll, self.imu_roll, self.imu_rate_x, dt)
 
     def compute_pitch(self):
         dt = self.last_dt
-        return self.pitch_ctrl.update(self.impact_pitch, self.imu_pitch, self.imu_rate_y, dt)
+        return self.pitch_ctrl.update(
+            self.impact_pitch,
+            self.imu_pitch,
+            self.imu_rate_y,
+            dt,
+            self.flag_setup_feedback_speed,
+            param_update={
+                "K_p": self.controllers["pitch"].K_p,
+                "K_i": self.controllers["pitch"].K_i,
+                "K_1": self.controllers["pitch"].K_1,
+                "K_2": self.controllers["pitch"].K_2,
+                "ap_T": self.controllers["pitch"].ap_T,
+                "ap_K": self.controllers["pitch"].ap_K,
+                "out_sat": self.controllers["pitch"].out_sat,
+            })
 
     def compute_yaw(self):
         dt = self.last_dt
