@@ -339,157 +339,90 @@ class StingrayCoreControlNode(Node):
         try:
             thruster_params: list[Parameter] = []
             controller_params: list[Parameter] = []
-            other_params: list[Parameter] = []
+            node_params: list[Parameter] = []
 
-            # Разделяем входные параметры по назначению
+            # --- 1. Классификация параметров ---
             for p in params:
-                name = p.name
+                if self._is_thruster_param(p.name):
+                    thruster_params.append(p)
+                elif self._is_controller_param(p.name):
+                    controller_params.append(p)
+                else:
+                    node_params.append(p)
 
-                # 1) thruster params: "<thruster>_<axis_u>"
-                matched_thruster = False
-                for thr in self.thrusters:
-                    for a in self.axes_u:
-                        if name == f"{thr}_{a}":
-                            thruster_params.append(p)
-                            matched_thruster = True
-                            break
-                    if matched_thruster:
-                        break
-                if matched_thruster:
-                    continue
+            # --- 2. Применяем controller params ---
+            for p in controller_params:
+                _, axis, key = p.name.split(".", 2)
 
-                # 2) controller params: "controllers.<axis>.<key>"
-                matched_controller = False
-                for axis in self.axes:
-                    prefix = f'controllers.{axis}.'
-                    if name.startswith(prefix):
-                        controller_params.append(p)
+                ctrl = self.controllers.get(axis)
+                if ctrl and hasattr(ctrl, key):
+                    setattr(ctrl, key, p.value)
+                    self.get_logger().info(
+                        f"Controller '{axis}': {key} = {p.value}"
+                    )
+                else:
+                    self.get_logger().warning(
+                        f"Ignored controller param: {p.name}"
+                    )
 
-                        # имя параметра внутри контроллера
-                        key = name[len(prefix):]
+            # --- 3. Применяем node params ---
+            for p in node_params:
+                if hasattr(self, p.name):
+                    setattr(self, p.name, p.value)
+                    self.get_logger().info(
+                        f"Node param updated: {p.name} = {p.value}"
+                    )
 
-                        # обновляем параметр в объекте контроллера
-                        if axis in self.controllers and hasattr(self.controllers[axis], key):
-                            self.controllers[axis].__dict__[key] = p.value
-                            self.get_logger().info(
-                                f"Controller '{axis}': {key} = {p.value}"
-                            )
-                        else:
-                            self.get_logger().warning(
-                                f"Controller '{axis}' has no param '{key}'"
-                            )
-
-                        matched_controller = True
-                        break
-
-                if matched_controller:
-                    continue
-
-                # Остальные параметры
-                other_params.append(p)
-                if hasattr(self, name):
-                    setattr(self, name, p.value)
-                    self.get_logger().info(f"Node param updated: {name} = {p.value}")
-
-            # Сохраняем изменения в файлы конфигурации
+            # --- 4. Сохраняем параметры ---
             if thruster_params:
-                try:
-                    save_params(self, param_list=thruster_params, config_name="thruster_matrix")
-                except Exception as e:
-                    self.get_logger().error(f"Error saving thruster params: {e}")
+                save_params(self, thruster_params, "thruster_matrix")
 
             if controller_params:
-                try:
-                    save_params(self, param_list=controller_params, config_name="controllers")
-                except Exception as e:
-                    self.get_logger().error(f"Error saving controller params: {e}")
+                save_params(self, controller_params, "controllers")
 
-            if other_params:
-                names = [p.name for p in other_params]
-                save_params(self, param_list=other_params, config_name="stingray_core_control_node")
-                self.get_logger().info(f"Other params changed (not handled specially): {names}")
+            if node_params:
+                save_params(self, node_params, "stingray_core_control_node")
 
-            # --- Обновляем коэффициенты в mixer для изменённых thruster params ---
+            # --- 5. Обновляем mixer ---
             if thruster_params:
-                # Построим словарь частичного обновления: thruster -> row
-                coeffs_update = {}
-                # Инициализируем строки из текущих coeffs (если mixer есть), чтобы заполнить отсутствующие оси нулями
-                current_coeffs = {}
-                if hasattr(self, 'mixer') and self.mixer is not None:
-                    current_coeffs = {t: list(self.mixer.coeffs.get(t, [0.0]*len(self.axes_u))) for t in self.thrusters}
-                else:
-                    # если mixer ещё нет — создаём шаблон с нулями
-                    current_coeffs = {t: [0.0]*len(self.axes_u) for t in self.thrusters}
+                self._update_mixer_from_params(thruster_params)
 
-                for p in thruster_params:
-                    # Найдём, какой thruster и какая ось
-                    # формат: "<thruster>_<axis_u>" где axis_u точно равна одному из self.axes_u
-                    name = p.name
-                    found = False
-                    for thr in self.thrusters:
-                        for idx, a in enumerate(self.axes_u):
-                            if name == f"{thr}_{a}":
-                                # получаем значение параметра; p.value — универсально
-                                try:
-                                    val = float(p.value)
-                                except Exception:
-                                    # бывало, что числовые параметры приходят как ParameterValue объект
-                                    try:
-                                        val = float(p.get_parameter_value().double_value)
-                                    except Exception:
-                                        try:
-                                            val = float(p.get_parameter_value().integer_value)
-                                        except Exception:
-                                            val = 0.0
-                                # гарантируем наличие строки
-                                row = coeffs_update.get(thr, current_coeffs.get(thr, [0.0]*len(self.axes_u))).copy()
-                                row[idx] = val
-                                coeffs_update[thr] = row
-                                found = True
-                                break
-                        if found:
-                            break
+            return SetParametersResult(successful=True)
 
-                # Применяем частичное обновление к mixer
-                if coeffs_update:
-                    try:
-                        # Если mixer отсутствует — создаём новый целиком (безопасность)
-                        if not hasattr(self, 'mixer') or self.mixer is None:
-                            # попытка собрать полный coeffs: пробуем прочитать параметры ноды
-                            full_coeffs = {}
-                            for t in self.thrusters:
-                                row = []
-                                for a in self.axes_u:
-                                    pname = f"{t}_{a}"
-                                    if self.has_parameter(pname):
-                                        try:
-                                            pv = self.get_parameter(pname).get_parameter_value()
-                                            # pv может быть integer_value или double_value
-                                            if pv.type == pv.Type.INTEGER:
-                                                row.append(float(pv.integer_value))
-                                            else:
-                                                row.append(float(pv.double_value))
-                                        except Exception:
-                                            row.append(0.0)
-                                    else:
-                                        row.append(0.0)
-                                full_coeffs[t] = row
-                            self.mixer = ThrusterMixer(self.thrusters, self.axes_u, full_coeffs)
-                            self.get_logger().info("Mixer recreated because it was missing when params changed.")
-                        else:
-                            # Обновляем только изменённые строки
-                            self.mixer.update_coeffs(coeffs_update)
-
-                        # Логируем, какие thrusters обновлены
-                        updated = ", ".join(f"{k}:{v}" for k, v in coeffs_update.items())
-                        self.get_logger().info(f"Thruster coeffs updated: {updated}")
-                    except Exception as e:
-                        self.get_logger().error(f"Failed to update mixer coeffs: {e}")
-
-            return SetParametersResult(successful=True, reason='ok')
         except Exception as e:
-            self.get_logger().error(f"_on_params_changed exception: {e}")
+            self.get_logger().error(f"_on_params_changed failed: {e}")
             return SetParametersResult(successful=False, reason=str(e))
+
+    def _update_mixer_from_params(self, params: list[Parameter]):
+        coeffs_update = {}
+
+        for p in params:
+            for thr in self.thrusters:
+                if not p.name.startswith(f"{thr}_"):
+                    continue
+
+                axis_u = p.name[len(thr) + 1 :]
+                if axis_u not in self.axes_u:
+                    continue
+
+                idx = self.axes_u.index(axis_u)
+                row = list(self.mixer.coeffs.get(thr, [0.0] * len(self.axes_u)))
+                row[idx] = float(p.value)
+                coeffs_update[thr] = row
+
+        if coeffs_update:
+            self.mixer.update_coeffs(coeffs_update)
+            self.get_logger().info(
+                f"Updated thruster coeffs: {coeffs_update}"
+            )
+
+    def _is_thruster_param(self, name: str) -> bool:
+        return "_" in name and any(
+            name.startswith(f"{thr}_") for thr in self.thrusters
+        )
+
+    def _is_controller_param(self, name: str) -> bool:
+        return name.startswith("controllers.")
         
     def debug_cb(self, data: dict):
         if not self.get_parameter("debug_publish").value:
