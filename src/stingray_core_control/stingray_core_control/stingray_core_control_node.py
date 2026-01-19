@@ -11,9 +11,6 @@ from rclpy.parameter import Parameter
 from rcl_interfaces.msg import SetParametersResult
 
 import time
-import math
-import yaml
-import os
 
 from geometry_msgs.msg import Twist, Vector3
 from std_msgs.msg import Float32, Float64, UInt8, Bool, UInt8MultiArray
@@ -21,13 +18,14 @@ from sensor_msgs.msg import Imu
 from vectornav_msgs.msg import CommonGroup
 from rclpy.qos import qos_profile_sensor_data
 
-from .thruster_mixer import ThrusterMixer
-from .controllers import (
+from .utils.thruster_mixer import ThrusterMixer
+from .utils.controllers import (
     YawController, PitchController, RollController,
     DepthController, SurgeController, SwayController
 )
-from .save_params import save_params
-from ament_index_python.packages import get_package_share_directory
+from .utils.save_params import save_params
+from .state.imu import ImuState
+from .state.control import ControlState
 
 
 class StingrayCoreControlNode(Node):
@@ -119,11 +117,15 @@ class StingrayCoreControlNode(Node):
         self.declare_parameter('axes', ["surge", "sway", "heave", "roll", "pitch", "yaw"])
         self.axes = list(self.get_parameter('axes').get_parameter_value().string_array_value)
 
+        self.imu = ImuState()
+        self.control = ControlState.from_axes(self.axes)
+
+        self.param_keys = ["K_p", "K_1", "K_2", "K_i", "I_min", "I_max", "out_sat", "ap_K", "ap_T"]
+
         # внутри ноды
         for axis in self.axes:
             # Получаем список ключей для оси
             self.declare_parameter(axis, ["K_p", "K_1", "K_2", "K_i", "I_min", "I_max", "out_sat", "ap_K", "ap_T"])
-            self.param_keys = self.get_parameter(axis).get_parameter_value().string_array_value
 
             # Загружаем параметры
             params_dict = {}
@@ -172,72 +174,10 @@ class StingrayCoreControlNode(Node):
         self.pub_thruster_cmd = self.create_publisher(
             UInt8MultiArray, '/thruster/cmd', qos)
 
-        # --- инициализация состояний ---
-        self.imu_yaw = 0.0
-        self.imu_pitch = 0.0
-        self.imu_roll = 0.0
-        self.imu_accel_x = 0.0
-        self.imu_accel_y = 0.0
-        self.imu_accel_z = 0.0
-        self.imu_rate_x = 0.0
-        self.imu_rate_y = 0.0
-        self.imu_rate_z = 0.0
-
-        # входные импакты (по умолчанию нули)
-        self.impact_surge = 0.0
-        self.impact_sway = 0.0
-        self.impact_depth = 0.0
-        self.impact_roll = 0.0
-        self.impact_pitch = 0.0
-        self.impact_yaw = 0.0
-
-        # флаги управления (по умолчанию off)
-        self.control_mode_flag_surge = False
-        self.control_mode_flag_sway = False
-        self.control_mode_flag_heave = False
-        self.control_mode_flag_yaw = False
-        self.control_mode_flag_pitch = False
-        self.control_mode_flag_roll = False
-
         self.depth = 0.0
-        self.yaw_ctrl = YawController(
-            K_p=self.controllers['yaw'].K_p,
-            K_1=self.controllers['yaw'].K_1,
-            K_2=self.controllers['yaw'].K_2,
-            K_i=self.controllers['yaw'].K_i,
-            I_max=self.controllers['yaw'].I_max,
-            I_min=self.controllers['yaw'].I_min,
-            out_sat=self.controllers['yaw'].out_sat,
-            ap_K=self.controllers['yaw'].ap_K,
-            ap_T=self.controllers['yaw'].ap_T
-        )
-        self.depth_ctrl = DepthController(
-            K_p=self.controllers['heave'].K_p,
-            K_1=self.controllers['heave'].K_1,
-            K_2=self.controllers['heave'].K_2,
-            K_i=self.controllers['heave'].K_i,
-            I_max=self.controllers['heave'].I_max,
-            I_min=self.controllers['heave'].I_min,
-            out_sat=self.controllers['heave'].out_sat,
-            ap_K=self.controllers['heave'].ap_K,
-            ap_T=self.controllers['heave'].ap_T
-        )
-
-        self.pitch_ctrl = PitchController(
-            K_p=self.controllers['heave'].K_p,
-            K_1=self.controllers['heave'].K_1,
-            K_2=self.controllers['heave'].K_2,
-            K_i=self.controllers['heave'].K_i,
-            I_max=self.controllers['heave'].I_max,
-            I_min=self.controllers['heave'].I_min,
-            out_sat=self.controllers['heave'].out_sat,
-            ap_K=self.controllers['heave'].ap_K,
-            ap_T=self.controllers['heave'].ap_T
-        )
-
-        # self.roll_ctrl = RollController(Kp=1.0, K_stage=1.0, out_sat=100.0, ap_K=1.0, ap_T=0.1)
-        # self.surge_ctrl = SurgeController(Kp=1.0, out_sat=100.0)
-        # self.sway_ctrl = SwayController(Kp=1.0, out_sat=100.0)
+        self.yaw_ctrl = self.controllers["yaw"]
+        self.depth_ctrl = self.controllers["heave"]
+        self.pitch_ctrl = self.controllers["pitch"]
 
         self.declare_parameter('debug_publish', False)
         self.pub_err_position   = self.create_publisher(Float64, "~/debug/err_position", 10)
@@ -273,12 +213,12 @@ class StingrayCoreControlNode(Node):
         self.last_dt = dt
         # self.get_logger().info(f"self.flag_setup_feedback_speed={self.flag_setup_feedback_speed}")
         # === 1. Определяем управляющие воздействия ===
-        u_surge = self.compute_surge() if self.control_mode_flag_surge else self.impact_surge
-        u_sway = self.compute_sway() if self.control_mode_flag_sway else self.impact_sway
-        u_heave = self.compute_heave() if self.control_mode_flag_heave else self.impact_depth
-        u_roll = self.compute_roll() if self.control_mode_flag_roll else self.impact_roll
-        u_pitch = self.compute_pitch() if self.control_mode_flag_pitch else self.impact_pitch
-        u_yaw = self.compute_yaw() if self.control_mode_flag_yaw else self.impact_yaw
+        u_surge = self.compute_surge() if self.control.enabled["surge"] else self.control.impact["surge"]
+        u_sway  = self.compute_sway()  if self.control.enabled["sway"]  else self.control.impact["sway"]
+        u_heave = self.compute_heave() if self.control.enabled["heave"] else self.control.impact["heave"]
+        u_roll  = self.compute_roll()  if self.control.enabled["roll"]  else self.control.impact["roll"]
+        u_pitch = self.compute_pitch() if self.control.enabled["pitch"] else self.control.impact["pitch"]
+        u_yaw   = self.compute_yaw()   if self.control.enabled["yaw"]   else self.control.impact["yaw"]
 
         # === 2. Преобразуем в команды thrusters ===
         control_list = [u_surge, u_sway, u_heave, u_roll, u_pitch, u_yaw]
@@ -290,9 +230,9 @@ class StingrayCoreControlNode(Node):
         self.pub_thruster_cmd.publish(msg)
 
         # === 4. Публикуем ориентацию ===
-        self.pub_yaw.publish(Float64(data=self.imu_yaw))
-        self.pub_pitch.publish(Float64(data=self.imu_pitch))
-        self.pub_roll.publish(Float64(data=self.imu_roll))
+        self.pub_yaw.publish(Float64(data=self.imu.yaw))
+        self.pub_pitch.publish(Float64(data=self.imu.pitch))
+        self.pub_roll.publish(Float64(data=self.imu.roll))
 
 
         # Логируем статус 1 раз в секунду, а не каждый тик
@@ -308,36 +248,29 @@ class StingrayCoreControlNode(Node):
 
             self.imu_yaw_raw = float(ypr.x)
 
-            self.imu_yaw = self.normalize_angle_deg(
-                self.imu_yaw_raw - self.yaw_zero_offset
+            self.imu.yaw = self.normalize_angle_deg(
+            self.imu_yaw_raw - self.yaw_zero_offset
             )
-            self.imu_pitch = float(ypr.y)
-            self.imu_roll  = float(ypr.z)
+            self.imu.pitch = float(ypr.y)
+            self.imu.roll = float(ypr.z)
 
         except Exception as e:
             self.get_logger().warning(
                 f"Error parsing CommonGroup yawpitchroll: {e}"
             )
 
-    def imu_linear_accel_callback(self, msg: Vector3):
-        try:
-            self.imu_accel_x = float(msg.x)
-            self.imu_accel_y = float(msg.y)
-            self.imu_accel_z = float(msg.z)
-        except Exception as e:
-            self.get_logger().warning(
-                f"Error parsing imu_linear_accel msg: {e}")
-
-
     def imu_angular_rate_callback(self, msg: Imu):
         try:
-            self.imu_rate_x = float(msg.angular_velocity.x)
-            self.imu_rate_y = float(msg.angular_velocity.y)
-            self.imu_rate_z = float(msg.angular_velocity.z)
+            self.imu.rate_x = float(msg.angular_velocity.x)
+            self.imu.rate_y = float(msg.angular_velocity.y)
+            self.imu.rate_z = float(msg.angular_velocity.z)
         except Exception as e:
             self.get_logger().warning(
                 f"Error parsing imu angular_velocity from Imu msg: {e}"
             )
+
+    def imu_linear_accel_callback(self, msg: Vector3):
+        pass
     
     def zero_yaw_callback(self, msg: Bool):
         if not msg.data:
@@ -354,39 +287,34 @@ class StingrayCoreControlNode(Node):
             self.get_logger().warning(f"Error parsing depth msg: {e}")
 
     def control_data_callback(self, msg: Twist):
-        # self.get_logger().info(f"control_data_callback: {msg}")
+        self.control.impact["surge"] = float(msg.linear.x)
+        self.control.impact["sway"]  = float(msg.linear.y)
+        self.control.impact["heave"] = float(msg.linear.z)
 
-        # impact команды — просто копируем вход
-        self.impact_surge = float(msg.linear.x)
-        self.impact_sway = float(msg.linear.y)
-        self.impact_depth = float(msg.linear.z)
-        self.impact_roll = float(msg.angular.x)
-        self.impact_pitch = float(msg.angular.y)
-        self.impact_yaw = float(msg.angular.z)
+        self.control.impact["roll"]  = float(msg.angular.x)
+        self.control.impact["pitch"] = float(msg.angular.y)
+        self.control.impact["yaw"]   = float(msg.angular.z)
 
     def control_mode_flags_callback(self, msg: UInt8):
         flags = int(msg.data)
-        self.control_mode_flag_surge = bool(flags & (1 << 0))
-        self.control_mode_flag_sway = bool(flags & (1 << 1))
-        self.control_mode_flag_heave = bool(flags & (1 << 2))
-        self.control_mode_flag_yaw = bool(flags & (1 << 3))
-        self.get_logger().info(f"control_mode_flag_yaw set to {self.control_mode_flag_yaw}")
-        self.control_mode_flag_pitch = bool(flags & (1 << 4))
-        self.control_mode_flag_roll = bool(flags & (1 << 5))
+        self.control.enabled["surge"] = bool(flags & (1 << 0))
+        self.control.enabled["sway"]  = bool(flags & (1 << 1))
+        self.control.enabled["heave"] = bool(flags & (1 << 2))
+        self.control.enabled["yaw"]   = bool(flags & (1 << 3))
+        self.control.enabled["pitch"] = bool(flags & (1 << 4))
+        self.control.enabled["roll"]  = bool(flags & (1 << 5))
 
     # === Заглушки регуляторов ===
     def compute_surge(self):
-        dt = self.last_dt
-        return self.ux_ctrl.update(self.impact_surge, self.imu_accel_x, 0.0, dt)
+        return 0.0
 
     def compute_sway(self):
-        dt = self.last_dt
-        return self.uy_ctrl.update(self.impact_sway, self.imu_accel_y, 0.0, dt)
+        return 0.0
 
     def compute_heave(self):
         dt = self.last_dt
         return self.depth_ctrl.update(
-            self.impact_depth,
+            self.control.impact["heave"],
             self.depth,
             dt,
             self.flag_setup_feedback_speed,
@@ -402,15 +330,15 @@ class StingrayCoreControlNode(Node):
 
 
     def compute_roll(self):
-        dt = self.last_dt
-        # return self.roll_ctrl.update(self.impact_roll, self.imu_roll, self.imu_rate_x, dt)
+        return 0.0
+
 
     def compute_pitch(self):
         dt = self.last_dt
         return self.pitch_ctrl.update(
-            self.impact_pitch,
-            self.imu_pitch,
-            self.imu_rate_y,
+            self.control.impact["pitch"],
+            self.imu.pitch,
+            self.imu.rate_y,
             dt,
             self.flag_setup_feedback_speed,
             param_update={
@@ -426,9 +354,9 @@ class StingrayCoreControlNode(Node):
     def compute_yaw(self):
         dt = self.last_dt
         return self.yaw_ctrl.update(
-            self.impact_yaw,
-            self.imu_yaw,
-            self.imu_rate_z,
+            self.control.impact["yaw"],
+            self.imu.yaw,
+            self.imu.rate_z,
             dt,
             self.flag_setup_feedback_speed,
             param_update={

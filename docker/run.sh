@@ -5,7 +5,7 @@ set -e
 IMAGE_NAME="stingray_core"
 CONTAINER_NAME="stingray_core"
 
-#xhost +si:localuser:root
+xhost +si:localuser:root
 
 
 if [ "$(docker ps -a -q -f name=^/${CONTAINER_NAME}$)" ]; then
