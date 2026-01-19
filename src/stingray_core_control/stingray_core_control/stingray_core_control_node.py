@@ -26,6 +26,11 @@ from .utils.controllers import (
 from .utils.save_params import save_params
 from .state.imu import ImuState
 from .state.control import ControlState
+from .control.axis_controller import (
+    AxisController,
+    AngularAxisController,
+    LinearAxisController,
+)
 
 
 class StingrayCoreControlNode(Node):
@@ -117,9 +122,6 @@ class StingrayCoreControlNode(Node):
         self.declare_parameter('axes', ["surge", "sway", "heave", "roll", "pitch", "yaw"])
         self.axes = list(self.get_parameter('axes').get_parameter_value().string_array_value)
 
-        self.imu = ImuState()
-        self.control = ControlState.from_axes(self.axes)
-
         self.param_keys = ["K_p", "K_1", "K_2", "K_i", "I_min", "I_max", "out_sat", "ap_K", "ap_T"]
 
         # внутри ноды
@@ -141,6 +143,31 @@ class StingrayCoreControlNode(Node):
 
         self.get_logger().info(f"Controllers initialized: {self.controllers}")
 
+        self.imu = ImuState()
+        self.control = ControlState.from_axes(self.axes)
+
+        # --- Axis controllers (angular / linear split) ---
+        self.axis_ctrl: dict[str, AxisController] = {
+            "yaw": AngularAxisController(
+                controller=self.controllers["yaw"],
+                angle_fn=lambda: self.imu.yaw,
+                rate_fn=lambda: self.imu.rate_z,
+                feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
+            ),
+            "pitch": AngularAxisController(
+                controller=self.controllers["pitch"],
+                angle_fn=lambda: self.imu.pitch,
+                rate_fn=lambda: self.imu.rate_y,
+                feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
+            ),
+            "heave": LinearAxisController(
+                controller=self.controllers["heave"],
+                pos_fn=lambda: self.depth,
+                vel_fn=lambda: 0.0,   # пока нет оценки вертикальной скорости
+                accel_fn=lambda: 0.0,
+                feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
+            ),
+        }
 
         qos = QoSProfile(depth=10)
 
@@ -211,17 +238,21 @@ class StingrayCoreControlNode(Node):
         dt = now - self.last_time if self.last_time is not None else 0.0
         self.last_time = now
         self.last_dt = dt
-        # self.get_logger().info(f"self.flag_setup_feedback_speed={self.flag_setup_feedback_speed}")
+
         # === 1. Определяем управляющие воздействия ===
-        u_surge = self.compute_surge() if self.control.enabled["surge"] else self.control.impact["surge"]
-        u_sway  = self.compute_sway()  if self.control.enabled["sway"]  else self.control.impact["sway"]
-        u_heave = self.compute_heave() if self.control.enabled["heave"] else self.control.impact["heave"]
-        u_roll  = self.compute_roll()  if self.control.enabled["roll"]  else self.control.impact["roll"]
-        u_pitch = self.compute_pitch() if self.control.enabled["pitch"] else self.control.impact["pitch"]
-        u_yaw   = self.compute_yaw()   if self.control.enabled["yaw"]   else self.control.impact["yaw"]
+        u: dict[str, float] = {}
+
+        for axis in self.axes:
+            if axis in self.axis_ctrl and self.control.enabled[axis]:
+                u[axis] = self.axis_ctrl[axis].compute(
+                    target=self.control.impact[axis],
+                    dt=self.last_dt,
+                )
+            else:
+                u[axis] = self.control.impact[axis]
 
         # === 2. Преобразуем в команды thrusters ===
-        control_list = [u_surge, u_sway, u_heave, u_roll, u_pitch, u_yaw]
+        control_list = [u["surge"], u["sway"], u["heave"], u["roll"], u["pitch"], u["yaw"]]
         thruster_cmds = self.mixer.mix_from_list(control_list)
 
         # === 3. Публикуем UInt8MultiArray ===
@@ -303,73 +334,6 @@ class StingrayCoreControlNode(Node):
         self.control.enabled["yaw"]   = bool(flags & (1 << 3))
         self.control.enabled["pitch"] = bool(flags & (1 << 4))
         self.control.enabled["roll"]  = bool(flags & (1 << 5))
-
-    # === Заглушки регуляторов ===
-    def compute_surge(self):
-        return 0.0
-
-    def compute_sway(self):
-        return 0.0
-
-    def compute_heave(self):
-        dt = self.last_dt
-        return self.depth_ctrl.update(
-            self.control.impact["heave"],
-            self.depth,
-            dt,
-            self.flag_setup_feedback_speed,
-            param_update={
-                "K_p": self.controllers["heave"].K_p,
-                "K_i": self.controllers["heave"].K_i,
-                "K_1": self.controllers["heave"].K_1,
-                "K_2": self.controllers["heave"].K_2,
-                "ap_T": self.controllers["heave"].ap_T,
-                "ap_K": self.controllers["heave"].ap_K,
-                "out_sat": self.controllers["heave"].out_sat,
-            })
-
-
-    def compute_roll(self):
-        return 0.0
-
-
-    def compute_pitch(self):
-        dt = self.last_dt
-        return self.pitch_ctrl.update(
-            self.control.impact["pitch"],
-            self.imu.pitch,
-            self.imu.rate_y,
-            dt,
-            self.flag_setup_feedback_speed,
-            param_update={
-                "K_p": self.controllers["pitch"].K_p,
-                "K_i": self.controllers["pitch"].K_i,
-                "K_1": self.controllers["pitch"].K_1,
-                "K_2": self.controllers["pitch"].K_2,
-                "ap_T": self.controllers["pitch"].ap_T,
-                "ap_K": self.controllers["pitch"].ap_K,
-                "out_sat": self.controllers["pitch"].out_sat,
-            })
-
-    def compute_yaw(self):
-        dt = self.last_dt
-        return self.yaw_ctrl.update(
-            self.control.impact["yaw"],
-            self.imu.yaw,
-            self.imu.rate_z,
-            dt,
-            self.flag_setup_feedback_speed,
-            param_update={
-                "K_p": self.controllers["yaw"].K_p,
-                "K_i": self.controllers["yaw"].K_i,
-                "K_1": self.controllers["yaw"].K_1,
-                "K_2": self.controllers["yaw"].K_2,
-                "ap_T": self.controllers["yaw"].ap_T,
-                "ap_K": self.controllers["yaw"].ap_K,
-                "out_sat": self.controllers["yaw"].out_sat,
-            })
-
-
 
     def _on_params_changed(self, params: list[Parameter]) -> SetParametersResult:
         try:
