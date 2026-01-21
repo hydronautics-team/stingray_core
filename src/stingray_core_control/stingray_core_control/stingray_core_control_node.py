@@ -85,26 +85,25 @@ class StingrayCoreControlNode(Node):
         if not self.has_parameter('thrusters'):
             self.declare_parameter('thrusters', ["",""])
 
-        self.declare_parameter('axes_u', ["u_surge", "u_sway", "u_heave", "u_roll", "u_pitch", "u_yaw"])
         self.thrusters = list(self.get_parameter('thrusters').get_parameter_value().string_array_value)
-        self.axes_u = list(self.get_parameter('axes_u').get_parameter_value().string_array_value)
         
+        self.declare_parameter('axes', ["surge", "sway", "heave", "roll", "pitch", "yaw"])
+        self.axes = list(self.get_parameter('axes').get_parameter_value().string_array_value)
 
         coeffs = {}
         for t in self.thrusters:
             row = []
-            for a in self.axes_u:
+            for a in self.axes:
                 param_name = f"{t}_{a}"
                 if not self.has_parameter(param_name):
                     self.declare_parameter(param_name, 0)
-                p = self.get_parameter(param_name).get_parameter_value()
-                val = p.integer_value
+                val = float(self.get_parameter(param_name).value)
                 row.append(val)
             coeffs[t] = row
 
         # create pure mixer
-        self.mixer = ThrusterMixer(self.thrusters, self.axes_u, coeffs)
-        self.get_logger().info(f"ThrusterMixer initialized: thrusters={self.thrusters}, axes={self.axes_u}, coeffs= {coeffs}")
+        self.mixer = ThrusterMixer(self.thrusters, self.axes, coeffs)
+        self.get_logger().info(f"ThrusterMixer initialized: thrusters={self.thrusters}, axes={self.axes}, coeffs= {coeffs}")
 
         # subscribe to parameter changes to update coeffs dynamically
 
@@ -119,8 +118,6 @@ class StingrayCoreControlNode(Node):
             'sway': SwayController
         }
 
-        self.declare_parameter('axes', ["surge", "sway", "heave", "roll", "pitch", "yaw"])
-        self.axes = list(self.get_parameter('axes').get_parameter_value().string_array_value)
 
         self.param_keys = ["K_p", "K_1", "K_2", "K_i", "I_min", "I_max", "out_sat", "ap_K", "ap_T"]
 
@@ -252,7 +249,7 @@ class StingrayCoreControlNode(Node):
                 u[axis] = self.control.impact[axis]
 
         # === 2. Преобразуем в команды thrusters ===
-        control_list = [u["surge"], u["sway"], u["heave"], u["roll"], u["pitch"], u["yaw"]]
+        control_list = [u[a] for a in self.axes]
         thruster_cmds = self.mixer.mix_from_list(control_list)
 
         # === 3. Публикуем UInt8MultiArray ===
@@ -401,12 +398,12 @@ class StingrayCoreControlNode(Node):
                 if not p.name.startswith(f"{thr}_"):
                     continue
 
-                axis_u = p.name[len(thr) + 1 :]
-                if axis_u not in self.axes_u:
+                axis = p.name[len(thr) + 1 :]
+                if axis not in self.axes:
                     continue
 
-                idx = self.axes_u.index(axis_u)
-                row = list(self.mixer.coeffs.get(thr, [0.0] * len(self.axes_u)))
+                idx = self.axes.index(axis)
+                row = list(self.mixer.coeffs.get(thr, [0.0] * len(self.axes)))
                 row[idx] = float(p.value)
                 coeffs_update[thr] = row
 
@@ -417,8 +414,9 @@ class StingrayCoreControlNode(Node):
             )
 
     def _is_thruster_param(self, name: str) -> bool:
-        return "_" in name and any(
-            name.startswith(f"{thr}_") for thr in self.thrusters
+        return any(
+            name.startswith(f"{thr}_") and name[len(thr)+1:] in self.axes
+            for thr in self.thrusters
         )
 
     def _is_controller_param(self, name: str) -> bool:

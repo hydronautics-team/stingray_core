@@ -17,13 +17,6 @@ stingray_core_control_node:
     - surge_upper_right
     - sway_front
     - surge_upper_left
-    axes_u:
-    - u_surge
-    - u_sway
-    - u_heave
-    - u_roll
-    - u_pitch
-    - u_yaw
     axes:
     - surge
     - sway
