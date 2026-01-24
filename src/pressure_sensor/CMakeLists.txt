@@ -12,8 +12,8 @@ find_package(std_msgs REQUIRED)
 include_directories(include)
 
 add_executable(${PROJECT_NAME} 
-  src/pressure_sensor_impl.cpp
   src/pressure_sensor.cpp
+  src/main.cpp
 )
 
 ament_target_dependencies(${PROJECT_NAME} 
