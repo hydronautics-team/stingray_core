@@ -8,14 +8,20 @@
 
 namespace stingray_core::pressure_sensor {
 
+struct PressureSensorConfig{
+    PressureSensorConfig(const rclcpp::Node::SharedPtr& node)
+    : dump_param(node->declare_parameter<double>("dump_param", DEFAULT_DUMP_PARAM))
+    {}
+    const double  dump_param;
+};
+
 class PressureSensorNode {
    public:
     explicit PressureSensorNode(
         rclcpp::NodeOptions options = rclcpp::NodeOptions());
 
-    rclcpp::node_interfaces::NodeBaseInterface::SharedPtr
-    get_node_base_interface() {
-        return node_->get_node_base_interface();
+    void spin() { 
+        rclcpp::spin(node_);
     }
 
     rclcpp::Logger get_logger() const { return node_->get_logger(); }
@@ -24,9 +30,8 @@ class PressureSensorNode {
     void data_raw_callback(const std_msgs::msg::String::ConstSharedPtr& msg);
     void publish_depth(const double depth);
 
-    std::shared_ptr<rclcpp::Node> node_;
-
-    double dump_param_;
+    rclcpp::Node::SharedPtr node_;
+    PressureSensorConfig config_;
 
     rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr depth_pub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr data_raw_sub_;
