@@ -19,11 +19,11 @@ BatterySensor::BatterySensor(rclcpp::NodeOptions options)
               })) {
 
     RCLCPP_INFO(node_->get_logger(), "Battery sensor node initialized.");
-    RCLCPP_INFO(node_->get_logger(), "voltage_scale: %f", voltage_scale_);
-    RCLCPP_INFO(node_->get_logger(), "current_scale: %f", current_scale_);
-    RCLCPP_INFO(node_->get_logger(), "filter_window: %f", filter_window_);
+    RCLCPP_INFO(node_->get_logger(), "voltage_scale: %f", config_.voltage_scale);
+    RCLCPP_INFO(node_->get_logger(), "current_scale: %f", config_.current_scale);
+    RCLCPP_INFO(node_->get_logger(), "filter_window: %f", config_.filter_window);
     RCLCPP_INFO(node_->get_logger(), "low_battery_threshold: %f",
-                low_battery_threshold_);
+                config_.low_battery_threshold);
 }
 
 void BatterySensor::data_raw_callback(
@@ -46,8 +46,8 @@ void BatterySensor::data_raw_callback(
 
 void BatterySensor::process_battery_data(const double voltage_raw_1,
                                              const double voltage_raw_2) {
-    double voltage_1 = voltage_raw_1 * voltage_scale_;
-    double voltage_2 = voltage_raw_2 * voltage_scale_;
+    double voltage_1 = voltage_raw_1 * config_.voltage_scale;
+    double voltage_2 = voltage_raw_2 * config_.voltage_scale;
 
     auto battery1_msg =
         sensor_msgs::msg::BatteryState();  // FIXME change ("use
@@ -71,14 +71,14 @@ void BatterySensor::process_battery_data(const double voltage_raw_1,
     auto low_voltage_msg = std_msgs::msg::Int32MultiArray();
     low_voltage_msg.data.resize(2);
 
-    if (voltage_1 < low_battery_threshold_) {
+    if (voltage_1 < config_.low_battery_threshold) {
         low_voltage_msg.data[0] = 1;
         RCLCPP_WARN(node_->get_logger(), "Low battery 1 voltage: %.2f V",
                     voltage_1);
     } else {
         low_voltage_msg.data[0] = 0;
     }
-    if (voltage_2 < low_battery_threshold_) {
+    if (voltage_2 < config_.low_battery_threshold) {
         low_voltage_msg.data[1] = 1;
         RCLCPP_WARN(node_->get_logger(), "Low battery 2 voltage: %.2f V",
                     voltage_2);
