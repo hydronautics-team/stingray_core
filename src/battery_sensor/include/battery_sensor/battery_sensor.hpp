@@ -12,14 +12,26 @@
 
 namespace stingray_core::battery_sensor {
 
-class BatterySensorNode {
+struct BatterySensorConfig {
+    PressureSensorConfig(const rclcpp::Node::SharedPtr& node)
+    : voltage_scale(node->declare_parameter<double>("voltage_scale", DEFAULT_VOLTAGE_SCALE)),
+    current_scale(node->declare_parameter<double>("current_scale", DEFAULT_CURRENT_SCALE)),
+    filter_window(node->declare_parameter<double>("filter_window", DEFAULT_FILTER_WINDOW)),
+    low_battery_threshold(node->declare_parameter<double>("low_battery_threshold", DEFAULT_LOW_BATTERY_THRESHOLD))
+    {}
+    const double voltage_scale;
+    const double current_scale;
+    const double filter_window;
+    const double low_battery_threshold;
+}
+
+class BatterySensor {
    public:
-    explicit BatterySensorNode(
+    explicit BatterySensor(
         rclcpp::NodeOptions options = rclcpp::NodeOptions());
 
-    rclcpp::node_interfaces::NodeBaseInterface::SharedPtr
-    get_node_base_interface() {
-        return node_->get_node_base_interface();
+    void spin() { 
+        rclcpp::spin(node_);
     }
 
     rclcpp::Logger get_logger() const { return node_->get_logger(); }
@@ -30,12 +42,8 @@ class BatterySensorNode {
     void process_battery_data(const double voltage_raw_1,
                               const double voltage_raw_2);
 
-    double voltage_scale_;
-    double current_scale_;
-    double filter_window_;
-    double low_battery_threshold_;
-
-    std::shared_ptr<rclcpp::Node> node_;
+    rclcpp::Node::SharedPtr node_;
+    BatterySensorConfig config_;
 
     rclcpp::Publisher<sensor_msgs::msg::BatteryState>::SharedPtr data_pub_;
     rclcpp::Publisher<std_msgs::msg::Int32MultiArray>::SharedPtr

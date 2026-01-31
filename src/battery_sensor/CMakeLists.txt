@@ -13,8 +13,8 @@ find_package(std_msgs REQUIRED)
 include_directories(include)
 
 add_executable(${PROJECT_NAME}
-  src/battery_sensor_node.cpp
   src/battery_sensor.cpp
+  src/main.cpp
 )
 
 ament_target_dependencies(${PROJECT_NAME} 
