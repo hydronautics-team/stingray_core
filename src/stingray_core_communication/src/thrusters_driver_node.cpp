@@ -23,6 +23,13 @@
 
 namespace stingray_core
 {
+    
+    typedef struct
+        {
+            uint16_t vbat1_adc = 0;
+            uint16_t vbat2_adc = 0;
+            bool killswitch_state = false;
+        }telemetry_data_t;
 
     class ThrustersDriverNode : public rclcpp::Node
     {
@@ -45,15 +52,8 @@ namespace stingray_core
         rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr serial_pub_;
 
         std::array<uint8_t, PACKET_SIZE> tx_packet_;
-        std::array<uint8_t, MAX_SCAN_BYTES> rx_packet_;
-        telemetry_data telemetry_;
-
-        struct telemetry_data
-        {
-            uint16_t vbat1_adc = 0;
-            uint16_t vbat2_adc = 0;
-            bool killswitch_state = false;
-        };
+        std::vector<uint8_t> rx_packet_;
+        telemetry_data_t telemetry_;
 
         void thrustersCallback(const std_msgs::msg::UInt8MultiArray::SharedPtr msg)
         {
