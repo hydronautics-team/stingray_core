@@ -15,9 +15,9 @@ struct PressureSensorConfig{
     const double  dump_param;
 };
 
-class PressureSensorNode {
+class PressureSensor {
    public:
-    explicit PressureSensorNode(
+    explicit PressureSensor(
         rclcpp::NodeOptions options = rclcpp::NodeOptions());
 
     void spin() { 
