@@ -11,7 +11,7 @@
 #define DEFAULT_DEDUPE true
 #define DEFAULT_DISPLAY_FIELDS 13.6
 
-namespace stingray_core::panel_device {
+namespace stingray_core::display_device {
 
 struct DisplayDeviceConfig{
     DisplayDeviceConfig(const rclcpp::Node::SharedPtr& node)
