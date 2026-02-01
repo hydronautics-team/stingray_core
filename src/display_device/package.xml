@@ -3,15 +3,20 @@
 <package format="3">
   <name>display_device</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>Display device node for aggregating and formatting system status</description>
   <maintainer email="p.v.elesin@gmail.com">Pavel Elesin</maintainer>
-  <license>TODO: License declaration</license>
+  <license>Apache License 2.0</license>
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>rclcpp</depend>
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
-
+  <depend>geometry_msgs</depend>
+  
+  <buildtool_depend>rosidl_default_generators</buildtool_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
+  <member_of_group>rosidl_interface_packages</member_of_group>
+  
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   

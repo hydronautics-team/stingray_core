@@ -9,18 +9,26 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/DisplayStatus.msg"
+  DEPENDENCIES std_msgs
+)
 
 include_directories(include)
 
 add_executable(${PROJECT_NAME}
-  src/display_device_node.cpp
   src/display_device.cpp
+  src/main.cpp
 )
 
 ament_target_dependencies(${PROJECT_NAME} 
   rclcpp
   sensor_msgs
   std_msgs
+  rosidl_default_runtime
 )
 
 install(TARGETS ${PROJECT_NAME}
@@ -29,6 +37,10 @@ install(TARGETS ${PROJECT_NAME}
 
 install(DIRECTORY include/
   DESTINATION include/
+)
+
+install(DIRECTORY msg/
+  DESTINATION share/${PROJECT_NAME}/msg
 )
 
 install(DIRECTORY launch/

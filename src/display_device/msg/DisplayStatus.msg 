@@ -1,0 +1,4 @@
+# DisplayStatus.msg
+std_msgs/Header header
+string battery_info
+string system_mode
