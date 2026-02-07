@@ -1,0 +1,8 @@
+buttons_sensor:
+  ros__parameters:
+    buttons_map:
+      1: "MISSION_SELECT"
+      2: "MISSION_CONFIRM" 
+      3: "MISSION_ABORT"
+      4: "CALIBRATION_START"
+      5: "SENSOR_TEST"
