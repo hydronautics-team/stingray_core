@@ -103,6 +103,22 @@ static void convert_vec_frd_to_rfu(const geometry_msgs::msg::Vector3 & vec_frd, 
   vec_rfu.z = -vec_frd.z;
 }
 
+static void convert_vec_frd_to_rfu_custom(const geometry_msgs::msg::Vector3 & vec_frd, geometry_msgs::msg::Vector3 & vec_rfu)
+{
+  // swap x and y and negate z
+  vec_rfu.x = vec_frd.x;
+  vec_rfu.y = -vec_frd.y;
+  vec_rfu.z = vec_frd.z;
+}
+
+static void convert_vec_frd_to_rfu_custom_rate(const geometry_msgs::msg::Vector3 & vec_frd, geometry_msgs::msg::Vector3 & vec_rfu)
+{
+  // swap x and y and negate z
+  vec_rfu.x = -vec_frd.x;
+  vec_rfu.y = -vec_frd.y;
+  vec_rfu.z = -vec_frd.z;
+}
+
 static void convert_to_enu(const geometry_msgs::msg::Quaternion & q_msg_frd2ned, geometry_msgs::msg::Quaternion & q_msg_rfu2enu)
 {
   // convert from FRD_TO_NED to RFU_TO_ENU attitude
@@ -179,12 +195,18 @@ void VnSensorMsgs::sub_vn_common(const vectornav_msgs::msg::CommonGroup::SharedP
     msg.header = msg_in->header;
 
     if (use_enu) {
-      convert_vec_frd_to_rfu(msg_in->angularrate, msg.angular_velocity);
-      convert_vec_frd_to_rfu(msg_in->accel, msg.linear_acceleration);
+      convert_vec_frd_to_rfu_custom_rate(msg_in->angularrate, msg.angular_velocity);
+      convert_vec_frd_to_rfu_custom(msg_in->accel, msg.linear_acceleration);
       convert_to_enu(msg_in->quaternion, msg.orientation);
     } else {
-      msg.angular_velocity = msg_in->angularrate;
-      msg.linear_acceleration = msg_in->accel;
+      msg.angular_velocity.x = msg_in->angularrate.x * (-1);
+      msg.angular_velocity.y = msg_in->angularrate.y * (-1);
+      msg.angular_velocity.z = msg_in->angularrate.z * (-1);
+      //msg.angular_velocity = msg_in->angularrate*(-1);
+      //msg.linear_acceleration = msg_in->accel;
+      msg.linear_acceleration.x = msg_in->accel.x*(-1);
+      msg.linear_acceleration.y = msg_in->accel.y*(-1);
+      msg.linear_acceleration.z = msg_in->accel.z;
       msg.orientation = msg_in->quaternion;
     }
 
@@ -202,11 +224,14 @@ void VnSensorMsgs::sub_vn_common(const vectornav_msgs::msg::CommonGroup::SharedP
     msg.header = msg_in->header;
 
     if (use_enu) {
-      convert_vec_frd_to_rfu(msg_in->imu_rate, msg.angular_velocity);
-      convert_vec_frd_to_rfu(msg_in->imu_accel, msg.linear_acceleration);
+      convert_vec_frd_to_rfu_custom(msg_in->imu_rate, msg.angular_velocity);
+      convert_vec_frd_to_rfu_custom(msg_in->imu_accel, msg.linear_acceleration);
       convert_to_enu(msg_in->quaternion, msg.orientation);
     } else {
-      msg.angular_velocity = msg_in->imu_rate;
+      msg.angular_velocity.x = msg_in->imu_rate.x * (-1);
+      msg.angular_velocity.y = msg_in->imu_rate.y * (-1);
+      msg.angular_velocity.z = msg_in->imu_rate.z * (-1);
+      //msg.angular_velocity = msg_in->imu_rate*(-1);
       msg.linear_acceleration = msg_in->imu_accel;
     }
 
@@ -222,7 +247,7 @@ void VnSensorMsgs::sub_vn_common(const vectornav_msgs::msg::CommonGroup::SharedP
     sensor_msgs::msg::MagneticField msg;
     msg.header = msg_in->header;
     if (use_enu) {
-      convert_vec_frd_to_rfu(msg_in->magpres_mag, msg.magnetic_field);
+      convert_vec_frd_to_rfu_custom(msg_in->magpres_mag, msg.magnetic_field);
     } else {
       msg.magnetic_field = msg_in->magpres_mag;
     }
@@ -284,11 +309,14 @@ void VnSensorMsgs::sub_vn_common(const vectornav_msgs::msg::CommonGroup::SharedP
     geometry_msgs::msg::TwistWithCovarianceStamped msg;
     msg.header = msg_in->header;
     if (use_enu) {
-      convert_vec_frd_to_rfu(ins_velbody_, msg.twist.twist.linear);
-      convert_vec_frd_to_rfu(msg_in->angularrate, msg.twist.twist.angular);
+      convert_vec_frd_to_rfu_custom(ins_velbody_, msg.twist.twist.linear);
+      convert_vec_frd_to_rfu_custom(msg_in->angularrate, msg.twist.twist.angular);
     } else {
       msg.twist.twist.linear = ins_velbody_;
-      msg.twist.twist.angular = msg_in->angularrate;
+      msg.twist.twist.angular.x = msg_in->angularrate.x * (-1);
+      msg.twist.twist.angular.y = msg_in->angularrate.y * (-1);
+      msg.twist.twist.angular.z = msg_in->angularrate.z * (-1);
+      //msg.twist.twist.angular = msg_in->angularrate*(-1);
     }
 
     /// TODO(Dereck): Velocity Covariance
