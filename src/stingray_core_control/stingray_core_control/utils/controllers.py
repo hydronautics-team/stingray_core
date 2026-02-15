@@ -143,11 +143,7 @@ class YawController(BaseController):
         measurement_rate: float,
         dt: float,
         flag_setup_feedback_speed: bool,
-        param_update: dict | None = None
     ) -> float:
-
-        if param_update:
-            self.apply_params(**param_update)
 
         setspeed = setpoint * flag_setup_feedback_speed
         if flag_setup_feedback_speed:
@@ -202,11 +198,7 @@ class PitchController(BaseController):
         measurement_rate: float,
         dt: float,
         flag_setup_feedback_speed: bool,
-        param_update: dict | None = None
     ) -> float:
-
-        if param_update:
-            self.apply_params(**param_update)
 
         dt = max(min(dt, 0.05), 1e-3)
 
@@ -268,11 +260,7 @@ class RollController(BaseController):
         measurement_rate: float,
         dt: float,
         flag_setup_feedback_speed: bool,
-        param_update: dict | None = None
     ) -> float:
-
-        if param_update:
-            self.apply_params(**param_update)
 
         dt = max(min(dt, 0.05), 1e-3)
 
@@ -339,19 +327,17 @@ class DepthController(BaseController):
         self,
         setpoint: float,
         measurement: float,
+        measurement_rate: float,
+        measurement_accel: float,
         dt: float,
         flag_setup_feedback_speed: bool,
-        param_update: dict | None = None
     ) -> float:
-
-        if param_update:
-            self.apply_params(**param_update)
 
         # защита dt
         dt = max(min(dt, 0.05), 1e-3)
 
         # -------- скорость глубины --------
-        depth_rate = (measurement - self.prev_depth) / dt
+        depth_rate = measurement_rate
         self.prev_depth = measurement
 
         # -------- режим настройки скорости --------

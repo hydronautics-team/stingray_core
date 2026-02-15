@@ -26,7 +26,6 @@ class AngularAxisController(AxisController):
             self.rate(),
             dt,
             self.feedback_flag(),
-            param_update=self.controller.__dict__,
         )
 
 class LinearAxisController(AxisController):
@@ -45,5 +44,4 @@ class LinearAxisController(AxisController):
             self.accel(),
             dt,
             self.feedback_flag(),
-            param_update=self.controller.__dict__,
         )

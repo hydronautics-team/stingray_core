@@ -6,7 +6,12 @@ Minimal ROS2 node skeleton with 100 Hz control loop callback.
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile
+from rclpy.qos import (
+    QoSProfile,
+    HistoryPolicy,
+    ReliabilityPolicy,
+    DurabilityPolicy,
+)
 from rclpy.parameter import Parameter
 from rcl_interfaces.msg import SetParametersResult
 
@@ -16,7 +21,6 @@ from geometry_msgs.msg import Twist, Vector3
 from std_msgs.msg import Float32, Float64, UInt8, Bool, UInt8MultiArray
 from sensor_msgs.msg import Imu
 from vectornav_msgs.msg import CommonGroup
-from rclpy.qos import qos_profile_sensor_data
 
 from .utils.thruster_mixer import ThrusterMixer
 from .utils.controllers import (
@@ -199,57 +203,98 @@ class StingrayCoreControlNode(Node):
         #         self.axis_ctrl[axis] = PassthroughAxisController()
 
     def _init_subscriptions(self):
-        qos = QoSProfile(depth=10)
+        # Explicit QoS profiles for deterministic behavior by topic class.
+        qos_sensor = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE,
+        )
+
+        qos_command = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=5,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE,
+        )
+
+        qos_event = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE,
+        )
 
         self.sub_imu_angular = self.create_subscription(
             CommonGroup, self.topic_imu_angular,
-            self.imu_angular_callback, qos_profile_sensor_data
+            self.imu_angular_callback, qos_sensor
         )
 
         self.sub_imu_linear_accel = self.create_subscription(
             Vector3, self.topic_imu_linear_accel,
-            self.imu_linear_accel_callback, qos
+            self.imu_linear_accel_callback, qos_sensor
         )
 
         self.sub_imu_angular_rate = self.create_subscription(
             Imu, self.topic_imu_angular_rate,
-            self.imu_angular_rate_callback, qos
+            self.imu_angular_rate_callback, qos_sensor
         )
 
         self.sub_control_mode_flags = self.create_subscription(
             UInt8, self.topic_loop_flags,
-            self.control_mode_flags_callback, qos
+            self.control_mode_flags_callback, qos_command
         )
 
         self.sub_pressure_sensor = self.create_subscription(
             Float32, self.topic_pressure_sensor,
-            self.pressure_sensor_callback, qos
+            self.pressure_sensor_callback, qos_sensor
         )
 
         self.sub_control_data = self.create_subscription(
             Twist, self.topic_control_data,
-            self.control_data_callback, qos
+            self.control_data_callback, qos_command
         )
 
         self.sub_zero_yaw = self.create_subscription(
             Bool, self.topic_zero_yaw,
-            self.zero_yaw_callback, 10
+            self.zero_yaw_callback, qos_event
         )
 
     def _init_publishers(self):
-        self.pub_thruster_cmd = self.create_publisher(
-            UInt8MultiArray, '/thruster/cmd', 10
+        qos_actuation = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE,
         )
 
-        self.pub_yaw = self.create_publisher(Float64, '~/orientation/yaw', 10)
-        self.pub_pitch = self.create_publisher(Float64, '~/orientation/pitch', 10)
-        self.pub_roll = self.create_publisher(Float64, '~/orientation/roll', 10)
+        qos_telemetry = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE,
+        )
 
-        self.pub_err_position = self.create_publisher(Float64, "~/debug/err_position", 10)
-        self.pub_output_pi = self.create_publisher(Float64, "~/debug/output_pi", 10)
-        self.pub_feedback_speed = self.create_publisher(Float64, "~/debug/feedback_speed", 10)
-        self.pub_measurement_rate = self.create_publisher(Float64, "~/debug/measurement_rate", 10)
-        self.pub_out = self.create_publisher(Float64, "~/debug/out", 10)
+        qos_debug = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE,
+        )
+
+        self.pub_thruster_cmd = self.create_publisher(
+            UInt8MultiArray, '/thruster/cmd', qos_actuation
+        )
+
+        self.pub_yaw = self.create_publisher(Float64, '~/orientation/yaw', qos_telemetry)
+        self.pub_pitch = self.create_publisher(Float64, '~/orientation/pitch', qos_telemetry)
+        self.pub_roll = self.create_publisher(Float64, '~/orientation/roll', qos_telemetry)
+
+        self.pub_err_position = self.create_publisher(Float64, "~/debug/err_position", qos_debug)
+        self.pub_output_pi = self.create_publisher(Float64, "~/debug/output_pi", qos_debug)
+        self.pub_feedback_speed = self.create_publisher(Float64, "~/debug/feedback_speed", qos_debug)
+        self.pub_measurement_rate = self.create_publisher(Float64, "~/debug/measurement_rate", qos_debug)
+        self.pub_out = self.create_publisher(Float64, "~/debug/out", qos_debug)
     
     def _init_param_callbacks(self):
         self.add_on_set_parameters_callback(self._on_params_changed)
