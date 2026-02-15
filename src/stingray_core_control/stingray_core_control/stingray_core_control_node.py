@@ -40,17 +40,10 @@ from .control.axis_controller import (
 class StingrayCoreControlNode(Node):
     def __init__(self):
         super().__init__('stingray_core_control_node')
-        self._init_node_params()
-        self._init_topics()
-        self._init_axes_and_thrusters()
-        self._init_mixer()
-        self._init_controllers()
-        self._init_state()
-        self._init_axis_controllers()
-        self._init_subscriptions()
-        self._init_publishers()
-        self._init_param_callbacks()
-        self._init_timer()
+        self._init_config()
+        self._init_control_core()
+        self._init_ros_interfaces()
+        self._init_runtime()
 
         self.get_logger().info(
             f"Started at {self.rate_hz} Hz | axes={self.axes} | thrusters={len(self.thrusters)}"
@@ -88,12 +81,7 @@ class StingrayCoreControlNode(Node):
         self.pub_pitch.publish(Float64(data=self.imu.pitch))
         self.pub_roll.publish(Float64(data=self.imu.roll))
 
-    def normalize_angle_deg(self, angle_deg):
-        """Нормализует угол в градусах в диапазон [-180, 180)."""
-        a = (angle_deg + 180.0) % 360.0 - 180.0
-        return a
-
-    def _init_node_params(self):
+    def _init_config(self):
         self.declare_parameter('rate_hz', 100.0)
         self.rate_hz = float(self.get_parameter('rate_hz').value)
 
@@ -102,8 +90,6 @@ class StingrayCoreControlNode(Node):
 
         self.declare_parameter('debug_publish', False)
 
-
-    def _init_topics(self):
         defaults = {
             'topic_imu_angular': '/vectornav/raw/common',
             'topic_imu_linear_accel': '/vectornav/imu_accel',
@@ -118,16 +104,14 @@ class StingrayCoreControlNode(Node):
             self.declare_parameter(name, default)
             setattr(self, name, self.get_parameter(name).value)
 
-    def _init_axes_and_thrusters(self):
         self.declare_parameter('axes', ["surge", "sway", "heave", "roll", "pitch", "yaw"])
         self.axes = list(self.get_parameter('axes').value)
 
         self.declare_parameter('thrusters', [])
         self.thrusters = list(self.get_parameter('thrusters').value)
 
-    def _init_mixer(self):
+    def _init_control_core(self):
         coeffs = {}
-
         for thr in self.thrusters:
             row = []
             for axis in self.axes:
@@ -139,7 +123,6 @@ class StingrayCoreControlNode(Node):
 
         self.mixer = ThrusterMixer(self.thrusters, self.axes, coeffs)
 
-    def _init_controllers(self):
         axis_class_map = {
             'yaw': YawController,
             'pitch': PitchController,
@@ -151,30 +134,22 @@ class StingrayCoreControlNode(Node):
 
         self.controllers = {}
         self.param_keys = ["K_p", "K_1", "K_2", "K_i", "I_min", "I_max", "out_sat", "ap_K", "ap_T"]
-
         for axis in self.axes:
             params = {}
             for key in self.param_keys:
                 pname = f"controllers.{axis}.{key}"
                 self.declare_parameter(pname, 0.0)
                 params[key] = float(self.get_parameter(pname).value)
-
             self.controllers[axis] = axis_class_map[axis](**params)
         # self.controllers["yaw"].set_debug_hook(self.debug_cb)
         # self.controllers["heave"].set_debug_hook(self.debug_cb)
 
-
-    def _init_state(self):
         self.imu = ImuState()
         self.control = ControlState.from_axes(self.axes)
-
         self.depth = 0.0
-
-        # yaw zeroing
         self.yaw_zero_offset = 0.0
         self.imu_yaw_raw = 0.0
 
-    def _init_axis_controllers(self):
         self.axis_ctrl: dict[str, AxisController] = {
             "yaw": AngularAxisController(
                 controller=self.controllers["yaw"],
@@ -201,6 +176,21 @@ class StingrayCoreControlNode(Node):
         # for axis in self.axes:
         #     if axis not in self.axis_ctrl:
         #         self.axis_ctrl[axis] = PassthroughAxisController()
+
+
+    def _init_ros_interfaces(self):
+        self._init_subscriptions()
+        self._init_publishers()
+        self.add_on_set_parameters_callback(self._on_params_changed)
+
+    def _init_runtime(self):
+        self.last_time = time.time()
+        self.timer = self.create_timer(1.0 / self.rate_hz, self.control_loop)
+
+    def normalize_angle_deg(self, angle_deg):
+        """Нормализует угол в градусах в диапазон [-180, 180)."""
+        a = (angle_deg + 180.0) % 360.0 - 180.0
+        return a
 
     def _init_subscriptions(self):
         # Explicit QoS profiles for deterministic behavior by topic class.
@@ -296,15 +286,6 @@ class StingrayCoreControlNode(Node):
         self.pub_measurement_rate = self.create_publisher(Float64, "~/debug/measurement_rate", qos_debug)
         self.pub_out = self.create_publisher(Float64, "~/debug/out", qos_debug)
     
-    def _init_param_callbacks(self):
-        self.add_on_set_parameters_callback(self._on_params_changed)
-
-    def _init_timer(self):
-        self.last_time = time.time()
-        self.timer = self.create_timer(1.0 / self.rate_hz, self.control_loop)
-
-
-
     # --- Колбэки ---
     def imu_angular_callback(self, msg: CommonGroup):
         try:
