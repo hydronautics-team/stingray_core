@@ -1,6 +1,7 @@
 # thruster_mixer.py
 from typing import Sequence, Dict, List
 
+
 class ThrusterMixer:
     """
     Pure mixer: holds thruster names, axes and coeffs.
@@ -10,7 +11,7 @@ class ThrusterMixer:
     def __init__(self, thrusters: Sequence[str], axes: Sequence[str], coeffs: Dict[str, Sequence[float]]):
         self.thrusters = list(thrusters)
         self.axes = list(axes)
-        self.coeffs = {t: [float(x) for x in coeffs.get(t, [0.0]*len(self.axes))] for t in self.thrusters}
+        self.coeffs = {t: [float(x) for x in coeffs.get(t, [0.0] * len(self.axes))] for t in self.thrusters}
         for t in self.thrusters:
             if len(self.coeffs[t]) != len(self.axes):
                 raise ValueError(f"coeffs for thruster '{t}' must have length {len(self.axes)}")

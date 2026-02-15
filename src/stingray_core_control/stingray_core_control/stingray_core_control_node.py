@@ -13,6 +13,7 @@ from rclpy.qos import (
     DurabilityPolicy,
 )
 from rclpy.parameter import Parameter
+from rcl_interfaces.msg import ParameterDescriptor
 from rcl_interfaces.msg import SetParametersResult
 
 import time
@@ -22,8 +23,8 @@ from std_msgs.msg import Float32, Float64, UInt8, Bool, UInt8MultiArray
 from sensor_msgs.msg import Imu
 from vectornav_msgs.msg import CommonGroup
 
-from .utils.thruster_mixer import ThrusterMixer
-from .utils.controllers import (
+from .control.thruster_mixer import ThrusterMixer
+from .control.controllers import (
     YawController, PitchController, RollController,
     DepthController, SurgeController, SwayController
 )
@@ -107,7 +108,7 @@ class StingrayCoreControlNode(Node):
         self.declare_parameter('axes', ["surge", "sway", "heave", "roll", "pitch", "yaw"])
         self.axes = list(self.get_parameter('axes').value)
 
-        self.declare_parameter('thrusters', [])
+        self.declare_parameter('thrusters', Parameter.Type.STRING_ARRAY)
         self.thrusters = list(self.get_parameter('thrusters').value)
 
     def _init_control_core(self):
@@ -117,7 +118,11 @@ class StingrayCoreControlNode(Node):
             for axis in self.axes:
                 pname = f"{thr}_{axis}"
                 if not self.has_parameter(pname):
-                    self.declare_parameter(pname, 0.0)
+                    self.declare_parameter(
+                        pname,
+                        0.0,
+                        ParameterDescriptor(dynamic_typing=True),
+                    )
                 row.append(float(self.get_parameter(pname).value))
             coeffs[thr] = row
 
@@ -138,7 +143,11 @@ class StingrayCoreControlNode(Node):
             params = {}
             for key in self.param_keys:
                 pname = f"controllers.{axis}.{key}"
-                self.declare_parameter(pname, 0.0)
+                self.declare_parameter(
+                    pname,
+                    0.0,
+                    ParameterDescriptor(dynamic_typing=True),
+                )
                 params[key] = float(self.get_parameter(pname).value)
             self.controllers[axis] = axis_class_map[axis](**params)
         # self.controllers["yaw"].set_debug_hook(self.debug_cb)

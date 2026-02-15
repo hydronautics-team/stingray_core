@@ -51,11 +51,31 @@ def save_params(self, param_list: list[Parameter], config_name: str):
 
     # --- Собираем snapshot параметров ---
     current_params = {}
+
+    # Читаем то, что уже лежит в YAML, чтобы при частичном обновлении
+    # не потерять старые ключи (merge, а не полная замена).
+    src_file = get_src_param_path(config_name)
+    existing_yaml = load_existing_yaml(src_file)
+    node_name = self.get_name()
+
+    # Пояснение к проверке:
+    # 1) existing_yaml должен быть dict
+    # 2) в нём должен быть раздел текущей ноды (node_name)
+    # 3) внутри должен быть ключ 'ros__parameters'
+    # 4) и это должен быть dict параметров (иначе update небезопасен)
+    if (
+        isinstance(existing_yaml, dict)
+        and node_name in existing_yaml
+        and 'ros__parameters' in existing_yaml[node_name]
+        and isinstance(existing_yaml[node_name]['ros__parameters'], dict)
+    ):
+        current_params.update(existing_yaml[node_name]['ros__parameters'])
+
     try:
         for name, p in self._parameters.items():
             if config_name == "thruster_matrix":
                 for thr in self.thrusters:
-                    for a in self.axes_u:
+                    for a in self.axes:
                         if name == f"{thr}_{a}":
                             current_params[name] = p.value
             elif config_name == "controllers":
@@ -64,17 +84,9 @@ def save_params(self, param_list: list[Parameter], config_name: str):
                         if name == f'controllers.{axis}.{key}':
                             current_params[name] = p.value
             elif config_name == "stingray_core_control_node":
-                # читаем существующий YAML и берём все параметры
-                src_file = get_src_param_path(config_name)
-                existing_yaml = load_existing_yaml(src_file)
-
-                node_name = self.get_name()
-                if (
-                    isinstance(existing_yaml, dict)
-                    and node_name in existing_yaml
-                    and 'ros__parameters' in existing_yaml[node_name]
-                ):
-                    current_params.update(existing_yaml[node_name]['ros__parameters'])
+                # Для node-конфига merge уже выполнен выше,
+                # здесь просто оставляем существующее поведение.
+                pass
 
     except Exception:
         current_params = {p.name: p.value for p in param_list}  # хотя бы param_list

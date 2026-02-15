@@ -61,11 +61,11 @@ class BaseController(ABC):
         self.ap_T = float(ap_T)
 
         # internal states
-        self.integrator = 0.0     
-        self.prev_stage = 0.0     
-        self.ap_out = 0.0     
+        self.integrator = 0.0
+        self.prev_stage = 0.0
+        self.ap_out = 0.0
 
-        self.debug_hook = None    
+        self.debug_hook = None
 
     def reset(self):
         """Сброс внутренних состояний (интегратор, апериодика)."""
@@ -93,7 +93,7 @@ class BaseController(ABC):
         else:
             self.ap_out = self.ap_K * input_val
         return self.ap_out
-    
+
     def set_debug_hook(self, hook):
         """hook(dict) — вызывается, если debug включён"""
         self.debug_hook = hook
@@ -117,8 +117,6 @@ class BaseController(ABC):
 
         if reset_required:
             self.reset()
-
-
 
     @abstractmethod
     def update(self, setpoint: float, measurement: float, measurement_rate: float, dt: float) -> float:
@@ -170,8 +168,8 @@ class YawController(BaseController):
         feedback_speed = ap * self.K_2
         # feedback_speed = 57.3 *measurement_rate * self.K_2
 
-        # 7) final output (PI minus speed feedback) 
-        error_speed = output_pi + setspeed - feedback_speed 
+        # 7) final output (PI minus speed feedback)
+        error_speed = output_pi + setspeed - feedback_speed
 
         # 8) saturate final output symmetrically by out_sat (if provided)
         if self.out_sat is not None:
@@ -307,7 +305,6 @@ class RollController(BaseController):
                 "error_speed": error_speed,
                 "out": out,
             })
-
 
         return out
 
