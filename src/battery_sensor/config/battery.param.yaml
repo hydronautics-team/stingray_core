@@ -1,0 +1,6 @@
+battery_sensor_node:
+  ros__parameters:
+    voltage_scale: 1.0 # FIXME change in the future
+    current_scale: 0.0 # FIXME remove in the future
+    filter_window: 0.0 # FIXME remove in the future
+    low_battery_threshold: 13.6
