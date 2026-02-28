@@ -3,12 +3,10 @@
 #include <memory>
 #include <string>
 
+
 #include "rclcpp/rclcpp.hpp"
-#include "std_msgs/msg/string.hpp"
-#include <QCoreApplication>
+
 #include "AH127Cprotocol.h"
-
-
 #include "parser/msg/data.hpp"
 
 using namespace std::chrono_literals;
@@ -25,17 +23,18 @@ public:
         
         protocol_ = new AH127Cprotocol("/tmp/ttyROS", 9600); //for socat
         timer_ = this->create_wall_timer(
-            20ms, std::bind(&AH127CPublisher::timer_callback, this));
+            10ms, std::bind(&AH127CPublisher::timer_callback, this));
             
+    }
+    ~AH127CPublisher() {
+        delete protocol_;
     }
 
 private:
     void timer_callback()
     {
-        for(int i = 0; i < 5; i++) {
-            QCoreApplication::processEvents();
-        }
-
+        protocol_->readData();
+        protocol_->timeoutSlot();
 
         auto message = parser::msg::Data();
 
@@ -73,10 +72,6 @@ private:
 
 int main(int argc, char * argv[])
 {
-    int qt_argc = 1;
-    char* qt_argv[] = {(char*)"imu_node"};
-    QCoreApplication a(qt_argc, qt_argv);
-
     rclcpp::init(argc, argv);
     
     auto node = std::make_shared<AH127CPublisher>();
