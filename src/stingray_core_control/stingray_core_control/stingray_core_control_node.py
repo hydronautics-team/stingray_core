@@ -18,7 +18,7 @@ import os
 from geometry_msgs.msg import Twist, Vector3
 from std_msgs.msg import Float32, Float64, UInt8, Bool, UInt8MultiArray
 from sensor_msgs.msg import Imu
-from vectornav_msgs.msg import CommonGroup
+from parser.msg import Data
 from rclpy.qos import qos_profile_sensor_data
 
 from .thruster_mixer import ThrusterMixer
@@ -42,22 +42,14 @@ class StingrayCoreControlNode(Node):
         self.declare_parameter('flag_setup_feedback_speed', False)
         self.flag_setup_feedback_speed = self.get_parameter(
             'flag_setup_feedback_speed').get_parameter_value().bool_value
-
-        self.declare_parameter('topic_imu_angular', '/vectornav/raw/common')
-        self.declare_parameter('topic_imu_linear_accel',
-                               '/vectornav/imu_accel')
-        self.declare_parameter('topic_imu_angular_rate', '/vectornav/imu')
+        self.declare_parameter('topic_imu_data', '/imu_full_data')
         self.declare_parameter('topic_loop_flags', '/control/loop_flags')
         self.declare_parameter('topic_pressure_sensor', '/sensors/pressure')
         self.declare_parameter('topic_control_data', '/control/data')
         self.declare_parameter('vectornav_yaw_offset_deg', 0.0)
 
-        self.topic_imu_angular = self.get_parameter(
-            'topic_imu_angular').get_parameter_value().string_value
-        self.topic_imu_linear_accel = self.get_parameter(
-            'topic_imu_linear_accel').get_parameter_value().string_value
-        self.topic_imu_angular_rate = self.get_parameter(
-            'topic_imu_angular_rate').get_parameter_value().string_value
+        
+        self.topic_imu_data = self.get_parameter('topic_imu_data').get_parameter_value().string_value
         self.topic_loop_flags = self.get_parameter(
             'topic_loop_flags').get_parameter_value().string_value
         self.topic_pressure_sensor = self.get_parameter(
@@ -141,14 +133,9 @@ class StingrayCoreControlNode(Node):
 
 
         qos = QoSProfile(depth=10)
-
         # --- подписки ---
-        self.sub_imu_angular = self.create_subscription(
-            CommonGroup, "/vectornav/raw/common", self.imu_angular_callback, qos_profile_sensor_data)
-        self.sub_imu_linear_accel = self.create_subscription(
-            Vector3, self.topic_imu_linear_accel, self.imu_linear_accel_callback, qos)
-        self.sub_imu_angular_rate = self.create_subscription(
-            Imu, self.topic_imu_angular_rate, self.imu_angular_rate_callback, qos)
+
+        self.sub_imu_data = self.create_subscription(Data, self.topic_imu_data, self.imu_callback, qos_profile_sensor_data)
         
         # --- my orientation publishers ---
         self.pub_yaw   = self.create_publisher(Float64, '~/orientation/yaw', 10)
@@ -302,43 +289,37 @@ class StingrayCoreControlNode(Node):
             self._last_status_log = now
 
     # --- Колбэки ---
-    def imu_angular_callback(self, msg: CommonGroup):
+    def imu_callback(self, msg: Data):
         try:
-            ypr: Vector3 = msg.yawpitchroll
 
-            self.imu_yaw_raw = float(ypr.x)
+            self.imu_yaw_raw = float(msg.yaw)
+            old_yaw = self.imu_yaw
 
             self.imu_yaw = self.normalize_angle_deg(
                 self.imu_yaw_raw - self.yaw_zero_offset
             )
-            self.imu_pitch = float(ypr.y)
-            self.imu_roll  = float(ypr.z)
+            self.imu_pitch = float(msg.pitch)
+            self.imu_roll  = float(msg.roll)
+
+            self.get_logger().info(
+            f"IMU In: {self.imu_yaw_raw:.1f}° | Out: {self.imu_yaw:.1f}° | P: {self.imu_pitch:.1f}°",
+            throttle_duration_sec=0.5
+        )
+
+            self.imu_accel_x = float(msg.accel_x)
+            self.imu_accel_y = float(msg.accel_y)
+            self.imu_accel_z = float(msg.accel_z)
+
+            self.imu_rate_x = float(msg.rate_x)
+            self.imu_rate_y = float(msg.rate_y)
+            self.imu_rate_z = float(msg.rate_z)
+
 
         except Exception as e:
             self.get_logger().warning(
-                f"Error parsing CommonGroup yawpitchroll: {e}"
+                f"Error parsing Data: {e}"
             )
 
-    def imu_linear_accel_callback(self, msg: Vector3):
-        try:
-            self.imu_accel_x = float(msg.x)
-            self.imu_accel_y = float(msg.y)
-            self.imu_accel_z = float(msg.z)
-        except Exception as e:
-            self.get_logger().warning(
-                f"Error parsing imu_linear_accel msg: {e}")
-
-
-    def imu_angular_rate_callback(self, msg: Imu):
-        try:
-            self.imu_rate_x = float(msg.angular_velocity.x)
-            self.imu_rate_y = float(msg.angular_velocity.y)
-            self.imu_rate_z = float(msg.angular_velocity.z)
-        except Exception as e:
-            self.get_logger().warning(
-                f"Error parsing imu angular_velocity from Imu msg: {e}"
-            )
-    
     def zero_yaw_callback(self, msg: Bool):
         if not msg.data:
             return
