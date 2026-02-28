@@ -1,0 +1,7 @@
+power_gpio:
+  ros__parameters:
+    gpio_chip: "gpiochip0"
+    gpio_line: 16
+    active_high: true
+    default_on: true
+    consumer: "power_control/power_gpio_node"
