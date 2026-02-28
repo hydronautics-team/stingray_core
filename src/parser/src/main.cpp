@@ -21,7 +21,7 @@ public:
     {
         publisher_ = this->create_publisher<parser::msg::Data>("imu_full_data", 10);
         
-        protocol_ = new AH127Cprotocol("/tmp/ttyROS", 9600); //for socat
+        protocol_ = new AH127Cprotocol("/dev/ttyUSB0", 9600); //for socat
         timer_ = this->create_wall_timer(
             10ms, std::bind(&AH127CPublisher::timer_callback, this));
             

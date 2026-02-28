@@ -12,6 +12,7 @@ colcon build --packages-select \
     serial_driver \
     io_context \
     asio_cmake_module \
+    parser \
     stingray_core_launch
 
 echo "----------------------------------------"
