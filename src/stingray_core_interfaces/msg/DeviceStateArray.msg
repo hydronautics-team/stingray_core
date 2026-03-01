@@ -1,0 +1,1 @@
+stingray_core_interfaces/DeviceState[] states
