@@ -10,6 +10,7 @@ find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(stingray_core_interfaces REQUIRED)
+find_package(vectornav_msgs REQUIRED)
 
 include_directories(include)
 
@@ -23,6 +24,7 @@ ament_target_dependencies(${PROJECT_NAME}
   geometry_msgs
   std_msgs
   stingray_core_interfaces
+  vectornav_msgs
 )
 
 install(TARGETS ${PROJECT_NAME}

@@ -15,6 +15,10 @@ StingrayInterfaceBridge::StingrayInterfaceBridge(const rclcpp::NodeOptions & opt
   this->declare_parameter<std::string>("input_stabilization_service", "/set_stabilization");
   this->declare_parameter<std::string>("output_topic", "/control/data");
   this->declare_parameter<std::string>("loop_flags_topic", "/control/loop_flags");
+  this->declare_parameter<std::string>("uv_state_topic", "/stingray/topics/uv_state");
+  this->declare_parameter<std::string>("imu_angular_topic", "/vectornav/raw/common");
+  this->declare_parameter<std::string>("imu_linear_accel_topic", "/vectornav/imu_accel");
+  this->declare_parameter<std::string>("depth_topic", "/sensors/pressure");
   this->declare_parameter<int>("qos_depth", 1);
   this->declare_parameter<std::string>("qos_reliability", "reliable"); // reliable | best_effort
   this->declare_parameter<bool>("enable_loop_protection", false);
@@ -23,6 +27,10 @@ StingrayInterfaceBridge::StingrayInterfaceBridge(const rclcpp::NodeOptions & opt
   input_stabilization_service_ = this->get_parameter("input_stabilization_service").as_string();
   output_topic_ = this->get_parameter("output_topic").as_string();
   loop_flags_topic_ = this->get_parameter("loop_flags_topic").as_string();
+  uv_state_topic_ = this->get_parameter("uv_state_topic").as_string();
+  imu_angular_topic_ = this->get_parameter("imu_angular_topic").as_string();
+  imu_linear_accel_topic_ = this->get_parameter("imu_linear_accel_topic").as_string();
+  depth_topic_ = this->get_parameter("depth_topic").as_string();
   int qos_depth = this->get_parameter("qos_depth").as_int();
   std::string qos_reliability = this->get_parameter("qos_reliability").as_string();
   enable_loop_protection_ = this->get_parameter("enable_loop_protection").as_bool();
@@ -47,6 +55,22 @@ StingrayInterfaceBridge::StingrayInterfaceBridge(const rclcpp::NodeOptions & opt
 
   control_data_publisher_ = this->create_publisher<geometry_msgs::msg::Twist>(output_topic_, pub_qos);
   loop_flags_publisher_ = this->create_publisher<std_msgs::msg::UInt8>(loop_flags_topic_, pub_qos);
+  uv_state_publisher_ = this->create_publisher<stingray_core_interfaces::msg::UVState>(uv_state_topic_, pub_qos);
+
+  imu_angular_sub_ = this->create_subscription<vectornav_msgs::msg::CommonGroup>(
+    imu_angular_topic_,
+    pub_qos,
+    std::bind(&StingrayInterfaceBridge::handle_imu_angular, this, _1));
+
+  imu_linear_accel_sub_ = this->create_subscription<geometry_msgs::msg::Vector3>(
+    imu_linear_accel_topic_,
+    pub_qos,
+    std::bind(&StingrayInterfaceBridge::handle_imu_linear_accel, this, _1));
+
+  depth_sub_ = this->create_subscription<std_msgs::msg::Float32>(
+    depth_topic_,
+    pub_qos,
+    std::bind(&StingrayInterfaceBridge::handle_depth, this, _1));
 
   // Service callback: map srv/SetTwist -> geometry_msgs/Twist publication
   set_twist_service_ = this->create_service<stingray_core_interfaces::srv::SetTwist>(
@@ -62,11 +86,12 @@ StingrayInterfaceBridge::StingrayInterfaceBridge(const rclcpp::NodeOptions & opt
 
   RCLCPP_INFO(
     this->get_logger(),
-    "Started StingrayInterfaceBridge: twist_service='%s' -> '%s', stabilization_service='%s' -> '%s'",
+    "Started StingrayInterfaceBridge: twist_service='%s' -> '%s', stabilization_service='%s' -> '%s', uv_state='%s'",
     input_service_.c_str(),
     output_topic_.c_str(),
     input_stabilization_service_.c_str(),
-    loop_flags_topic_.c_str());
+    loop_flags_topic_.c_str(),
+    uv_state_topic_.c_str());
 }
 
 void StingrayInterfaceBridge::handle_set_twist(
@@ -115,13 +140,44 @@ void StingrayInterfaceBridge::handle_set_stabilization(
   }
 
   loop_flags_msg_.data = flags;
+  uv_state_msg_.depth_stabilization = request->depth_stabilization;
+  uv_state_msg_.yaw_stabilization = request->yaw_stabilization;
+  uv_state_msg_.pitch_stabilization = request->pitch_stabilization;
+  uv_state_msg_.roll_stabilization = request->roll_stabilization;
 
   if (enable_loop_protection_) {
     last_pub_stamp_ = this->now();
   }
 
   loop_flags_publisher_->publish(loop_flags_msg_);
+  publish_uv_state();
 
   response->success = true;
   response->message = "ok";
+}
+
+void StingrayInterfaceBridge::handle_imu_angular(const vectornav_msgs::msg::CommonGroup::SharedPtr msg)
+{
+  uv_state_msg_.yaw = static_cast<float>(msg->yawpitchroll.x);
+  uv_state_msg_.pitch = static_cast<float>(msg->yawpitchroll.y);
+  uv_state_msg_.roll = static_cast<float>(msg->yawpitchroll.z);
+  publish_uv_state();
+}
+
+void StingrayInterfaceBridge::handle_imu_linear_accel(const geometry_msgs::msg::Vector3::SharedPtr msg)
+{
+  uv_state_msg_.surge_accel = static_cast<float>(msg->x);
+  uv_state_msg_.sway_accel = static_cast<float>(msg->y);
+  publish_uv_state();
+}
+
+void StingrayInterfaceBridge::handle_depth(const std_msgs::msg::Float32::SharedPtr msg)
+{
+  uv_state_msg_.depth = static_cast<float>(msg->data);
+  publish_uv_state();
+}
+
+void StingrayInterfaceBridge::publish_uv_state()
+{
+  uv_state_publisher_->publish(uv_state_msg_);
 }
