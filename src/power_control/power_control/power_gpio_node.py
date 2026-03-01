@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import rclpy
 from rclpy.node import Node
-from std_srvs.srv import SetBool
+from std_msgs.msg import Bool
 
 
 class PowerGpioNode(Node):
     """ROS2 node to drive one GPIO line via python-libgpiod.
 
-    Service:
-      - `~/set_power` (std_srvs/SetBool)
+    Subscription:
+      - `~/set_power` (std_msgs/Bool)
         * data=True  -> logical ON
         * data=False -> logical OFF
 
@@ -53,7 +53,9 @@ class PowerGpioNode(Node):
         self._chip = None
         self._line = None
 
-        self.srv = self.create_service(SetBool, "~/set_power", self._handle_set_power)
+        self.sub = self.create_subscription(
+            Bool, "~/set_power", self._handle_set_power, 10
+        )
         self._init_gpio()
 
     def _init_gpio(self) -> None:
@@ -85,6 +87,7 @@ class PowerGpioNode(Node):
             )
             self._set_power(self.default_on)
             self._ready = True
+            self._current_state = self.default_on
 
             self.get_logger().info(
                 f"GPIO ready: chip={self.gpio_chip}, line={self.gpio_line}, "
@@ -105,26 +108,22 @@ class PowerGpioNode(Node):
         if self._line is None:
             raise RuntimeError("GPIO line is not requested")
         self._line.set_value(self._logical_to_level(on))
+        self._current_state = on
 
-    def _handle_set_power(
-        self, request: SetBool.Request, response: SetBool.Response
-    ) -> SetBool.Response:
+    def _handle_set_power(self, msg: Bool) -> None:
         if not self._ready:
-            response.success = False
-            response.message = (
-                "GPIO is not ready (gpiod missing or gpio_line not configured)."
+            self.get_logger().warning(
+                "GPIO is not ready (gpiod missing or gpio_line not configured). "
             )
-            return response
+            return
 
         try:
-            self._set_power(bool(request.data))
-            response.success = True
-            response.message = "ON" if request.data else "OFF"
-            return response
+            self._set_power(bool(msg.data))
+            self.get_logger().info(
+                f"Power set to {'ON' if msg.data else 'OFF'} via topic"
+            )
         except Exception as e:
-            response.success = False
-            response.message = f"Failed to set GPIO: {e}"
-            return response
+            self.get_logger().error(f"Failed to set GPIO: {e}")
 
 
 def main(argv=None) -> None:
