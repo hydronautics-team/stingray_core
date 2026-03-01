@@ -1,4 +1,4 @@
-power_gpio:
+/stingray_core/power_control/power_gpio_node:
   ros__parameters:
     gpio_chip: "gpiochip0"
     gpio_line: 16
