@@ -1,12 +1,12 @@
 #ifndef AH127CPROTOCOL_H
 #define AH127CPROTOCOL_H
 
-#include <stdint.h>
-#include <string>
-#include <vector>
-#include <chrono>
-#include <libserial/SerialPort.h>
-
+#include <QObject>
+#include <QSerialPort>
+#include <QDebug>
+#include <QTimer>
+#include <QTime>
+;
 //класс протокола
 #pragma pack(push,1)
 //заглушка для заголовка послыки
@@ -60,30 +60,34 @@ struct Header_AH_calibration_end {
 };
 #pragma pack(pop)
 
-class AH127Cprotocol 
+class AH127Cprotocol : public QObject
 {
+    Q_OBJECT
 public:
-    AH127Cprotocol(std::string portName, int baudRate);
+    explicit AH127Cprotocol(QString portName, int baudRate = 115200, QObject *parent = 0);
     DataFromAH127C data;//выходная структура
     Header_AH_calibration_start calibr_start;
     Header_AH_calibration_end calibr_end;
-    bool flag_calibration_start = false;
-    bool flag_calibration_end = false;
-    int flag_start_cal = 0;
-    int flag_finish_cal = 0;
-    bool correctChecksum (const std::vector<uint8_t> &ba);
+    quint8 flag_calibration_start = false;
+    quint8 flag_calibration_end = false;
+
+    bool correctChecksum (QByteArray const &ba);//это метод, который проверяет корректность чексуммы
+public slots:
     void readData(); //слот, который будет вызываться в ответ на readyRead
-    void timeoutSlot();
     void readyReadForTimer();
+    void timeoutSlot();
 
 protected:
-    uint8_t calculateCRC(const uint8_t data[], uint32_t length);
+    unsigned short calculateCRC(unsigned char data[], unsigned int length);
     void parseBuffer();
-    std::vector<uint8_t> m_buffer;
+    QByteArray m_buffer;
     int baudRate = 115200; //бодрейт
-    std::chrono::steady_clock::time_point last_receive_time;
+    QTime time;
+    QTimer *timer;
 public:
-    LibSerial::SerialPort m_port;
+    QSerialPort m_port; //объект COM-порта
+    quint8 flag_start_cal = 0;
+    quint8 flag_finish_cal = 0;
 };
 
 #endif // AH127CPROTOCOL_H

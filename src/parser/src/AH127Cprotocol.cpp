@@ -1,18 +1,12 @@
 #include "AH127Cprotocol.h"
 #include <stdint.h>
-#include <vector>
-#include <algorithm>
-#include <iostream>
+#include <QTextCodec>
 
-#define LOG_INFO(msg) std::cout << "[INFO]: " << msg << std::endl
-#define LOG_ERR(msg) std::cerr << "[ERROR]: " << msg << std::endl
-
-
-AH127Cprotocol::AH127Cprotocol(std::string portName, int baudRate)
-
+AH127Cprotocol::AH127Cprotocol(QString portName, int baudRate, QObject *parent)
 {
-    m_port.Open(portName);
-    m_port.SetBaudRate(LibSerial::BaudRate::BAUD_9600);
+    m_port.setBaudRate(QSerialPort::Baud9600);
+    m_port.setPortName(portName);
+    m_port.open(QIODevice::ReadWrite);
 
 
     char cmd_1[6]; //задание формата посылки и частоты выдачи данных, 2.15 и 2.17
@@ -22,10 +16,12 @@ AH127Cprotocol::AH127Cprotocol(std::string portName, int baudRate)
     cmd_1[3] = 0x56;
     cmd_1[4] = 0x05;
     cmd_1[5] = 0x60;
-
-    std::vector<uint8_t> v_cmd1(cmd_1, cmd_1 + 6);
-    m_port.Write(v_cmd1);
-    std::cout << "cmd_1 отправлена успешно (0x56 0x05)" << std::endl;
+    m_port.write(cmd_1, 6);
+    if (m_port.waitForBytesWritten(500)) {
+    qDebug() << "cmd_1 отправлена успешно (0x56 0x05)";
+} else {
+    qDebug() << "Ошибка отправки cmd_1:" << m_port.errorString();
+}
 
     char cmd_2[6];
     cmd_2[0] = 0x77;
@@ -34,12 +30,21 @@ AH127Cprotocol::AH127Cprotocol(std::string portName, int baudRate)
     cmd_2[3] = 0x0C;
     cmd_2[4] = 0x05;
     cmd_2[5] = 0x16;
-    std::vector<uint8_t> v_cmd2(cmd_2, cmd_2 + 6);
-    m_port.Write(v_cmd2);
-    std::cout << "cmd_2 отправлена успешно (0x0C 0x05)" << std::endl;
+    m_port.write(cmd_2, 6);
+    if (m_port.waitForBytesWritten(500)) {
+    qDebug() << "cmd_2 отправлена успешно (0x0C 0x05)";
+} else {
+    qDebug() << "Ошибка отправки cmd_2:" << m_port.errorString();
 }
 
-uint8_t AH127Cprotocol::calculateCRC(const uint8_t data[], uint32_t length) {
+    QTimer *timer = new QTimer(this);
+    connect(&m_port, &QSerialPort::readyRead, this, &AH127Cprotocol::readData);
+    connect(&m_port, &QSerialPort::readyRead, this, &AH127Cprotocol::readyReadForTimer);
+    connect(timer, &QTimer::timeout, this, &AH127Cprotocol::timeoutSlot);
+    timer->start(10000);
+}
+
+unsigned short AH127Cprotocol::calculateCRC(unsigned char data[], unsigned int length) {
      unsigned int i;
      unsigned short crc = 0;
      for(i=0; i<length; i++){
@@ -48,62 +53,54 @@ uint8_t AH127Cprotocol::calculateCRC(const uint8_t data[], uint32_t length) {
     return crc & 0xFF;
 }
 
-bool AH127Cprotocol::correctChecksum(const std::vector<uint8_t> &ba) {
-    if (ba.size() < 56) return false;
-    if (calculateCRC((unsigned char*)ba.data(), 55) == ba[55]) {
+bool AH127Cprotocol::correctChecksum (QByteArray const &ba) {
+    if (calculateCRC((uchar*)ba.data(), 55) == ba[55]) {
         return true;
     }
     return false;
 }
 
 void AH127Cprotocol::readData() {
-    if (m_port.IsDataAvailable()) {
-        uint8_t byte;
-        while(m_port.IsDataAvailable()){
-            m_port.ReadByte(byte); 
-            m_buffer.push_back(byte);
-        }
-        readyReadForTimer();
-        parseBuffer();
+    QByteArray newData = m_port.readAll();
+    if (!newData.isEmpty()) {
+        m_buffer.append(newData);
+    } else {
+        qDebug() << "readAll() вернул 0 байт";
     }
+    parseBuffer();
 }
 
 void AH127Cprotocol::readyReadForTimer() {
-    last_receive_time = std::chrono::steady_clock::now();
+    time.restart();
 }
 
 void AH127Cprotocol::timeoutSlot(){
-auto now = std::chrono::steady_clock::now();
-auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_receive_time).count();
  double deltaTMax = 2000;
-    if (elapsed>deltaTMax) {
-        uint8_t cmd_1[6]; //задание формата посылки, 2.15
+    if (time.elapsed()>deltaTMax) {
+        char cmd_1[6]; //задание формата посылки, 2.15
         cmd_1[0] = 0x77;
         cmd_1[1] = 0x05;
         cmd_1[2] = 0x00;
         cmd_1[3] = 0x0C;
         cmd_1[4] = 0x05;
         cmd_1[5] = 0x16;
-        std::vector<uint8_t> v_cmd1(cmd_1, cmd_1 + 6);
-        m_port.Write(v_cmd1);
-        
+        m_port.write(cmd_1, 6);
+        m_port.waitForBytesWritten();
 
-        uint8_t cmd_2[6]; //задание частоты выдачи данных, 2.17
+        char cmd_2[6]; //задание частоты выдачи данных, 2.17
         cmd_2[0] = 0x77;
         cmd_2[1] = 0x05;
         cmd_2[2] = 0x00;
         cmd_2[3] = 0x56;
         cmd_2[4] = 0x05;
         cmd_2[5] = 0x60;
-        std::vector<uint8_t> v_cmd2(cmd_2, cmd_2 + 6);
-        m_port.Write(v_cmd2);
-
-        readyReadForTimer();
+        m_port.write(cmd_2, 6);
+        m_port.waitForBytesWritten();
     }
 }
 
-float ThreeBytesToFloat(const uint8_t* buf) {
-    float result = 0.0f;
+float ThreeBytesToFloat(QByteArray const buf) {
+    float result = 0.0;
     result += int(buf[0] & 0x0F) * 100;
     result += int((buf[1] & 0xF0) >> 4) * 10;
     result += int(buf[1] & 0x0F);
@@ -113,7 +110,7 @@ float ThreeBytesToFloat(const uint8_t* buf) {
     return result;
 }
 
-float ThreeBytesToFloatAccel(const uint8_t* buf) {
+float ThreeBytesToFloatAccel(QByteArray const buf) {
     float result = 0.0;
     result += int(buf[0] & 0x0F);
     result += int((buf[1] & 0xF0) >> 4) * 0.1;
@@ -124,7 +121,7 @@ float ThreeBytesToFloatAccel(const uint8_t* buf) {
     return result*9.81;
 }
 
-float ThreeBytesToFloatMagn(const uint8_t* buf) {
+float ThreeBytesToFloatMagn(QByteArray const buf) {
     float result = 0.0;
     result += int(buf[0] & 0x0F)*0.1;
     result += int((buf[1] & 0xF0) >> 4) * 0.01;
@@ -135,7 +132,7 @@ float ThreeBytesToFloatMagn(const uint8_t* buf) {
     return result;
 }
 
-float FourBytesToFloatQvat(const uint8_t* buf) {
+float FourBytesToFloatQvat(QByteArray const buf) {
     float result = 0.0;
     result += int(buf[0] & 0x0F);
     result += int((buf[1] & 0xF0) >> 4) * 0.1;
@@ -149,22 +146,22 @@ float FourBytesToFloatQvat(const uint8_t* buf) {
 }
 
 void PrintMsg(DataFromAH127C const& msg) {
-    std::cout << "yaw: " << msg.yaw << std::endl;
-    std::cout << "pitch: " << msg.pitch << std::endl;
-    std::cout << "roll: " << msg.roll << std::endl;
-    std::cout << "X_accel: " << msg.X_accel << std::endl;
-    std::cout << "Y_accel: " << msg.Y_accel << std::endl;
-    std::cout << "Z_accel: " << msg.Z_accel << std::endl;
-    std::cout << "X_rate: " << msg.X_rate << std::endl;
-    std::cout << "Y_rate: " << msg.Y_rate << std::endl;
-    std::cout << "Z_rate: " << msg.Z_rate << std::endl;
-    std::cout << "X_magn: " << msg.X_magn << std::endl;
-    std::cout << "Y_magn: " << msg.Y_magn << std::endl;
-    std::cout << "Z_magn: " << msg.Z_magn << std::endl;
-    std::cout << "first_qvat " << msg.first_qvat << std::endl;
-    std::cout << "second_qvat " << msg.second_qvat << std::endl;
-    std::cout << "third_qvat " << msg.third_qvat << std::endl;
-    std::cout << "four_qvat " << msg.four_qvat << std::endl;
+    qDebug() << "yaw: " <<msg.yaw;
+    qDebug() << "pitch: " <<msg.pitch;
+    qDebug() << "roll: " <<msg.roll;
+    qDebug() << "X_accel: " <<msg.X_accel;
+    qDebug() << "Y_accel: " <<msg.Y_accel;
+    qDebug() << "Z_accel: " <<msg.Z_accel;
+    qDebug() << "X_rate: " <<msg.X_rate;
+    qDebug() << "Y_rate: " <<msg.Y_rate;
+    qDebug() << "Z_rate: " <<msg.Z_rate;
+    qDebug() << "X_magn: " <<msg.X_magn;
+    qDebug() << "Y_magn: " <<msg.Y_magn;
+    qDebug() << "Z_magn: " <<msg.Z_magn;
+    qDebug() << "first_qvat " <<msg.first_qvat;
+    qDebug() << "second_qvat " <<msg.second_qvat;
+    qDebug() << "third_qvat " <<msg.third_qvat;
+    qDebug() << "four_qvat " <<msg.four_qvat;
 }
 
 void AH127Cprotocol::parseBuffer() {
@@ -172,90 +169,99 @@ void AH127Cprotocol::parseBuffer() {
         return;
     }
 
-    uint8_t* cal_start_ptr = reinterpret_cast<uint8_t*>(&calibr_start);
-
     if (flag_start_cal == 1) {
-        auto it = std::search(m_buffer.begin(), m_buffer.end(), 
-                              cal_start_ptr, cal_start_ptr + sizeof(Header_AH_calibration_start));
-
-        if (it == m_buffer.end()) {
-            std::cout << "команда начала калибровки не распознана" << std::endl;
-            return; 
-        } else {
-            flag_calibration_start = 1;
-            flag_calibration_end = 0;
-            std::cout << "команда калибровки дошла до датчика, можно начинать калибровку" << std::endl;
-        }
-        flag_start_cal = 0;
+    QByteArray header_calibration_start((char*) &(calibr_start),sizeof(Header_AH_calibration_start));
+    int index_calibr_start = m_buffer.indexOf(header_calibration_start);
+    if (index_calibr_start == -1) {
+        qDebug() << "команда начала калибровки не распознана";
+        return;
+    } else {
+        flag_calibration_start = 1;
+        flag_calibration_end = 0;
+        qDebug() << "команда калибровки дошла до датчика, можно начинать калибровку";
+    }
+    flag_start_cal = 0;
     }
 
     if (flag_finish_cal == 1) {
-        uint8_t* cal_end_ptr = reinterpret_cast<uint8_t*>(&calibr_end);
-        auto it_cal_end = std::search(m_buffer.begin(), m_buffer.end(), 
-                                     cal_end_ptr, cal_end_ptr + sizeof(Header_AH_calibration_end));
+    QByteArray header_calibration_end((char*) &(calibr_end),sizeof(Header_AH_calibration_end));
+    int index_calibr_end = m_buffer.indexOf(header_calibration_end);
+    if (index_calibr_end == -1) {
+        qDebug() << "команда окончания калибровки не распознана";
+        return;
+    } else {
+        flag_calibration_start = 0;
+        flag_calibration_end = 1;
+        qDebug() << "команда окончания калибровки дошла до датчика, результат калибровки записан";
+        //и тогда возобоновляем посылку данных
+        char cmd_1[6]; //задание формата посылки, 2.15
+        cmd_1[0] = 0x77;
+        cmd_1[1] = 0x05;
+        cmd_1[2] = 0x00;
+        cmd_1[3] = 0x0C;
+        cmd_1[4] = 0x05;
+        cmd_1[5] = 0x16;
+        m_port.write(cmd_1, 6);
+        m_port.waitForBytesWritten();
 
-        if (it_cal_end == m_buffer.end()) {
-            std::cout << "команда окончания калибровки не распознана" << std::endl;
-            return;
-        } else {
-            flag_calibration_start = 0;
-            flag_calibration_end = 1;
-            std::cout << "команда окончания калибровки дошла до датчика, результат калибровки записан" << std::endl;
+        char cmd_2[6]; //задание частоты выдачи данных, 2.17
+        cmd_2[0] = 0x77;
+        cmd_2[1] = 0x05;
+        cmd_2[2] = 0x00;
+        cmd_2[3] = 0x56;
+        cmd_2[4] = 0x05;
+        cmd_2[5] = 0x60;
+        m_port.write(cmd_2, 6);
+        m_port.waitForBytesWritten();
 
-            uint8_t cmd_1[6] = {0x77, 0x05, 0x00, 0x0C, 0x05, 0x16};
-            std::vector<uint8_t> v_cmd1(cmd_1, cmd_1 + 6);
-            m_port.Write(v_cmd1);
-
-            uint8_t cmd_2[6] = {0x77, 0x05, 0x00, 0x56, 0x05, 0x60};
-            std::vector<uint8_t> v_cmd2(cmd_2, cmd_2 + 6);
-            m_port.Write(v_cmd2);
-        }
-        flag_finish_cal = 0;
+    }
+    flag_finish_cal = 0;
     }
 
-    uint8_t* h_ptr = reinterpret_cast<uint8_t*>(&data.header);
-    auto it_header = std::search(m_buffer.begin(), m_buffer.end(), 
-                                 h_ptr, h_ptr + sizeof(Header_AH));
-
-    if (it_header == m_buffer.end()) {
-        std::cout << "no message" << std::endl;
+    QByteArray header((char*) &(data.header),sizeof(Header_AH));
+    int index = m_buffer.indexOf(header);
+    
+    if (index == -1) {
+        qDebug() << "no message";
         return;
     }
 
-    if (it_header != m_buffer.begin()) {
-        m_buffer.erase(m_buffer.begin(), it_header);
+    if (index > 0) {
+        m_buffer.remove(0, index);
+        index = 0;
     }
 
-    if (m_buffer.size() < 57) {
+    if (m_buffer.size() < (index + 57)) {
         return;
     }
 
-    std::vector<uint8_t> packetData(m_buffer.begin() + 1, m_buffer.begin() + 57);
-
+    QByteArray packetData = m_buffer.mid(1, 56);
     if (correctChecksum(packetData)) {
         DataFromAH127C msg;
-        const uint8_t* ptr = m_buffer.data();
+        QByteArray tmp = m_buffer.mid(0, 57);
 
-        msg.pitch   = ThreeBytesToFloat(ptr + 4);
-        msg.roll    = ThreeBytesToFloat(ptr + 7);
-        msg.yaw     = ThreeBytesToFloat(ptr + 10);
-        msg.X_accel = ThreeBytesToFloatAccel(ptr + 13);
-        msg.Y_accel = ThreeBytesToFloatAccel(ptr + 16);
-        msg.Z_accel = ThreeBytesToFloatAccel(ptr + 19);
-        msg.X_rate  = ThreeBytesToFloat(ptr + 22);
-        msg.Y_rate  = ThreeBytesToFloat(ptr + 25);
-        msg.Z_rate  = ThreeBytesToFloat(ptr + 28);
-        msg.X_magn  = ThreeBytesToFloatMagn(ptr + 31);
-        msg.Y_magn  = ThreeBytesToFloatMagn(ptr + 34);
-        msg.Z_magn  = ThreeBytesToFloatMagn(ptr + 37);
-        msg.first_qvat  = FourBytesToFloatQvat(ptr + 40);
-        msg.second_qvat = FourBytesToFloatQvat(ptr + 44);
-        msg.third_qvat  = FourBytesToFloatQvat(ptr + 48);
-        msg.four_qvat   = FourBytesToFloatQvat(ptr + 52);
+        msg.pitch = ThreeBytesToFloat(tmp.mid(4,3));
+        msg.roll = ThreeBytesToFloat(tmp.mid(7, 3));
+        msg.yaw = ThreeBytesToFloat(tmp.mid(10, 3));
+        msg.X_accel = ThreeBytesToFloatAccel(tmp.mid(13, 3));
+        msg.Y_accel = ThreeBytesToFloatAccel(tmp.mid(16, 3));
+        msg.Z_accel = ThreeBytesToFloatAccel(tmp.mid(19, 3));
+        msg.X_rate = ThreeBytesToFloat(tmp.mid(22, 3));
+        msg.Y_rate = ThreeBytesToFloat(tmp.mid(25, 3));
+        msg.Z_rate = ThreeBytesToFloat(tmp.mid(28, 3));
+        msg.X_magn = ThreeBytesToFloatMagn(tmp.mid(31, 3));
+        msg.Y_magn = ThreeBytesToFloatMagn(tmp.mid(34, 3));
+        msg.Z_magn = ThreeBytesToFloatMagn(tmp.mid(37, 3));
+        msg.first_qvat = FourBytesToFloatQvat(tmp.mid(40, 4));
+        msg.second_qvat = FourBytesToFloatQvat(tmp.mid(44, 4));
+        msg.third_qvat = FourBytesToFloatQvat(tmp.mid(48, 4));
+        msg.four_qvat = FourBytesToFloatQvat(tmp.mid(52, 4));
         
         data = msg;
-        m_buffer.erase(m_buffer.begin(), m_buffer.begin() + 57);
+        PrintMsg(msg); 
+        m_buffer.remove(0, index+57);
     } else {
-        m_buffer.erase(m_buffer.begin());
+        m_buffer.remove(0, index+1);
     }
 }
+

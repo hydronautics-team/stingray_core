@@ -11,10 +11,10 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(Qt5 REQUIRED COMPONENTS SerialPort)
 find_package(rosidl_default_generators REQUIRED)
 
-find_library(SERIAL_LIB serial REQUIRED)
-
+set(CMAKE_AUTOMOC ON)
 
 include_directories(include)
 
@@ -37,17 +37,16 @@ rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_t
 
 
 target_link_libraries(imu_node
-  "${SERIAL_LIB}"
+  Qt5::SerialPort
   "${cpp_typesupport_target}"
 )
-
-add_dependencies(imu_node ${PROJECT_NAME}__rosidl_typesupport_cpp)
 
 install(TARGETS
   imu_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
+# Установка эмулятора
 install(PROGRAMS
   scripts/emulator.py
   DESTINATION lib/${PROJECT_NAME}
