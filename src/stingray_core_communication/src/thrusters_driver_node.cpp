@@ -12,7 +12,7 @@
 
 #define MAGIC_BYTE 0x00
 #define HEADER_SIZE 2
-#define TOTAL_MOTOR_COUNT 14
+#define TOTAL_MOTOR_COUNT 6
 #define DATA_SIZE TOTAL_MOTOR_COUNT
 #define CRC_SIZE 1
 

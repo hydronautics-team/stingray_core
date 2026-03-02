@@ -10,10 +10,12 @@
   <buildtool_depend>ament_python</buildtool_depend>
 
   <depend>rclpy</depend>
-  <depend>std_srvs</depend>
+  <depend>std_msgs</depend>
 
   <!-- system dependency (Debian/Ubuntu/RPi OS): python3-gpiod -->
   <exec_depend>python3-gpiod</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
