@@ -13,6 +13,7 @@ colcon build --packages-select \
     io_context \
     asio_cmake_module \
     power_control \
+    parser \
     stingray_core_launch
 
 echo "----------------------------------------"
