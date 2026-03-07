@@ -24,15 +24,15 @@ stingray_core_control_node:
     controllers.heave.K_i: 1.0
     controllers.heave.I_min: -0.3
     controllers.heave.I_max: 0.3
-    controllers.heave.out_sat: 1000
+    controllers.heave.out_sat: 1000.0
     controllers.heave.ap_K: 1.0
     controllers.heave.ap_T: 1.0
     controllers.roll.K_p: 1.0
     controllers.roll.K_1: 0.3
     controllers.roll.K_2: 5.0
-    controllers.roll.K_i: 1
-    controllers.roll.I_min: -50
-    controllers.roll.I_max: 50
+    controllers.roll.K_i: 1.0
+    controllers.roll.I_min: -50.0
+    controllers.roll.I_max: 50.0
     controllers.roll.out_sat: 1.0
     controllers.roll.ap_K: 1.0
     controllers.roll.ap_T: 0.01
