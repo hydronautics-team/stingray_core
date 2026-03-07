@@ -59,7 +59,7 @@ public:
         auto serial_msg = std_msgs::msg::UInt8MultiArray();
         serial_msg.data = packet;
         serial_pub_->publish(serial_msg);
-        return lenght;  // Fix: added missing return statement
+        return lenght;
     }
 
     int read(void *data, unsigned lenght)
@@ -71,7 +71,6 @@ public:
         }
         else
         {
-            // Fix: cast lenght to uint16_t to match expected parameter type
             hydrolib_RingQueue_Pull(&txQueue_, data, static_cast<uint16_t>(lenght));
             return lenght;
         }
@@ -85,7 +84,6 @@ private:
     {
         std::vector<uint8_t> packet;
         auto value = static_cast<const uint8_t *>(data);
-        // Fix: use unsigned loop variable to avoid signed/unsigned mismatch
         for (unsigned i = 0; i < lenght; i++)
         {
             packet.push_back(value[i]);
@@ -100,7 +98,6 @@ private:
         {
             const void *data = msg->data.data();
             unsigned length = static_cast<unsigned>(msg->data.size());
-            // Fix: added missing comma and cast length to uint16_t
             hydrolib_RingQueue_Push(&txQueue_, data, static_cast<uint16_t>(length));
             RCLCPP_INFO(this->get_logger(), "Received %zu bytes to serial", static_cast<size_t>(length));
         }
