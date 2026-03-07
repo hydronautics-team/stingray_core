@@ -27,12 +27,15 @@ add_subdirectory(../Hydrolib-soft/hydrolib_strings hydrolib_strings)
 add_subdirectory(../Hydrolib-soft/hydrolib_math hydrolib_math)
 add_subdirectory(../Hydrolib-soft/hydrolib_concepts hydrolib_concepts)
 add_subdirectory(../Hydrolib-soft/hydrolib_crc hydrolib_crc)
-
+add_subdirectory(../Hydrolib-soft/deprecated/hydrolib_ring_queue HydrolibRingQueue)
+add_subdirectory(../Hydrolib-soft/deprecated/hydrolib_common hydrolib_common)
 
 # Используем plain стиль для совместимости с ament_target_dependencies
 target_link_libraries(thrusters_driver_node
   HydrolibBusApplication
   HydrolibBusDatalink
+  HydrolibRingQueue
+  HydrolibCommon
 )
 
 # Устанавливаем исполняемый файл в целевую директорию
