@@ -8,8 +8,6 @@
 #include "std_msgs/msg/u_int8_multi_array.hpp"
 #include "link_node_base.hpp"
 
-#define BUFFER_LENGTH 256
-
 namespace stingray_core
 {
 
@@ -33,7 +31,6 @@ private:
             const void *data = msg->data.data();
             unsigned length = static_cast<unsigned>(msg->data.size());
             serialWrite(data, 0, length);
-            RCLCPP_INFO(this->get_logger(), "Sent %zu bytes to serial", length);
         }
     }
 
