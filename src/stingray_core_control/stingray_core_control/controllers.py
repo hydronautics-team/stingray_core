@@ -293,7 +293,7 @@ class RollController(BaseController):
         # -------- гравитационная компенсация --------
         grav = (
             self.grav_bias
-            + math.sin(math.radians(measurement - self.grav_offset_deg))
+            + math.sin(math.radians(setpoint - self.grav_offset_deg))
             * self.grav_gain
         )
 
