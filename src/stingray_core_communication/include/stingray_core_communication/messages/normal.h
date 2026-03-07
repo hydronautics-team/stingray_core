@@ -44,20 +44,28 @@ struct RequestNormalMessage : public AbstractMessage {
 struct ResponseNormalMessage : public AbstractMessage {
     ResponseNormalMessage();
 
-    const static uint8_t length = 28; // 26(message) + 2(checksum) = 30 dyte
-    /// Number of the devs
+    const static uint8_t length = 53; // 51(message) + 2(checksum) = 53 dyte
     static const uint8_t dev_amount = 2;
-    static const uint8_t flare_amount = 0;
+    static const uint8_t flare_amount = 3;
 
-    // parsel start
+    uint8_t reset_imu;
+    uint8_t stab_depth;
+    uint8_t stab_roll;
+    uint8_t stab_pitch;
+    uint8_t stab_yaw;
+    float surge; // NED coordinate system
+    float sway;
+    float depth;
     float roll;
     float pitch;
     float yaw;
     float surge_accel;
     float sway_accel;
-    float depth;
-    int8_t dev[dev_amount];
+    uint8_t dev[dev_amount];
     char flare_seq[flare_amount];
+    float distance_from_start;
+    uint8_t peleng_angle;
+    float distance_from_bottom;
 
 
     uint16_t checksum;

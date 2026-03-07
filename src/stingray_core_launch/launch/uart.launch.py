@@ -104,7 +104,7 @@ def generate_launch_description():
         Node(
             package='stingray_core_communication',
             executable='uart_driver_node',
-            name='uart_driver_node',
+            # name='uart_driver_node',
             parameters=[
                 {'driver_request_topic': LaunchConfiguration("driver_request_topic")},
                 {'driver_response_topic': LaunchConfiguration("driver_response_topic")},

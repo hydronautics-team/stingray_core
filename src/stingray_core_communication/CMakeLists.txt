@@ -41,6 +41,7 @@ install(
 # ament_target_dependencies(${PROJECT_NAME} rclcpp Boost std_msgs std_srvs serial stingray_core_interfaces)
 
 
+# uart_driver_node
 add_executable(uart_driver_node
        src/uart_driver_node.cpp
        include/stingray_core_communication/uart_driver.h
@@ -55,6 +56,7 @@ add_executable(uart_driver_node
        )
 ament_target_dependencies(uart_driver_node rclcpp std_msgs std_srvs serial stingray_core_interfaces)
 
+# hardware_bridge_node
 add_executable(hardware_bridge_node
        src/hardware_bridge_node.cpp
        include/stingray_core_communication/hardware_bridge.h
@@ -69,8 +71,9 @@ add_executable(hardware_bridge_node
        )
 ament_target_dependencies(hardware_bridge_node rclcpp std_msgs std_srvs serial stingray_core_interfaces)
 
-add_executable(udp_driver_node
-       src/udp_driver_node.cpp
+# udp_driver_receiver_node
+add_executable(udp_driver_receiver_node
+       src/udp_driver_receiver_node.cpp
        include/stingray_core_communication/udp_driver.h
        src/messages/common.cpp
        src/messages/config.cpp
@@ -81,13 +84,30 @@ add_executable(udp_driver_node
        include/stingray_core_communication/messages/direct.h
        include/stingray_core_communication/messages/normal.h
        )
-ament_target_dependencies(udp_driver_node Boost rclcpp std_msgs std_srvs serial stingray_core_interfaces)
+ament_target_dependencies(udp_driver_receiver_node Boost rclcpp std_msgs std_srvs serial stingray_core_interfaces)
+
+# udp_driver_sender_node
+add_executable(udp_driver_sender_node
+       src/udp_driver_sender_node.cpp
+       include/stingray_core_communication/udp_driver.h
+       src/messages/common.cpp
+       src/messages/config.cpp
+       src/messages/direct.cpp
+       src/messages/normal.cpp
+       include/stingray_core_communication/messages/common.h
+       include/stingray_core_communication/messages/config.h
+       include/stingray_core_communication/messages/direct.h
+       include/stingray_core_communication/messages/normal.h
+       )
+ament_target_dependencies(udp_driver_sender_node Boost rclcpp std_msgs std_srvs serial stingray_core_interfaces)
+
 
 ## Install executable
 install(TARGETS
         hardware_bridge_node
         uart_driver_node
-        udp_driver_node
+        udp_driver_receiver_node
+        udp_driver_sender_node
         ${PROJECT_NAME}
         DESTINATION lib/${PROJECT_NAME}
         EXPORT ${PROJECT_NAME}

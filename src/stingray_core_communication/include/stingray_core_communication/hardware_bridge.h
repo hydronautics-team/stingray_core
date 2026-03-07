@@ -105,7 +105,8 @@ private:
             // RCLCPP_INFO(_node->get_logger(), "Request yaw: %f", requestMessage.yaw);
             // RCLCPP_INFO(_node->get_logger(), "uvState yaw: %f", uvStateMsg.yaw);
             // RCLCPP_INFO(_node->get_logger(), "Final request yaw: %f", yaw_delta);
-            requestMessage.yaw = uvStateMsg.yaw + yaw_delta + request->yaw;
+            // requestMessage.yaw = uvStateMsg.yaw + yaw_delta + request->yaw;
+            requestMessage.yaw = request->yaw;
         } else {
             // RCLCPP_WARN(_node->get_logger(), "Yaw stabilization is not enabled");
             requestMessage.yaw = 0;
@@ -162,10 +163,10 @@ private:
         // RCLCPP_INFO(_node->get_logger(), "Delta yaw: %f", yaw_delta);
         // RCLCPP_INFO(_node->get_logger(), "Request yaw: %f", requestMessage.yaw);
         // RCLCPP_INFO(_node->get_logger(), "uvState yaw: %f", uvStateMsg.yaw);
-        // yaw_counter = 0;
+        yaw_counter = 0;
         yaw_delta = responseMessage.yaw;
-        uvStateMsg.yaw = 0;
-        requestMessage.yaw = uvStateMsg.yaw + yaw_delta;
+        // uvStateMsg.yaw = 0;
+        // requestMessage.yaw = uvStateMsg.yaw + yaw_delta;
 
         // RCLCPP_INFO(_node->get_logger(), "After enable stab yaw delta: %f", yaw_delta);
 
@@ -199,19 +200,26 @@ private:
                 yaw_delta = responseMessage.yaw;
                 inited_yaw = true;
             } 
-            // else {
-            //     if (last_response_yaw < -150 && responseMessage.yaw > 150) {
-            //         yaw_counter--;
-            //     } else if (last_response_yaw > 150 && responseMessage.yaw < -150) {
-            //         yaw_counter++;
-            //     }
-            // }
-            // last_response_yaw = responseMessage.yaw;
-            // uvStateMsg.yaw = yaw_counter * 360 + responseMessage.yaw - yaw_delta;
-            uvStateMsg.yaw = responseMessage.yaw - yaw_delta;
+            // >> for -inf to inf yaw angle
+            else {
+                if (last_response_yaw < -150 && responseMessage.yaw > 150) {
+                    yaw_counter--;
+                } else if (last_response_yaw > 150 && responseMessage.yaw < -150) {
+                    yaw_counter++;
+                }
+            }
+
+            last_response_yaw = responseMessage.yaw;
+            uvStateMsg.yaw = yaw_counter * 360 + responseMessage.yaw - yaw_delta; 
+            // << -inf to inf yaw angle
+
+            // uvStateMsg.yaw = responseMessage.yaw - yaw_delta; // for -180 to 180 yaw angle
             uvStateMsg.surge_accel = responseMessage.surge_accel;
             uvStateMsg.sway_accel = responseMessage.sway_accel;
             uvStateMsg.depth = responseMessage.depth;
+            uvStateMsg.distance_from_bottom = responseMessage.distance_from_bottom;
+            uvStateMsg.peleng_angle = responseMessage.peleng_angle;
+            uvStateMsg.distance_from_start = responseMessage.distance_from_start;
             uvStateMsg.depth_stabilization = requestMessage.stab_depth;
             uvStateMsg.roll_stabilization = requestMessage.stab_roll;
             uvStateMsg.pitch_stabilization = requestMessage.stab_pitch;

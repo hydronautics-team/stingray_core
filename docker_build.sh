@@ -1,1 +1,0 @@
-docker buildx build --platform linux/amd64,linux/arm64 -t hydronautics/stingray_core:latest -f Dockerfile --push .

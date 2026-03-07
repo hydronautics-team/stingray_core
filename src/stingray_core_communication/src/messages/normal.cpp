@@ -86,30 +86,56 @@ bool RequestNormalMessage::parse(std::vector<uint8_t> &input) {
 }
 
 ResponseNormalMessage::ResponseNormalMessage() {
-    roll = 0;
-    pitch = 0;
-    yaw = 0;
+    reset_imu = 0;
+    stab_depth = 0;
+    stab_roll = 0;
+    stab_pitch = 0;
+    stab_yaw = 0;
+    surge = 0.0;
+    sway = 0.0;
+    depth = 0.0;
+    roll = 0.0;
+    pitch = 0.0;
+    yaw = 0.0;
     surge_accel = 0.0;
     sway_accel = 0.0;
-    depth = 0;
     for (int i = 0; i < dev_amount; i++) {
         dev[i] = 0;
     }
+    for (int i = 0; i < flare_amount; i++) {
+        flare_seq[i] = 0;
+    }
+    distance_from_start = 0.0;
+    peleng_angle = 0;
+    distance_from_bottom = 0.0;
 
     checksum = 0;
 }
 
 // form byte-vector (raspberry_cm4 to pult)
 void ResponseNormalMessage::pack(std::vector<uint8_t> &container) {
+    pushToVector(container, reset_imu);
+    pushToVector(container, stab_depth);
+    pushToVector(container, stab_roll);
+    pushToVector(container, stab_pitch);
+    pushToVector(container, stab_yaw);
+    pushToVector(container, surge);
+    pushToVector(container, sway);
+    pushToVector(container, depth);
     pushToVector(container, roll);
     pushToVector(container, pitch);
     pushToVector(container, yaw);
     pushToVector(container, surge_accel);
     pushToVector(container, sway_accel);
-    pushToVector(container, depth);
     for (int i = 0; i < dev_amount; i++) {
         pushToVector(container, dev[i]);
     }
+    for (int i = 0; i < flare_amount; i++) {
+        pushToVector(container, flare_seq[i]);
+    }
+    pushToVector(container, distance_from_start);
+    pushToVector(container, peleng_angle);
+    pushToVector(container, distance_from_bottom);
 
     uint16_t checksum = getChecksum16b(container);
     pushToVector(container, checksum);  // do i need to revert bytes here?
@@ -118,22 +144,33 @@ void ResponseNormalMessage::pack(std::vector<uint8_t> &container) {
 // pull message from byte-vector (STM to raspberry_cm4)
 bool ResponseNormalMessage::parse(std::vector<uint8_t> &input) {
     popFromVector(input, checksum, true);
-
     uint16_t checksum_calc = getChecksum16b(input);
-
     // if (checksum_calc != checksum) {
     //     return false;
     // }
 
-    for (int i = 0; i < dev_amount; i++) {
-        popFromVector(input, dev[dev_amount - i]);
+    popFromVector(input, distance_from_bottom);
+    popFromVector(input, peleng_angle);
+    popFromVector(input, distance_from_start);
+    for (int i = 0; i < flare_amount; i++) {
+        popFromVector(input, flare_seq[flare_amount - i - 1]);
     }
-    popFromVector(input, depth);
+    for (int i = 0; i < dev_amount; i++) {
+        popFromVector(input, dev[dev_amount - i - 1]);
+    }
     popFromVector(input, sway_accel);
     popFromVector(input, surge_accel);
     popFromVector(input, yaw);
     popFromVector(input, pitch);
     popFromVector(input, roll);
+    popFromVector(input, depth);
+    popFromVector(input, sway);
+    popFromVector(input, surge);
+    popFromVector(input, stab_yaw);
+    popFromVector(input, stab_pitch);
+    popFromVector(input, stab_roll);
+    popFromVector(input, stab_depth);
+    popFromVector(input, reset_imu);
 
     return true;
 }
