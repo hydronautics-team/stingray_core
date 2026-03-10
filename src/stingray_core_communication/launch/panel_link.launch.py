@@ -1,37 +1,51 @@
-from launch import LaunchDescription
-from launch.actions import GroupAction, IncludeLaunchDescription, DeclareLaunchArgument
-from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch_ros.actions import Node, PushRosNamespace
+import os
+
 from ament_index_python.packages import get_package_share_directory
-from launch.substitutions import LaunchConfiguration
+from launch import LaunchDescription
+from launch.actions import IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import PathJoinSubstitution
+from launch_ros.actions import Node
+
 
 def generate_launch_description():
-    ns_arg = DeclareLaunchArgument('ns', default_value='panel')
-    params_arg = DeclareLaunchArgument(
-        'params_file',
-        default_value=f"{get_package_share_directory('stingray_core_communication')}/params/panel.params.yaml"
+    # Путь к пакету serial_driver
+    serial_driver_dir = get_package_share_directory("serial_driver")
+
+    # Путь к вашему файлу параметров
+    thruster_params_file = PathJoinSubstitution(
+        [
+            get_package_share_directory("stingray_core_communication"),
+            "params",
+            "display.params.yaml",
+        ]
     )
 
-    serial_lc = IncludeLaunchDescription(
+    # Включение launch-файла serial_driver с передачей аргумента params_file
+    serial_bridge_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            f"{get_package_share_directory('stingray_core_communication')}/launch/serial_bridge_lc.launch.py"
+            os.path.join(
+                serial_driver_dir, "launch", "serial_driver_bridge_node.launch.py"
+            )
         ),
         launch_arguments={
-            'ns': LaunchConfiguration('ns'),
-            'params_file': LaunchConfiguration('params_file')
-        }.items()
+            "params_file": thruster_params_file,
+            "namespace": "/display",
+        }.items(),
     )
 
-    link_node = GroupAction([
-        PushRosNamespace(LaunchConfiguration('ns')),
-        Node(
-            package='stingray_core_communication',
-            executable='panel_link_node',
-            name='panel_link',
-            output='screen',
-            parameters=[{'device_id': 2}],
-            remappings=[('serial_read','serial_read'), ('serial_write','serial_write')],
-        ),
-    ])
-
-    return LaunchDescription([ns_arg, params_arg, serial_lc, link_node])
+    return LaunchDescription(
+        [
+            serial_bridge_launch,
+            Node(
+                package="stingray_core_communication",
+                executable="display_driver_node",
+                name="display_driver_node",
+                remappings=[
+                    ("serial_write", "/display/serial_write"),
+                    ("serial_read", "/display/serial_read"),
+                ],
+                output="screen",
+            ),
+        ]
+    )

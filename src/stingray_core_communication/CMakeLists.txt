@@ -14,9 +14,11 @@ find_package(std_msgs REQUIRED)
 
 # ---- СБОРКА НОДЫ ----
 add_executable(thrusters_driver_node src/thrusters_driver_node.cpp)
+add_executable(display_driver_node srs/display_driver_node.cpp)
 
 # Указываем зависимости для узла
 ament_target_dependencies(thrusters_driver_node rclcpp std_msgs)
+ament_target_dependencies(display_driver_node rclcpp std_msgs)
 
 # add_subdirectory(../../Hydrolib-soft Hydrolib-soft)
 add_subdirectory(../Hydrolib-soft/hydrolib_bus/hydrolib_bus_application hydrolib_bus_application)
@@ -41,6 +43,7 @@ target_link_libraries(thrusters_driver_node
 # Устанавливаем исполняемый файл в целевую директорию
 install(TARGETS
   thrusters_driver_node
+  display_driver_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
