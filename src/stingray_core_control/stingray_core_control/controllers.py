@@ -224,7 +224,7 @@ class PitchController(BaseController):
             setspeed = 0.0
 
         # --- ОС по скорости ---
-        ap = self.aperiodic_step(measurement_rate, dt)
+        ap = self.aperiodic_step(57.3 *measurement_rate, dt)
         feedback_speed = ap * self.K_2
 
         error_speed = output_pi + setspeed - feedback_speed
@@ -239,7 +239,7 @@ class PitchController(BaseController):
             self.debug_hook({
                 "err_position": err_position,
                 "output_pi": output_pi,
-                "measurement_rate": measurement_rate,
+                "measurement_rate": 57.3 *measurement_rate,
                 "feedback_speed": feedback_speed,
                 "error_speed": error_speed,
                 "out": out,

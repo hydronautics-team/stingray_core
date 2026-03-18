@@ -6,17 +6,17 @@ stingray_core_control_node:
     topic_imu_angular: /vectornav/raw/common/yawpitchroll
     topic_imu_linear_accel: /vectornav/imu_accel
     topic_imu_angular_rate: /vectornav/imu
-    thrusters:           
-    - sway_back          
-    - depth_front_right  
-    - sway_front         
-    - depth_back_right   
-    - surge_upper_right  
-    - surge_upper_left   
-    - depth_back_left    
-    - depth_front_left   
-    - surge_lower_left   
-    - surge_lower_right  
+    thrusters:
+    - surge_upper_left
+    - depth_front_right
+    - sway_front
+    - depth_back_right
+    - surge_upper_right
+    - sway_back
+    - depth_back_left
+    - depth_front_left
+    - surge_lower_left
+    - surge_lower_right
     axes_u:
     - u_surge
     - u_sway

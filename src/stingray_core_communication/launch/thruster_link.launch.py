@@ -24,7 +24,7 @@ def generate_launch_description():
         ),
         launch_arguments={
             'params_file': thruster_params_file,
-            'namespace': '/thruster'
+            
         }.items()
     )
 
@@ -34,10 +34,7 @@ def generate_launch_description():
             package='stingray_core_communication',
             executable='thrusters_driver_node',
             name='thrusters_driver_node',
-            remappings=[
-            ('serial_write', '/thruster/serial_write'),
-            ('serial_read', '/thruster/serial_read')
-        ],
+            
             output='screen'
         )
     ])

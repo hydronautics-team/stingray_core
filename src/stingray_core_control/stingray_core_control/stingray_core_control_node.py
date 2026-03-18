@@ -246,6 +246,7 @@ class StingrayCoreControlNode(Node):
         self.pub_measurement_rate    = self.create_publisher(Float64, "~/debug/measurement_rate", 10)
         self.pub_out            = self.create_publisher(Float64, "~/debug/out", 10)
         self.yaw_ctrl.set_debug_hook(self.debug_cb)
+        self.pitch_ctrl.set_debug_hook(self.debug_cb)
         self.depth_ctrl.set_debug_hook(self.debug_cb)
 
 

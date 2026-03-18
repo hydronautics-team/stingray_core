@@ -29,7 +29,7 @@ stingray_core_control_node:
     controllers.heave.ap_T: 1.0
     controllers.roll.K_p: 1.0
     controllers.roll.K_1: 0.3
-    controllers.roll.K_2: 5.0
+    controllers.roll.K_2: 0.025
     controllers.roll.K_i: 1.0
     controllers.roll.I_min: -50.0
     controllers.roll.I_max: 50.0
@@ -37,14 +37,14 @@ stingray_core_control_node:
     controllers.roll.ap_K: 1.0
     controllers.roll.ap_T: 0.01
     controllers.pitch.K_p: 1.1
-    controllers.pitch.K_1: 1.0
+    controllers.pitch.K_1: 0.9
     controllers.pitch.K_2: 0.25
     controllers.pitch.K_i: 0.04
     controllers.pitch.I_min: -0.4
     controllers.pitch.I_max: 0.4
-    controllers.pitch.out_sat: 1.0
+    controllers.pitch.out_sat: 200.0
     controllers.pitch.ap_K: 1.0
-    controllers.pitch.ap_T: 0.2
+    controllers.pitch.ap_T: 0.0
     controllers.yaw.K_p: 0.6
     controllers.yaw.K_1: 4.4
     controllers.yaw.K_2: 1.4

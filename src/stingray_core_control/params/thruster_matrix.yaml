@@ -1,11 +1,11 @@
 stingray_core_control_node:
   ros__parameters:
-    sway_back_u_surge: 0
-    sway_back_u_sway: -1
-    sway_back_u_heave: 0
-    sway_back_u_roll: 0
-    sway_back_u_pitch: 0
-    sway_back_u_yaw: 1
+    surge_upper_left_u_surge: -1
+    surge_upper_left_u_sway: 0
+    surge_upper_left_u_heave: 0
+    surge_upper_left_u_roll: 0
+    surge_upper_left_u_pitch: -1
+    surge_upper_left_u_yaw: 0
     depth_front_right_u_surge: 0
     depth_front_right_u_sway: 0
     depth_front_right_u_heave: 1
@@ -30,12 +30,12 @@ stingray_core_control_node:
     surge_upper_right_u_roll: 0
     surge_upper_right_u_pitch: 1
     surge_upper_right_u_yaw: 0
-    surge_upper_left_u_surge: -1
-    surge_upper_left_u_sway: 0
-    surge_upper_left_u_heave: 0
-    surge_upper_left_u_roll: 0
-    surge_upper_left_u_pitch: -1
-    surge_upper_left_u_yaw: 0
+    sway_back_u_surge: 0
+    sway_back_u_sway: -1
+    sway_back_u_heave: 0
+    sway_back_u_roll: 0
+    sway_back_u_pitch: 0
+    sway_back_u_yaw: 1
     depth_back_left_u_surge: 0
     depth_back_left_u_sway: 0
     depth_back_left_u_heave: -1
@@ -58,5 +58,5 @@ stingray_core_control_node:
     surge_lower_right_u_sway: 0
     surge_lower_right_u_heave: 0
     surge_lower_right_u_roll: 0
-    surge_lower_right_u_pitch: 1
+    surge_lower_right_u_pitch: -1
     surge_lower_right_u_yaw: 0
