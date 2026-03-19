@@ -36,6 +36,9 @@ stingray_core_control_node:
     controllers.roll.out_sat: 1.0
     controllers.roll.ap_K: 1.0
     controllers.roll.ap_T: 0.2
+    controllers.roll.grav_bias: 0.0
+    controllers.roll.grav_gain: 0.0
+    controllers.roll.grav_offset_deg: 0.0
     controllers.pitch.K_p: 1.1
     controllers.pitch.K_1: 1.0
     controllers.pitch.K_2: 0.25
@@ -45,6 +48,9 @@ stingray_core_control_node:
     controllers.pitch.out_sat: 1.0
     controllers.pitch.ap_K: 1.0
     controllers.pitch.ap_T: 0.2
+    controllers.pitch.grav_bias: 0.0
+    controllers.pitch.grav_gain: 0.0
+    controllers.pitch.grav_offset_deg: 0.0
     controllers.yaw.K_p: 0.6
     controllers.yaw.K_1: 4.4
     controllers.yaw.K_2: 1.4

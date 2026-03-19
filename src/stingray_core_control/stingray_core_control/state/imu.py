@@ -11,3 +11,7 @@ class ImuState:
     rate_x: float = 0.0
     rate_y: float = 0.0
     rate_z: float = 0.0
+
+    accel_x: float = 0.0
+    accel_y: float = 0.0
+    accel_z: float = 0.0

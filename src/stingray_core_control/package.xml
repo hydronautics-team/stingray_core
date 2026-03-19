@@ -16,6 +16,7 @@
   <exec_depend>python_qt_binding</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
+  <exec_depend>dvl_msgs</exec_depend>
   <exec_depend>pyqtgraph</exec_depend> <!-- optional: for plotting -->
 
   <export>

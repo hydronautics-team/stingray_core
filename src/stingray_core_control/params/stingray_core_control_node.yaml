@@ -6,6 +6,7 @@ stingray_core_control_node:
     topic_imu_angular: /vectornav/raw/common/yawpitchroll
     topic_imu_linear_accel: /vectornav/imu_accel
     topic_imu_angular_rate: /vectornav/imu
+    topic_dvl_data: /dvl/data
     thrusters:
     - depth_front_left
     - depth_front_right
@@ -85,5 +86,9 @@ stingray_core_control_node:
     - ap_K
     - ap_T
     flag_setup_feedback_speed: false
+    use_dvl_velocity: false
+    use_distance_measurement: false
+    dvl_velocity_alpha: 0.2
+    dvl_timeout_sec: 0.5
     debug_publish: true
     use_sim_time: false

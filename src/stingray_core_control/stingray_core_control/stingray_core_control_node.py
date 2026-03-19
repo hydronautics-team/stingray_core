@@ -22,6 +22,7 @@ from geometry_msgs.msg import Twist, Vector3
 from std_msgs.msg import Float32, Float64, UInt8, Bool, UInt8MultiArray
 from sensor_msgs.msg import Imu
 from vectornav_msgs.msg import CommonGroup
+from dvl_msgs.msg import DVL
 
 from .control.thruster_mixer import ThrusterMixer
 from .control.controllers import (
@@ -35,6 +36,7 @@ from .control.axis_controller import (
     AxisController,
     AngularAxisController,
     LinearAxisController,
+    LinearVelocityAxisController,
 )
 
 
@@ -54,7 +56,9 @@ class StingrayCoreControlNode(Node):
         now = time.time()
         dt = now - self.last_time if self.last_time is not None else 0.0
         self.last_time = now
-        self.last_dt = dt
+        self.last_dt = max(min(dt, 0.05), 1e-3)
+
+        self._update_motion_estimation(self.last_dt)
 
         # === 1. Определяем управляющие воздействия ===
         u: dict[str, float] = {}
@@ -95,6 +99,7 @@ class StingrayCoreControlNode(Node):
             'topic_imu_angular': '/vectornav/raw/common',
             'topic_imu_linear_accel': '/vectornav/imu_accel',
             'topic_imu_angular_rate': '/vectornav/imu',
+            'topic_dvl_data': '/dvl/data',
             'topic_loop_flags': '/control/loop_flags',
             'topic_pressure_sensor': '/sensors/pressure',
             'topic_control_data': '/control/data',
@@ -107,6 +112,18 @@ class StingrayCoreControlNode(Node):
 
         self.declare_parameter('axes', ["surge", "sway", "heave", "roll", "pitch", "yaw"])
         self.axes = list(self.get_parameter('axes').value)
+
+        self.declare_parameter('use_dvl_velocity', False)
+        self.use_dvl_velocity = bool(self.get_parameter('use_dvl_velocity').value)
+
+        self.declare_parameter('use_distance_measurement', False)
+        self.use_distance_measurement = bool(self.get_parameter('use_distance_measurement').value)
+
+        self.declare_parameter('dvl_velocity_alpha', 0.2)
+        self.dvl_velocity_alpha = float(self.get_parameter('dvl_velocity_alpha').value)
+
+        self.declare_parameter('dvl_timeout_sec', 0.5)
+        self.dvl_timeout_sec = float(self.get_parameter('dvl_timeout_sec').value)
 
         self.declare_parameter('thrusters', Parameter.Type.STRING_ARRAY)
         self.thrusters = list(self.get_parameter('thrusters').value)
@@ -149,13 +166,40 @@ class StingrayCoreControlNode(Node):
                     ParameterDescriptor(dynamic_typing=True),
                 )
                 params[key] = float(self.get_parameter(pname).value)
+
+            if axis in ("pitch", "roll"):
+                for key in ("grav_bias", "grav_gain", "grav_offset_deg"):
+                    pname = f"controllers.{axis}.{key}"
+                    self.declare_parameter(
+                        pname,
+                        0.0,
+                        ParameterDescriptor(dynamic_typing=True),
+                    )
+                    params[key] = float(self.get_parameter(pname).value)
+
             self.controllers[axis] = axis_class_map[axis](**params)
-        # self.controllers["yaw"].set_debug_hook(self.debug_cb)
-        # self.controllers["heave"].set_debug_hook(self.debug_cb)
+
+        for ctrl in self.controllers.values():
+            ctrl.set_debug_hook(self.debug_cb)
 
         self.imu = ImuState()
         self.control = ControlState.from_axes(self.axes)
         self.depth = 0.0
+        self.distance_to_bottom = 0.0
+
+        self.surge_velocity_imu = 0.0
+        self.sway_velocity_imu = 0.0
+        self.heave_velocity_imu = 0.0
+        self.surge_velocity_est = 0.0
+        self.sway_velocity_est = 0.0
+        self.heave_velocity_est = 0.0
+
+        self.dvl_velocity_x = 0.0
+        self.dvl_velocity_y = 0.0
+        self.dvl_velocity_z = 0.0
+        self.dvl_velocity_valid = False
+        self.dvl_last_time = 0.0
+
         self.yaw_zero_offset = 0.0
         self.imu_yaw_raw = 0.0
 
@@ -172,12 +216,28 @@ class StingrayCoreControlNode(Node):
                 rate_fn=lambda: self.imu.rate_y,
                 feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
             ),
+            "roll": AngularAxisController(
+                controller=self.controllers["roll"],
+                angle_fn=lambda: self.imu.roll,
+                rate_fn=lambda: self.imu.rate_x,
+                feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
+            ),
             "heave": LinearAxisController(
                 controller=self.controllers["heave"],
                 pos_fn=lambda: self.depth,
-                vel_fn=lambda: 0.0,
-                accel_fn=lambda: 0.0,
+                vel_fn=self._get_heave_velocity_measurement,
+                accel_fn=lambda: self.imu.accel_z,
                 feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
+            ),
+            "surge": LinearVelocityAxisController(
+                controller=self.controllers["surge"],
+                vel_fn=self._get_surge_velocity_measurement,
+                accel_fn=lambda: self.imu.accel_x,
+            ),
+            "sway": LinearVelocityAxisController(
+                controller=self.controllers["sway"],
+                vel_fn=self._get_sway_velocity_measurement,
+                accel_fn=lambda: self.imu.accel_y,
             ),
         }
 
@@ -200,6 +260,40 @@ class StingrayCoreControlNode(Node):
         """Нормализует угол в градусах в диапазон [-180, 180)."""
         a = (angle_deg + 180.0) % 360.0 - 180.0
         return a
+
+    def _is_dvl_fresh(self) -> bool:
+        if self.dvl_last_time <= 0.0:
+            return False
+        return (time.time() - self.dvl_last_time) <= self.dvl_timeout_sec
+
+    def _update_motion_estimation(self, dt: float):
+        # IMU-only оценка скоростей интегрированием ускорений
+        self.surge_velocity_imu += self.imu.accel_x * dt
+        self.sway_velocity_imu += self.imu.accel_y * dt
+        self.heave_velocity_imu += self.imu.accel_z * dt
+
+        use_dvl_now = self.use_dvl_velocity and self.dvl_velocity_valid and self._is_dvl_fresh()
+        alpha = max(0.0, min(1.0, self.dvl_velocity_alpha))
+
+        if use_dvl_now:
+            # IMU + DVL: blended correction для снижения дрейфа IMU
+            self.surge_velocity_est = alpha * self.surge_velocity_imu + (1.0 - alpha) * self.dvl_velocity_x
+            self.sway_velocity_est = alpha * self.sway_velocity_imu + (1.0 - alpha) * self.dvl_velocity_y
+            self.heave_velocity_est = alpha * self.heave_velocity_imu + (1.0 - alpha) * self.dvl_velocity_z
+        else:
+            # IMU-only
+            self.surge_velocity_est = self.surge_velocity_imu
+            self.sway_velocity_est = self.sway_velocity_imu
+            self.heave_velocity_est = self.heave_velocity_imu
+
+    def _get_surge_velocity_measurement(self) -> float:
+        return self.surge_velocity_est
+
+    def _get_sway_velocity_measurement(self) -> float:
+        return self.sway_velocity_est
+
+    def _get_heave_velocity_measurement(self) -> float:
+        return self.heave_velocity_est
 
     def _init_subscriptions(self):
         # Explicit QoS profiles for deterministic behavior by topic class.
@@ -237,6 +331,11 @@ class StingrayCoreControlNode(Node):
         self.sub_imu_angular_rate = self.create_subscription(
             Imu, self.topic_imu_angular_rate,
             self.imu_angular_rate_callback, qos_sensor
+        )
+
+        self.sub_dvl_data = self.create_subscription(
+            DVL, self.topic_dvl_data,
+            self.dvl_data_callback, qos_sensor
         )
 
         self.sub_control_mode_flags = self.create_subscription(
@@ -324,7 +423,27 @@ class StingrayCoreControlNode(Node):
             )
 
     def imu_linear_accel_callback(self, msg: Vector3):
-        pass
+        try:
+            self.imu.accel_x = float(msg.x)
+            self.imu.accel_y = float(msg.y)
+            self.imu.accel_z = float(msg.z)
+        except Exception as e:
+            self.get_logger().warning(
+                f"Error parsing imu linear acceleration from Vector3 msg: {e}"
+            )
+
+    def dvl_data_callback(self, msg: DVL):
+        try:
+            self.dvl_velocity_x = float(msg.velocity.x)
+            self.dvl_velocity_y = float(msg.velocity.y)
+            self.dvl_velocity_z = float(msg.velocity.z)
+            self.dvl_velocity_valid = bool(msg.velocity_valid)
+            self.dvl_last_time = time.time()
+
+            if self.use_distance_measurement:
+                self.distance_to_bottom = float(msg.altitude)
+        except Exception as e:
+            self.get_logger().warning(f"Error parsing DVL msg: {e}")
     
     def zero_yaw_callback(self, msg: Bool):
         if not msg.data:

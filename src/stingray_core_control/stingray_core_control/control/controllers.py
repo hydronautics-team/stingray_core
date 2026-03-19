@@ -163,10 +163,10 @@ class YawController(BaseController):
             # 5) PI combined
             output_pi = res_p + res_i
 
-        # 6) aperiodic filter from rate (wz) and scale
-        ap = self.aperiodic_step(57.3 * measurement_rate, dt)
+        # 6) aperiodic filter from rate (deg/s) and scale
+        ap = self.aperiodic_step(measurement_rate, dt)
         feedback_speed = ap * self.K_2
-        # feedback_speed = 57.3 *measurement_rate * self.K_2
+        # feedback_speed = measurement_rate * self.K_2
 
         # 7) final output (PI minus speed feedback)
         error_speed = output_pi + setspeed - feedback_speed
@@ -182,13 +182,26 @@ class YawController(BaseController):
                 "err_position": err_position,
                 "output_pi": output_pi,
                 "feedback_speed": feedback_speed,
-                "measurement_rate": 57.3 *measurement_rate,
+                "measurement_rate": measurement_rate,
                 "out": out,
             })
 
         return out
 
 class PitchController(BaseController):
+    def __init__(
+        self,
+        *args,
+        grav_bias: float = 0.0,
+        grav_gain: float = 0.0,
+        grav_offset_deg: float = 0.0,
+        **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        self.grav_bias = grav_bias
+        self.grav_gain = grav_gain
+        self.grav_offset_deg = grav_offset_deg
+
     def update(
         self,
         setpoint: float,
@@ -217,7 +230,14 @@ class PitchController(BaseController):
         ap = self.aperiodic_step(measurement_rate, dt)
         feedback_speed = ap * self.K_2
 
-        error_speed = output_pi + setspeed - feedback_speed
+        # --- гравитационная компенсация ---
+        grav = (
+            self.grav_bias
+            + math.sin(math.radians(measurement - self.grav_offset_deg))
+            * self.grav_gain
+        )
+
+        error_speed = output_pi + grav + setspeed - feedback_speed
 
         if self.out_sat is not None:
             out = saturation(error_speed, self.out_sat, -self.out_sat)
@@ -231,6 +251,7 @@ class PitchController(BaseController):
                 "output_pi": output_pi,
                 "measurement_rate": measurement_rate,
                 "feedback_speed": feedback_speed,
+                "grav": grav,
                 "error_speed": error_speed,
                 "out": out,
             })

@@ -7,6 +7,7 @@ echo "🔧 Building all Stingray packages (including launch)..."
 echo "----------------------------------------"
 
 colcon build --packages-select \
+    dvl_msgs \
     stingray_core_control \
     stingray_core_communication \
     serial_driver \
