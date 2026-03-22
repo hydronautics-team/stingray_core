@@ -8,10 +8,15 @@ stingray_core_control_node:
     topic_imu_angular_rate: /vectornav/imu
     topic_dvl_data: /dvl/data
     thrusters:
-    - depth_front_left
+    - surge_upper_left
     - depth_front_right
+    - sway_front
     - depth_back_right
+    - surge_upper_right
+    - sway_back
     - depth_back_left
+    - depth_front_left
+    - surge_lower_left
     - surge_lower_right
     - surge_lower_left
     - sway_back

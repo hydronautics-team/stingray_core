@@ -1,3 +1,4 @@
+#include <array>
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -5,19 +6,20 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/u_int8_multi_array.hpp"
+#include "link_node_base.hpp"
 
 namespace stingray_core
 {
 
-class ThrustersDriverNode : public rclcpp::Node
+class ThrustersDriverNode : public baseLink::LinkNodeBase
 {
 public:
-    ThrustersDriverNode() : Node("thrusters_driver_node")
+    ThrustersDriverNode() : LinkNodeBase("thrusters_driver_node", 2, 1)
+
     {
         thrusters_sub_ = this->create_subscription<std_msgs::msg::UInt8MultiArray>(
             "/thruster/cmd", 10, std::bind(&ThrustersDriverNode::thrustersCallback, this, std::placeholders::_1));
-
-        serial_pub_ = this->create_publisher<std_msgs::msg::UInt8MultiArray>("serial_write", 10);
+            
         RCLCPP_INFO(this->get_logger(), "Thrusters driver node initialized");
     }
 
@@ -26,36 +28,15 @@ private:
     {
         if (!msg->data.empty())
         {
-            std::vector<uint8_t> packet = createPacket(msg->data);
-            auto serial_msg = std_msgs::msg::UInt8MultiArray();
-            serial_msg.data = packet;
-            serial_pub_->publish(serial_msg);
-
-            // RCLCPP_INFO(this->get_logger(), "Sent %zu bytes to serial", packet.size());
+            const void *data = msg->data.data();
+            unsigned length = static_cast<unsigned>(msg->data.size());
+            serialWrite(data, 0, length);
         }
     }
 
     rclcpp::Subscription<std_msgs::msg::UInt8MultiArray>::SharedPtr thrusters_sub_;
 
-    rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr serial_pub_;
-
-    std::vector<uint8_t> createPacket(const std::vector<uint8_t> &thrusters)
-    {
-        std::vector<uint8_t> packet;
-        // Заголовок пакета
-        packet.push_back(0xFF);
-        packet.push_back(0xFD);
-
-        // Закидываем значения в массив и считаем контрольную сумму
-        for (auto value : thrusters)
-        {
-            packet.push_back(value);
-        }
-        // packet.push_back(150);
-        // packet.push_back(150);
-
-        return packet;
-    }
+    
 }; // class ThrustersDriverNode
 
 } // namespace stingray_core

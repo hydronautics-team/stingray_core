@@ -227,7 +227,7 @@ class PitchController(BaseController):
             setspeed = 0.0
 
         # --- ОС по скорости ---
-        ap = self.aperiodic_step(measurement_rate, dt)
+        ap = self.aperiodic_step(57.3 *measurement_rate, dt)
         feedback_speed = ap * self.K_2
 
         # --- гравитационная компенсация ---
@@ -249,7 +249,7 @@ class PitchController(BaseController):
             self.debug_hook({
                 "err_position": err_position,
                 "output_pi": output_pi,
-                "measurement_rate": measurement_rate,
+                "measurement_rate": 57.3 *measurement_rate,
                 "feedback_speed": feedback_speed,
                 "grav": grav,
                 "error_speed": error_speed,
@@ -300,7 +300,7 @@ class RollController(BaseController):
         # -------- гравитационная компенсация --------
         grav = (
             self.grav_bias
-            + math.sin(math.radians(measurement - self.grav_offset_deg))
+            + math.sin(math.radians(setpoint - self.grav_offset_deg))
             * self.grav_gain
         )
 
