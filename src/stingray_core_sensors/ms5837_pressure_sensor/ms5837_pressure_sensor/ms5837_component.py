@@ -16,14 +16,23 @@ import time
 class BarComponentr:
     def __init__(self):
         self.sensor = ms5837.MS5837_02BA()
+        self.ok = False
         
-        if not self.sensor.init():
+        try:
+            if not self.sensor.init():
                 print("Sensor could not be initialized")
-                exit(1)
+                return
+        except Exception as e:
+            print(f"Sensor init exception: {e}")
+            return
 
-        if not self.sensor.read():
+        try:
+            if not self.sensor.read():
                 print("Sensor read failed!")
-                exit(1)
+                return
+        except Exception as e:
+            print(f"Sensor first read exception: {e}")
+            return
 
         print("Pressure: {} atm {} Torr {} psi".format(
                 round( self.sensor.pressure(ms5837.UNITS_atm), 2),
@@ -56,28 +65,47 @@ class BarComponentr:
         print("MSL Relative Altitude: {} m".format( self.sensor.altitude() )) # relative to Mean Sea Level pressure in air
 
         time.sleep(1)
+        self.ok = True
+
+    def is_ready(self):
+        return self.ok
 
     def pressure_value(self):
-        if self.sensor.read():
-                hpa_data = self.sensor.pressure()
-                psi_data = self.sensor.pressure(ms5837.UNITS_psi)
-        else:
-                exit(1)
+        if not self.ok:
+            return None, None
+        try:
+            if self.sensor.read():
+                    hpa_data = self.sensor.pressure()
+                    psi_data = self.sensor.pressure(ms5837.UNITS_psi)
+            else:
+                    return None, None
+        except Exception:
+            return None, None
         return hpa_data, psi_data
 
     def temperature_value(self):
-        if self.sensor.read():
-                temp_degrees = self.sensor.temperature()
-                temp_farenheit = self.sensor.temperature(ms5837.UNITS_Farenheit) 
-        else:
-                exit(1)
+        if not self.ok:
+            return None, None
+        try:
+            if self.sensor.read():
+                    temp_degrees = self.sensor.temperature()
+                    temp_farenheit = self.sensor.temperature(ms5837.UNITS_Farenheit) 
+            else:
+                    return None, None
+        except Exception:
+            return None, None
         return temp_degrees, temp_farenheit
 
     def depth_value(self):
-        if self.sensor.read():
-                depth_data = self.sensor.depth()
-        else:
-                exit(1)
+        if not self.ok:
+            return None
+        try:
+            if self.sensor.read():
+                    depth_data = self.sensor.depth()
+            else:
+                    return None
+        except Exception:
+            return None
         return depth_data
 
     def depth_init_error(self):
@@ -93,23 +121,61 @@ class BarNode(Node):
         self.pub_depth = self.create_publisher(Float32, 'ms5837/depth', 10)
         self.pub_odom = self.create_publisher(Odometry, 'ms5837/odom', 10)
 
-        timer_period = 0.02  # seconds
-        self.timer = self.create_timer(timer_period, self.timer_callback)
-
-        self.ms5837_data = BarComponentr()
+        self.reconnect_period_sec = 1.0
+        self.next_reconnect_time = 0.0
+        self.sensor_ready = False
+        self.ms5837_data = None
 
         self.msg_pressure = Float32()
         self.msg_temp = Float32()
         self.msg_depth = Float32()
         self.msg_odom = Odometry()
 
-        self.init_fresh, self.init_salt = self.ms5837_data.depth_init_error()
+        self.init_fresh = 0.0
+        self.init_salt = 0.0
+
+        self._try_connect_sensor(initial=True)
+
+        timer_period = 0.02  # seconds
+        self.timer = self.create_timer(timer_period, self.timer_callback)
+
+    def _try_connect_sensor(self, initial=False):
+        try:
+            self.ms5837_data = BarComponentr()
+            if self.ms5837_data.is_ready():
+                self.sensor_ready = True
+                self.init_fresh, self.init_salt = self.ms5837_data.depth_init_error()
+                self.get_logger().info("MS5837 connected")
+                return
+        except Exception as e:
+            self.get_logger().warning(f"MS5837 reconnect exception: {e}")
+
+        self.sensor_ready = False
+        self.next_reconnect_time = time.time() + self.reconnect_period_sec
+
+        if initial:
+            self.get_logger().warning("Failed to connect to MS5837 sensor")
+        self.get_logger().fatal(
+            "Unable to connect to MS5837 via I2C. "
+            "Check /dev/i2c-*, wiring, power and sensor address (0x76/0x77)."
+        )
 
     def timer_callback(self):
+        if not self.sensor_ready:
+            if time.time() >= self.next_reconnect_time:
+                self.get_logger().warning("Failed to reconnect to sensor")
+                self._try_connect_sensor()
+            return
 
         hpa_data, psi_data = self.ms5837_data.pressure_value()
         temp_degrees, temp_farenheit = self.ms5837_data.temperature_value()
         depth_data = self.ms5837_data.depth_value()
+
+        if hpa_data is None or temp_degrees is None or depth_data is None:
+            self.get_logger().warning("MS5837 read failed, switching to reconnect mode")
+            self.sensor_ready = False
+            self.next_reconnect_time = time.time() + self.reconnect_period_sec
+            return
 
         self.msg_pressure.data = round(hpa_data, 1)
 
