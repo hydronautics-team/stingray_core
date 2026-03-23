@@ -1,6 +1,6 @@
-[submodule "src/serial"]
-	path = src/serial
+[submodule "src/stingray_core_communication/serial"]
+	path = src/stingray_core_communication/serial
 	url = https://github.com/jinmenglei/serial.git
-[submodule "src/Hydrolib-soft"]
-	path = src/Hydrolib-soft
+[submodule "src/stingray_core_communication/Hydrolib-soft"]
+	path = src/stingray_core_communication/Hydrolib-soft
 	url = https://github.com/SeaJackal/Hydrolib-soft.git
