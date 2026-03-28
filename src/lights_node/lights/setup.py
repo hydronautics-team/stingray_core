@@ -20,8 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'lantern_control = lights.light_system:main',
-            'light_check = lights.check:main',
+            'lantern_control = lights.main:main',
         ],
     },
 )

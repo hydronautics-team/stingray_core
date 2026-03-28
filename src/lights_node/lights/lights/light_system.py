@@ -1,83 +1,78 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.timer import Timer
-from lights_interfaces.msg import Brightness
+from stingray_msgs.msg import Brightness, LightMode as LightModeMsg
 
-from .code_light import BrightControl
+from .code_light import BrightControl, LightMode
 
-class LanternControl(Node):
+class LanternControl:
     def __init__(self):
-        super().__init__('lantern_controller')
+        self.node = Node('lantern_controller')
         
-        self.lantern_pub = self.create_publisher(Brightness, '/lights/brightness_cmd', 10)
-        
+        self.lantern_pub = self.node.create_publisher(
+            Brightness, '/lights/brightness_cmd', 10
+        )
+        self.mode_sub = self.node.create_subscription(
+            LightModeMsg,
+            '/lights/set_mode',
+            self.mode_callback,
+            10
+        )
+
         self.logic_controller = BrightControl() 
         
         self.main_timer_period = 3.0
         self.state = 0
-        self.main_timer = self.create_timer(self.main_timer_period, self.main_timer_callback)
+        self.main_timer = self.node.create_timer(self.main_timer_period, self.main_timer_callback)
         
         self.publish_time = 0.05 
-        self.publish_timer = self.create_timer(self.publish_time, self.publish_value)
+        self.publish_timer = self.node.create_timer(self.publish_time, self.publish_value)
         
         self.stop_effect_timer = None
+
+    def mode_callback(self, msg):
+        try:
+            new_mode = LightMode(msg.mode + 1)
+            self.set_mode(new_mode, period=msg.period, duration=msg.duration)
+        except ValueError:
+            self.node.get_logger().error(f"Unknown mode: {msg.mode}")
     
     def publish_value(self):
         left_value, right_value = self.logic_controller.bright()  
         
         msg = Brightness()
-        msg.left_value = left_value
-        msg.right_value = right_value
-        
+        msg.left_value = int(left_value) 
+        msg.right_value = int(right_value)
         self.lantern_pub.publish(msg)
 
     def back_to_solid(self):
-        self.logic_controller.set_mode("SOLID")
+        self.logic_controller.set_mode(LightMode.SOLID)
 
-    def set_mode(self, mode: str, period : float, duration : float):
+    def set_mode(self, mode: LightMode, period : float, duration : float):
         self.logic_controller.set_mode(mode, period=period)
         
         if self.stop_effect_timer:
-            self.stop_effect_timer.cancel()
+            self.node.destroy_timer(self.stop_effect_timer)
             self.stop_effect_timer = None
             
-        self.stop_effect_timer = self.create_timer(duration, self.back_to_solid)
+        self.stop_effect_timer = self.node.create_timer(duration, self.back_to_solid)
     
 
     def main_timer_callback(self):
         if self.state == 0:
-            self.set_mode("ONE_BY_ONE", period=0.5, duration=5.0)
+            self.set_mode(LightMode.ONE_BY_ONE, period=0.5, duration=5.0)
             
         elif self.state == 1:
-            self.set_mode("BLINK", period=0.5, duration=5.0)
+            self.set_mode(LightMode.BLINK, period=0.5, duration=5.0)
             
         elif self.state == 2:
-            self.logic_controller.set_mode("SOLID")
+            self.logic_controller.set_mode(LightMode.SOLID)
             if self.stop_effect_timer:
-                self.stop_effect_timer.cancel()
+                self.node.destroy_timer(self.stop_effect_timer)
                 self.stop_effect_timer = None
 
         elif self.state == 3:
-            self.set_mode("FADE", period=0.5, duration=5.0)
+            self.set_mode(LightMode.FADE, period=0.5, duration=5.0)
 
         self.state = (self.state + 1) % 4
         
-
-def main(args=None):
-    rclpy.init(args=args)
-    controller = LanternControl()
-    
-    rclpy.spin(controller)
-    
-    if controller.stop_effect_timer:
-        controller.stop_effect_timer.cancel()
-    if controller.publish_timer:
-        controller.publish_timer.cancel()
-    if controller.main_timer:
-        controller.main_timer.cancel()
-        
-    controller.destroy_node()
-    rclpy.shutdown()
-
-if __name__ == '__main__':
-    main()
