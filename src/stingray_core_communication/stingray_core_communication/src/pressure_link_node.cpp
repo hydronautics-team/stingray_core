@@ -1,4 +1,6 @@
 #include <array>
+#include <bit>
+#include <cstdint>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -25,36 +27,20 @@ public:
     }
 
 private:
-    void onSerialBytes(const uint8_t *data, size_t length) override
-    {
-        serial_line_buffer_.append(reinterpret_cast<const char *>(data), length);
-
-        size_t delimiter_pos = 0;
-        while ((delimiter_pos = serial_line_buffer_.find_first_of("\r\n")) !=
-               std::string::npos)
-        {
-            std::string line = serial_line_buffer_.substr(0, delimiter_pos);
-            serial_line_buffer_.erase(0, delimiter_pos + 1);
-
-            while (!serial_line_buffer_.empty() &&
-                   (serial_line_buffer_.front() == '\r' ||
-                    serial_line_buffer_.front() == '\n'))
-            {
-                serial_line_buffer_.erase(0, 1);
-            }
-
-            if (!line.empty())
-            {
-                publishRaw(line);
-            }
-        }
-    }
-
-    void publishRaw(const std::string &raw_data)
+    void publishRaw(const float value)
     {
         auto msg = std_msgs::msg::String();
-        msg.data = raw_data;
+        msg.data = std::to_string(value);
         data_raw_pub_->publish(std::move(msg));
+    }
+
+    static float decodeFloatLE(const uint8_t *data)
+    {
+        const uint32_t raw = static_cast<uint32_t>(data[0]) |
+                             (static_cast<uint32_t>(data[1]) << 8U) |
+                             (static_cast<uint32_t>(data[2]) << 16U) |
+                             (static_cast<uint32_t>(data[3]) << 24U);
+        return std::bit_cast<float>(raw);
     }
 
     hydrolib::ReturnCode memoryRead(void *buffer, unsigned address,
@@ -72,6 +58,10 @@ private:
     hydrolib::ReturnCode memoryWrite(const void *buffer, unsigned address,
                                      unsigned length)
     {
+        RCLCPP_DEBUG(this->get_logger(),
+                     "Pressure slave write: addr=%u len=%u",
+                     address, length);
+
         if (address + length > memory_.size())
         {
             return hydrolib::ReturnCode::FAIL;
@@ -79,25 +69,22 @@ private:
 
         std::memcpy(memory_.data() + address, buffer, length);
 
-        if (address == 0U && length > 0U)
+        constexpr unsigned kValueAddress = 0U;
+        constexpr unsigned kValueLength = sizeof(float);
+        const bool value_is_written =
+            (address <= kValueAddress) &&
+            ((address + length) >= (kValueAddress + kValueLength));
+
+        if (value_is_written)
         {
-            const auto *bytes = static_cast<const char *>(buffer);
-            std::string raw_data(bytes, bytes + length);
-
-            const auto null_pos = raw_data.find('\0');
-            if (null_pos != std::string::npos)
-            {
-                raw_data.resize(null_pos);
-            }
-
-            publishRaw(raw_data);
+            const float value = decodeFloatLE(memory_.data() + kValueAddress);
+            publishRaw(value);
         }
 
         return hydrolib::ReturnCode::OK;
     }
 
     std::array<uint8_t, 256> memory_{};
-    std::string serial_line_buffer_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr data_raw_pub_;
 };
 

@@ -12,7 +12,7 @@ namespace stingray_core::pressure_sensor {
 struct PressureSensorConfig{
     PressureSensorConfig(const rclcpp::Node::SharedPtr& node)
     : dump_param(node->declare_parameter<double>("dump_param", DEFAULT_DUMP_PARAM)),
-      data_topic(node->declare_parameter<std::string>("data_topic", "/pressure/data_raw"))
+      data_topic(node->declare_parameter<std::string>("data_topic", "/data_raw"))
     {}
     const double  dump_param;
     const std::string data_topic;
