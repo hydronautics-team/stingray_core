@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -115,6 +116,11 @@ public:
     }
 
 protected:
+    virtual void onSerialBytes([[maybe_unused]] const uint8_t *data,
+                               [[maybe_unused]] size_t length)
+    {
+    }
+
     void processIncoming()
     {
         stream_manager_.Process();
@@ -186,8 +192,9 @@ private:
             return;
         }
 
-        const void *data = msg->data.data();
+        const auto *data = msg->data.data();
         const auto length = static_cast<unsigned>(msg->data.size());
+        onSerialBytes(data, static_cast<size_t>(length));
         hydrolib_RingQueue_Push(&tx_queue_, data, static_cast<uint16_t>(length));
         processIncoming();
     }

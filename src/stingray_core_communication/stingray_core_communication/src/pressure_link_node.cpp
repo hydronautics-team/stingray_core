@@ -25,6 +25,38 @@ public:
     }
 
 private:
+    void onSerialBytes(const uint8_t *data, size_t length) override
+    {
+        serial_line_buffer_.append(reinterpret_cast<const char *>(data), length);
+
+        size_t delimiter_pos = 0;
+        while ((delimiter_pos = serial_line_buffer_.find_first_of("\r\n")) !=
+               std::string::npos)
+        {
+            std::string line = serial_line_buffer_.substr(0, delimiter_pos);
+            serial_line_buffer_.erase(0, delimiter_pos + 1);
+
+            while (!serial_line_buffer_.empty() &&
+                   (serial_line_buffer_.front() == '\r' ||
+                    serial_line_buffer_.front() == '\n'))
+            {
+                serial_line_buffer_.erase(0, 1);
+            }
+
+            if (!line.empty())
+            {
+                publishRaw(line);
+            }
+        }
+    }
+
+    void publishRaw(const std::string &raw_data)
+    {
+        auto msg = std_msgs::msg::String();
+        msg.data = raw_data;
+        data_raw_pub_->publish(std::move(msg));
+    }
+
     hydrolib::ReturnCode memoryRead(void *buffer, unsigned address,
                                     unsigned length)
     {
@@ -58,15 +90,14 @@ private:
                 raw_data.resize(null_pos);
             }
 
-            auto msg = std_msgs::msg::String();
-            msg.data = std::move(raw_data);
-            data_raw_pub_->publish(std::move(msg));
+            publishRaw(raw_data);
         }
 
         return hydrolib::ReturnCode::OK;
     }
 
     std::array<uint8_t, 256> memory_{};
+    std::string serial_line_buffer_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr data_raw_pub_;
 };
 
