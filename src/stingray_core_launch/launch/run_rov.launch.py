@@ -11,6 +11,7 @@ def generate_launch_description():
     ms5837_pkg = get_package_share_directory('ms5837_pressure_sensor')
     vectornav_pkg = get_package_share_directory('vectornav')
 
+    pressure_link_launch = os.path.join(comm_pkg, 'launch', 'pressure_link.launch.py')
     thruster_link_launch = os.path.join(comm_pkg, 'launch', 'thruster_link.launch.py')
     core_control_launch = os.path.join(control_pkg, 'launch', 'stingray_core_control.launch.py')
     ms5837_launch = os.path.join(ms5837_pkg, 'launch', 'ms5837.launch.py')
@@ -18,6 +19,10 @@ def generate_launch_description():
 
     thruster_link = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(thruster_link_launch)
+    )
+
+    pressure_link = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(pressure_link_launch)
     )
 
     core_control = IncludeLaunchDescription(
@@ -35,6 +40,6 @@ def generate_launch_description():
     return LaunchDescription([
         thruster_link,
         core_control,
-        ms5837,
+        pressure_link,
         vectornav
     ])

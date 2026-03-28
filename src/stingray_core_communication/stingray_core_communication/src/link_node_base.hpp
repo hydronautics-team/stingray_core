@@ -78,7 +78,7 @@ public:
         serial_pub_ = this->create_publisher<std_msgs::msg::UInt8MultiArray>(
             "serial_write", 10);
         serial_sub_ = this->create_subscription<std_msgs::msg::UInt8MultiArray>(
-            "serial_read", 10,
+            "serial_read", 20,
             std::bind(&LinkNodeBase::readCallback, this, std::placeholders::_1));
         hydrolib_RingQueue_Init(&tx_queue_, work_buf_tx_queue_.data(), kQueueLen);
 

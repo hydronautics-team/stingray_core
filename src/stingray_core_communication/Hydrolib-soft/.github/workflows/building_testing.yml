@@ -1,0 +1,14 @@
+name: Building and testing library
+run-name: Building and testing library
+on: [push]
+jobs:
+  Explore-GitHub-Actions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - run: sudo apt-get install libgtest-dev
+      - run: cmake -B ./build
+      - run: cmake --build ./build
+      - run: ctest --test-dir ./build --rerun-failed --output-on-failure

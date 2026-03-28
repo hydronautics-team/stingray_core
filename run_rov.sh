@@ -14,7 +14,6 @@ colcon build --packages-select \
     io_context \
     asio_cmake_module \
     vectornav_msgs \
-    vectornav \
     stingray_core_launch \
     ms5837_pressure_sensor
 

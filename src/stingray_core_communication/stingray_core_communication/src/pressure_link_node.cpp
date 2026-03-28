@@ -13,7 +13,7 @@ class PressureLinkNode : public baseLink::LinkNodeBase
 public:
     PressureLinkNode()
         : LinkNodeBase(
-              "pressure_link_node", 2, 1,
+              "pressure_link_node", 1, 2,
               [this](void *buffer, unsigned address,
                      unsigned length) { return this->memoryRead(buffer, address, length); },
               [this](const void *buffer, unsigned address,
