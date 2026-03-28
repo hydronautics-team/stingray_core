@@ -11,6 +11,8 @@
         "install/stingray_interfaces/lib/python3.10/site-packages",
     ],
     "files.associations": {
+        "*.hpp": "cpp",
+        "*.cpp": "cpp",
         "cstddef": "cpp",
         "limits": "cpp",
         "version": "cpp",
@@ -89,6 +91,13 @@
         "typeindex": "cpp",
         "typeinfo": "cpp",
         "valarray": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "span": "cpp",
+        "cassert": "cpp",
+        "cerrno": "cpp",
+        "cfloat": "cpp",
+        "charconv": "cpp",
+        "climits": "cpp",
+        "format": "cpp"
     }
 }
