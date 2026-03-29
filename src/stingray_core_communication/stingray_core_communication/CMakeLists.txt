@@ -65,4 +65,25 @@ install(
   DESTINATION share/${PROJECT_NAME}/params
 )
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+
+  ament_add_gtest(test_link_node_base
+    test/test_link_node_base.cpp
+  )
+  target_include_directories(test_link_node_base PRIVATE
+    src
+  )
+  ament_target_dependencies(test_link_node_base
+    rclcpp
+    std_msgs
+  )
+  target_link_libraries(test_link_node_base
+    HydrolibBusApplication
+    HydrolibBusDatalink
+    HydrolibRingQueue
+    HydrolibCommon
+  )
+endif()
+
 ament_package()

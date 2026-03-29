@@ -48,6 +48,5 @@ def generate_launch_description():
         core_control,
         pressure_link,
         pressure_sensor,
-        ms5837,
         vectornav
     ])
