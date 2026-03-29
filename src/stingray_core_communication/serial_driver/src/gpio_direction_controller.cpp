@@ -110,7 +110,7 @@ void GpioDirectionController::initialize()
   }
 
   write_file(direction_path(), "out");
-  write_file(value_path(), "0");
+  write_file(value_path(), "1");
   m_initialized = true;
 }
 
@@ -121,7 +121,7 @@ void GpioDirectionController::set_tx()
   }
 
   initialize();
-  write_file(value_path(), "1");
+  write_file(value_path(), "0");
 }
 
 void GpioDirectionController::set_rx()
@@ -131,7 +131,7 @@ void GpioDirectionController::set_rx()
   }
 
   initialize();
-  write_file(value_path(), "0");
+  write_file(value_path(), "1");
 }
 
 }  // namespace serial_driver

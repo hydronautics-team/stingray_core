@@ -12,4 +12,4 @@ Provided within this package also is a `serial_driver` library without the ROS2 
 - `direction_gpio` (`int`, default `-1`): optional TX/RX direction GPIO for RS485-like control.
   - `-1`: disabled
   - `>= 0`: GPIO number in Linux sysfs global numbering (`/sys/class/gpio/gpioX`)
-  - behavior: sets GPIO to `1` before TX, returns to `0` after TX completion, and forces `0` during open/close
+  - behavior: sets GPIO to `0` before TX, returns to `1` after TX completion, and forces `1` during open/close

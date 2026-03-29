@@ -88,13 +88,13 @@ TEST(GpioDirectionControllerTest, InitTxRxSequence)
   ASSERT_TRUE(controller.is_enabled());
   ASSERT_NO_THROW(controller.initialize());
   EXPECT_EQ(read_file(gpio_dir / "direction"), "out");
-  EXPECT_EQ(read_file(gpio_dir / "value"), "0");
-
-  ASSERT_NO_THROW(controller.set_tx());
   EXPECT_EQ(read_file(gpio_dir / "value"), "1");
 
-  ASSERT_NO_THROW(controller.set_rx());
+  ASSERT_NO_THROW(controller.set_tx());
   EXPECT_EQ(read_file(gpio_dir / "value"), "0");
+
+  ASSERT_NO_THROW(controller.set_rx());
+  EXPECT_EQ(read_file(gpio_dir / "value"), "1");
 }
 
 TEST(GpioDirectionControllerTest, MissingSysfsRootThrows)
