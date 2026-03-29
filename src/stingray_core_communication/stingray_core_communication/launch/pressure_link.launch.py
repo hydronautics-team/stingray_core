@@ -1,16 +1,14 @@
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
+from launch.actions import GroupAction, IncludeLaunchDescription, DeclareLaunchArgument
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch_ros.actions import Node
+from launch_ros.actions import Node, PushRosNamespace
 from ament_index_python.packages import get_package_share_directory
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 import os
 
 def generate_launch_description():
-    # Путь к пакету serial_driver
-    serial_driver_dir = get_package_share_directory('serial_driver')
-    
-    # Путь к вашему файлу параметров
+    ns_arg = DeclareLaunchArgument('ns', default_value='pressure')
+
     pressure_params_file = PathJoinSubstitution([
         get_package_share_directory('stingray_core_communication'),
         'params',
@@ -22,26 +20,35 @@ def generate_launch_description():
         default_value=pressure_params_file,
     )
 
-    # Включение launch-файла serial_driver с передачей аргумента params_file
-    serial_bridge_launch = IncludeLaunchDescription(
+    serial_lc = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(serial_driver_dir, 'launch', 'serial_driver_bridge_node.launch.py')
+            os.path.join(
+                get_package_share_directory('stingray_core_communication'),
+                'launch',
+                'serial_bridge_lc.launch.py'
+            )
         ),
         launch_arguments={
+            'ns': LaunchConfiguration('ns'),
             'params_file': LaunchConfiguration('params_file'),
-            
         }.items()
     )
 
-    return LaunchDescription([
-        params_arg,
-        serial_bridge_launch,
+    link_node = GroupAction([
+        PushRosNamespace(LaunchConfiguration('ns')),
         Node(
             package='stingray_core_communication',
             executable='pressure_link_node',
             name='pressure_link_node',
             parameters=[LaunchConfiguration('params_file')],
-            
+            remappings=[('data_raw', '/data_raw')],
             output='screen'
         )
+    ])
+
+    return LaunchDescription([
+        ns_arg,
+        params_arg,
+        serial_lc,
+        link_node
     ])
