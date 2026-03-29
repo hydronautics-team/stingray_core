@@ -1,5 +1,4 @@
 #include <array>
-#include <bit>
 #include <cstdint>
 #include <cstring>
 #include <memory>
@@ -25,18 +24,17 @@ public:
     }
 
 private:
-    void publishRaw(const float value)
+    void publishRaw(const uint32_t value_mm)
     {
         auto msg = std_msgs::msg::String();
-        msg.data = std::to_string(value);
+        msg.data = std::to_string(value_mm);
         data_raw_pub_->publish(std::move(msg));
     }
 
-    static float decodeFloatLE(const uint8_t *data)
+    static uint32_t decodeUint32LE(const uint8_t *data)
     {
-        const uint32_t raw = static_cast<uint32_t>(data[0]) | (static_cast<uint32_t>(data[1]) << 8U) |
-                             (static_cast<uint32_t>(data[2]) << 16U) | (static_cast<uint32_t>(data[3]) << 24U);
-        return std::bit_cast<float>(raw);
+        return static_cast<uint32_t>(data[0]) | (static_cast<uint32_t>(data[1]) << 8U) |
+               (static_cast<uint32_t>(data[2]) << 16U) | (static_cast<uint32_t>(data[3]) << 24U);
     }
 
     hydrolib::ReturnCode memoryRead(void *buffer, unsigned address, unsigned length)
@@ -62,12 +60,12 @@ private:
         std::memcpy(memory_.data() + address, buffer, length);
 
         constexpr unsigned kValueAddress = 0U;
-        constexpr unsigned kValueLength = sizeof(float);
+        constexpr unsigned kValueLength = sizeof(uint32_t);
         const bool value_is_written = (address <= kValueAddress) && ((address + length) >= (kValueAddress + kValueLength));
 
         if (value_is_written)
         {
-            const float value = decodeFloatLE(memory_.data() + kValueAddress);
+            const uint32_t value = decodeUint32LE(memory_.data() + kValueAddress);
             publishRaw(value);
         }
 
