@@ -17,23 +17,30 @@ def generate_launch_description():
         'pressure.params.yaml'
     ])
 
+    params_arg = DeclareLaunchArgument(
+        'params_file',
+        default_value=pressure_params_file,
+    )
+
     # Включение launch-файла serial_driver с передачей аргумента params_file
     serial_bridge_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(serial_driver_dir, 'launch', 'serial_driver_bridge_node.launch.py')
         ),
         launch_arguments={
-            'params_file': pressure_params_file,
+            'params_file': LaunchConfiguration('params_file'),
             
         }.items()
     )
 
     return LaunchDescription([
+        params_arg,
         serial_bridge_launch,
         Node(
             package='stingray_core_communication',
             executable='pressure_link_node',
             name='pressure_link_node',
+            parameters=[LaunchConfiguration('params_file')],
             
             output='screen'
         )

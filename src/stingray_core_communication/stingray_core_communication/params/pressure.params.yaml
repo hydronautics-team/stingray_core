@@ -1,5 +1,7 @@
 /**:
   ros__parameters:
+    self_addr: 2
+    dev_addr: 1
     device_name: /dev/serial1
     baud_rate: 115200
     flow_control: none

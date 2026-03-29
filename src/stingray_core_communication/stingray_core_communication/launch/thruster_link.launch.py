@@ -17,23 +17,30 @@ def generate_launch_description():
         'thruster.params.yaml'
     ])
 
+    params_arg = DeclareLaunchArgument(
+        'params_file',
+        default_value=thruster_params_file,
+    )
+
     # Включение launch-файла serial_driver с передачей аргумента params_file
     serial_bridge_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(serial_driver_dir, 'launch', 'serial_driver_bridge_node.launch.py')
         ),
         launch_arguments={
-            'params_file': thruster_params_file,
+            'params_file': LaunchConfiguration('params_file'),
             
         }.items()
     )
 
     return LaunchDescription([
+        params_arg,
         serial_bridge_launch,
         Node(
             package='stingray_core_communication',
             executable='thrusters_driver_node',
             name='thrusters_driver_node',
+            parameters=[LaunchConfiguration('params_file')],
             
             output='screen'
         )

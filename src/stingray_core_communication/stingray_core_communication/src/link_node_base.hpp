@@ -57,8 +57,10 @@ public:
     LinkNodeBase(std::string node_name, int self_addr, int dev_addr, MemoryReadCallback read_cb, MemoryWriteCallback write_cb)
         : Node(std::move(node_name)),
           mode_(read_cb && write_cb ? Mode::kSlave : Mode::kMaster),
-          stream_manager_(self_addr, *this, logger),
-          stream_(stream_manager_, dev_addr),
+          self_addr_(declareAddressParameter("self_addr", self_addr)),
+          dev_addr_(declareAddressParameter("dev_addr", dev_addr)),
+          stream_manager_(self_addr_, *this, logger),
+          stream_(stream_manager_, dev_addr_),
           master_(stream_, logger),
           slave_memory_(std::move(read_cb), std::move(write_cb)),
           slave_(stream_, slave_memory_, logger)
@@ -68,7 +70,10 @@ public:
             "serial_read", 20, std::bind(&LinkNodeBase::readCallback, this, std::placeholders::_1));
         hydrolib_RingQueue_Init(&tx_queue_, work_buf_tx_queue_.data(), kQueueLen);
 
-        RCLCPP_INFO(this->get_logger(), "Link node initialized in %s mode", mode_ == Mode::kMaster ? "master" : "slave");
+        RCLCPP_INFO(
+            this->get_logger(),
+            "Link node initialized in %s mode (self_addr=%d, dev_addr=%d)",
+            mode_ == Mode::kMaster ? "master" : "slave", self_addr_, dev_addr_);
     }
 
 public:
@@ -107,6 +112,11 @@ protected:
     }
 
 private:
+    int declareAddressParameter(const char *name, int default_value)
+    {
+        return this->declare_parameter<int>(name, default_value);
+    }
+
     enum class Mode
     {
         kMaster,
@@ -166,6 +176,8 @@ private:
     }
 
     Mode mode_;
+    int self_addr_;
+    int dev_addr_;
 
     rclcpp::Subscription<std_msgs::msg::UInt8MultiArray>::SharedPtr serial_sub_;
     rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr serial_pub_;
