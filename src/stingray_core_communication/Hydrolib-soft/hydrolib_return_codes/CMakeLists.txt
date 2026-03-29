@@ -1,3 +1,0 @@
-add_library(HydrolibReturnCodes INTERFACE)
-
-target_include_directories(HydrolibReturnCodes INTERFACE include)
