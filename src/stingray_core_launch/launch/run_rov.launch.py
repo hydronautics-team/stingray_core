@@ -13,7 +13,7 @@ def generate_launch_description():
 
     thruster_link_launch = os.path.join(comm_pkg, 'launch', 'thruster_link.launch.py')
     core_control_launch = os.path.join(control_pkg, 'launch', 'stingray_core_control.launch.py')
-    ms5837_launch = os.path.join(ms5837_pkg, 'launch', 'ms5837.launch.py')
+    # ms5837_launch = os.path.join(ms5837_pkg, 'launch', 'ms5837.launch.py')
     vectornav_launch = os.path.join(vectornav_pkg, 'launch', 'vectornav.launch.py')
 
     thruster_link = IncludeLaunchDescription(
@@ -24,9 +24,9 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(core_control_launch)
     )
 
-    ms5837 = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(ms5837_launch)
-    )
+    # ms5837 = IncludeLaunchDescription(
+    #     PythonLaunchDescriptionSource(ms5837_launch)
+    # )
 
     vectornav = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(vectornav_launch)
@@ -35,6 +35,6 @@ def generate_launch_description():
     return LaunchDescription([
         thruster_link,
         core_control,
-        ms5837,
+        # ms5837,
         vectornav
     ])
