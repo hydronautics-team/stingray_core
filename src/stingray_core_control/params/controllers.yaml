@@ -33,7 +33,7 @@ stingray_core_control_node:
     controllers.roll.K_i: 1.0
     controllers.roll.I_min: -50.0
     controllers.roll.I_max: 50.0
-    controllers.roll.out_sat: 1.0
+    controllers.roll.out_sat: 200.0
     controllers.roll.ap_K: 1.0
     controllers.roll.ap_T: 0.01
     controllers.roll.grav_bias: 0.0

@@ -35,9 +35,9 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(core_control_launch)
     )
 
-    ms5837 = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(ms5837_launch)
-    )
+    # ms5837 = IncludeLaunchDescription(
+    #     PythonLaunchDescriptionSource(ms5837_launch)
+    # )
 
     vectornav = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(vectornav_launch)
