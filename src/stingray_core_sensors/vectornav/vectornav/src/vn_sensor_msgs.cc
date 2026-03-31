@@ -194,21 +194,9 @@ void VnSensorMsgs::sub_vn_common(const vectornav_msgs::msg::CommonGroup::SharedP
     sensor_msgs::msg::Imu msg;
     msg.header = msg_in->header;
 
-    if (use_enu) {
-      convert_vec_frd_to_rfu_custom_rate(msg_in->angularrate, msg.angular_velocity);
-      convert_vec_frd_to_rfu_custom(msg_in->accel, msg.linear_acceleration);
-      convert_to_enu(msg_in->quaternion, msg.orientation);
-    } else {
-      msg.angular_velocity.x = msg_in->angularrate.x * (-1);
-      msg.angular_velocity.y = msg_in->angularrate.y * (-1);
-      msg.angular_velocity.z = msg_in->angularrate.z * (-1);
-      //msg.angular_velocity = msg_in->angularrate*(-1);
-      //msg.linear_acceleration = msg_in->accel;
-      msg.linear_acceleration.x = msg_in->accel.x*(-1);
-      msg.linear_acceleration.y = msg_in->accel.y*(-1);
-      msg.linear_acceleration.z = msg_in->accel.z;
-      msg.orientation = msg_in->quaternion;
-    }
+    msg.angular_velocity = msg_in->angularrate;
+    msg.linear_acceleration = msg_in->accel;
+    msg.orientation = msg_in->quaternion;
 
     fill_covariance_from_param("orientation_covariance", msg.orientation_covariance);
     fill_covariance_from_param("angular_velocity_covariance", msg.angular_velocity_covariance);
@@ -218,22 +206,14 @@ void VnSensorMsgs::sub_vn_common(const vectornav_msgs::msg::CommonGroup::SharedP
     pub_imu_->publish(msg);
   }
 
-  // IMU (Uncompensated)
+  // IMU (Uncompensated) — FRD напрямую
   {
     sensor_msgs::msg::Imu msg;
     msg.header = msg_in->header;
 
-    if (use_enu) {
-      convert_vec_frd_to_rfu_custom(msg_in->imu_rate, msg.angular_velocity);
-      convert_vec_frd_to_rfu_custom(msg_in->imu_accel, msg.linear_acceleration);
-      convert_to_enu(msg_in->quaternion, msg.orientation);
-    } else {
-      msg.angular_velocity.x = msg_in->imu_rate.x * (-1);
-      msg.angular_velocity.y = msg_in->imu_rate.y * (-1);
-      msg.angular_velocity.z = msg_in->imu_rate.z * (-1);
-      //msg.angular_velocity = msg_in->imu_rate*(-1);
-      msg.linear_acceleration = msg_in->imu_accel;
-    }
+    msg.angular_velocity = msg_in->imu_rate;
+    msg.linear_acceleration = msg_in->imu_accel;
+    msg.orientation = msg_in->quaternion;  // можно оставить или убрать
 
     fill_covariance_from_param("angular_velocity_covariance", msg.angular_velocity_covariance);
     fill_covariance_from_param(
@@ -241,16 +221,12 @@ void VnSensorMsgs::sub_vn_common(const vectornav_msgs::msg::CommonGroup::SharedP
 
     pub_imu_uncompensated_->publish(msg);
   }
-
+  
   // Magnetic Field
   {
     sensor_msgs::msg::MagneticField msg;
     msg.header = msg_in->header;
-    if (use_enu) {
-      convert_vec_frd_to_rfu_custom(msg_in->magpres_mag, msg.magnetic_field);
-    } else {
-      msg.magnetic_field = msg_in->magpres_mag;
-    }
+    msg.magnetic_field = msg_in->magpres_mag;
 
     fill_covariance_from_param("magnetic_covariance", msg.magnetic_field_covariance);
 
@@ -308,47 +284,35 @@ void VnSensorMsgs::sub_vn_common(const vectornav_msgs::msg::CommonGroup::SharedP
   {
     geometry_msgs::msg::TwistWithCovarianceStamped msg;
     msg.header = msg_in->header;
-    if (use_enu) {
-      convert_vec_frd_to_rfu_custom(ins_velbody_, msg.twist.twist.linear);
-      convert_vec_frd_to_rfu_custom(msg_in->angularrate, msg.twist.twist.angular);
-    } else {
-      msg.twist.twist.linear = ins_velbody_;
-      msg.twist.twist.angular.x = msg_in->angularrate.x * (-1);
-      msg.twist.twist.angular.y = msg_in->angularrate.y * (-1);
-      msg.twist.twist.angular.z = msg_in->angularrate.z * (-1);
-      //msg.twist.twist.angular = msg_in->angularrate*(-1);
-    }
-
+    msg.twist.twist.linear = ins_velbody_;
+    msg.twist.twist.angular = msg_in->angularrate;
     /// TODO(Dereck): Velocity Covariance
 
     pub_velocity_->publish(msg);
   }
 
-  // Pose
+  // Pose (FRD → ECEF)
   {
     geometry_msgs::msg::PoseWithCovarianceStamped msg;
     msg.header = msg_in->header;
-    msg.header.frame_id = "earth";
+    msg.header.frame_id = "earth";  // ECEF
     msg.pose.pose.position = ins_posecef_;
 
-    // Converts Quaternion to ECEF
     tf2::Quaternion q_frd2ned, q_ned2ecef;
     tf2::fromMsg(msg_in->quaternion, q_frd2ned);
+
     auto latitude = deg2rad(msg_in->position.x);
     auto longitude = deg2rad(msg_in->position.y);
-    q_ned2ecef = tf2::Quaternion(tf2::Vector3(0, 0, 1), longitude)
-                  * tf2::Quaternion(tf2::Vector3(0, 1, 0), -M_PI/2 - latitude);
 
-    if (use_enu) {
-      static const tf2::Quaternion q_rfu2frd(tf2::Vector3(1, 1, 0).normalized(), M_PI);
-      tf2::Quaternion q_rfu2ecef =q_ned2ecef * q_frd2ned * q_rfu2frd;
-      msg.pose.pose.orientation = tf2::toMsg(q_rfu2ecef);
-    } else {
-      tf2::Quaternion q_frd2ecef =q_ned2ecef * q_frd2ned;
-      msg.pose.pose.orientation = tf2::toMsg(q_frd2ecef);
-    }
+    // NED → ECEF
+    q_ned2ecef =
+        tf2::Quaternion(tf2::Vector3(0, 0, 1), longitude) *
+        tf2::Quaternion(tf2::Vector3(0, 1, 0), -M_PI/2 - latitude);
 
-    /// TODO(Dereck): Pose Covariance
+    // FRD → ECEF
+    tf2::Quaternion q_frd2ecef = q_ned2ecef * q_frd2ned;
+
+    msg.pose.pose.orientation = tf2::toMsg(q_frd2ecef);
 
     pub_pose_->publish(msg);
   }
