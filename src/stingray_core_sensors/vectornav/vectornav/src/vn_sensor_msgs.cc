@@ -194,8 +194,16 @@ void VnSensorMsgs::sub_vn_common(const vectornav_msgs::msg::CommonGroup::SharedP
     sensor_msgs::msg::Imu msg;
     msg.header = msg_in->header;
 
-    msg.angular_velocity = msg_in->angularrate;
-    msg.linear_acceleration = msg_in->accel;
+    auto acc = msg_in->accel;
+    auto gyro = msg_in->angularrate;
+
+    acc.y = -acc.y;
+    gyro.x = -gyro.x;
+    gyro.y = -gyro.y;
+    gyro.z = -gyro.z;
+
+    msg.linear_acceleration = acc;
+    msg.angular_velocity = gyro;
     msg.orientation = msg_in->quaternion;
 
     fill_covariance_from_param("orientation_covariance", msg.orientation_covariance);
@@ -206,14 +214,21 @@ void VnSensorMsgs::sub_vn_common(const vectornav_msgs::msg::CommonGroup::SharedP
     pub_imu_->publish(msg);
   }
 
-  // IMU (Uncompensated) — FRD напрямую
+  // IMU (Uncompensated)
   {
     sensor_msgs::msg::Imu msg;
     msg.header = msg_in->header;
 
-    msg.angular_velocity = msg_in->imu_rate;
-    msg.linear_acceleration = msg_in->imu_accel;
-    msg.orientation = msg_in->quaternion;  // можно оставить или убрать
+    auto acc = msg_in->imu_accel;
+    auto gyro = msg_in->imu_rate;
+
+    // FIX: FRD → FRD (Y вправо)
+    acc.y = -acc.y;
+    gyro.y = -gyro.y;
+
+    msg.linear_acceleration = acc;
+    msg.angular_velocity = gyro;
+    msg.orientation = msg_in->quaternion;
 
     fill_covariance_from_param("angular_velocity_covariance", msg.angular_velocity_covariance);
     fill_covariance_from_param(
