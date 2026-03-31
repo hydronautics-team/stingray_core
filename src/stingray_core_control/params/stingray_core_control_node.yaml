@@ -3,27 +3,26 @@ stingray_core_control_node:
     rate_hz: 100.0
     topic_control_data: /control/data
     topic_loop_flags: /control/loop_flags
-    topic_imu_angular: /vectornav/raw/common/yawpitchroll
+    topic_imu_angular: /vectornav/raw/common
     topic_imu_linear_accel: /vectornav/imu_accel
     topic_imu_angular_rate: /vectornav/imu
-    thrusters:           
-    - sway_back          
-    - depth_front_right  
-    - sway_front         
-    - depth_back_right   
-    - surge_upper_right  
-    - surge_upper_left   
-    - depth_back_left    
-    - depth_front_left   
-    - surge_lower_left   
-    - surge_lower_right  
-    axes_u:
-    - u_surge
-    - u_sway
-    - u_heave
-    - u_roll
-    - u_pitch
-    - u_yaw
+    topic_dvl_data: /dvl/data
+    thrusters:
+    - surge_upper_left
+    - depth_front_right
+    - sway_front
+    - depth_back_right
+    - surge_upper_right
+    - sway_back
+    - depth_back_left
+    - depth_front_left
+    - surge_lower_left
+    - surge_lower_right
+    - surge_lower_left
+    - sway_back
+    - surge_upper_right
+    - sway_front
+    - surge_upper_left
     axes:
     - surge
     - sway
@@ -92,5 +91,9 @@ stingray_core_control_node:
     - ap_K
     - ap_T
     flag_setup_feedback_speed: false
+    use_dvl_velocity: false
+    use_distance_measurement: false
+    dvl_velocity_alpha: 0.2
+    dvl_timeout_sec: 0.5
     debug_publish: true
     use_sim_time: false

@@ -6,106 +6,144 @@ Minimal ROS2 node skeleton with 100 Hz control loop callback.
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile
+from rclpy.qos import (
+    QoSProfile,
+    HistoryPolicy,
+    ReliabilityPolicy,
+    DurabilityPolicy,
+)
 from rclpy.parameter import Parameter
+from rcl_interfaces.msg import ParameterDescriptor
 from rcl_interfaces.msg import SetParametersResult
 
 import time
-import math
-import yaml
-import os
 
 from geometry_msgs.msg import Twist, Vector3
 from std_msgs.msg import Float32, Float64, UInt8, Bool, UInt8MultiArray
 from sensor_msgs.msg import Imu
 from vectornav_msgs.msg import CommonGroup
-from rclpy.qos import qos_profile_sensor_data
+from dvl_msgs.msg import DVL
 
-from .thruster_mixer import ThrusterMixer
-from .controllers import (
+from .control.thruster_mixer import ThrusterMixer
+from .control.controllers import (
     YawController, PitchController, RollController,
     DepthController, SurgeController, SwayController
 )
-from .save_params import save_params
-from ament_index_python.packages import get_package_share_directory
+from .utils.save_params import save_params
+from .state.imu import ImuState
+from .state.control import ControlState
+from .control.axis_controller import (
+    AxisController,
+    AngularAxisController,
+    LinearAxisController,
+    LinearVelocityAxisController,
+)
 
 
 class StingrayCoreControlNode(Node):
     def __init__(self):
         super().__init__('stingray_core_control_node')
+        self._init_config()
+        self._init_control_core()
+        self._init_ros_interfaces()
+        self._init_runtime()
 
-        # --- параметры ---
+        self.get_logger().info(
+            f"Started at {self.rate_hz} Hz | axes={self.axes} | thrusters={len(self.thrusters)}"
+        )
+
+    def control_loop(self):
+        now = time.time()
+        dt = now - self.last_time if self.last_time is not None else 0.0
+        self.last_time = now
+        self.last_dt = max(min(dt, 0.05), 1e-3)
+
+        self._update_motion_estimation(self.last_dt)
+
+        # === 1. Определяем управляющие воздействия ===
+        u: dict[str, float] = {}
+
+        for axis in self.axes:
+            if axis in self.axis_ctrl and self.control.enabled[axis]:
+                u[axis] = self.axis_ctrl[axis].compute(
+                    target=self.control.impact[axis],
+                    dt=self.last_dt,
+                )
+            else:
+                u[axis] = self.control.impact[axis]
+
+        # === 2. Преобразуем в команды thrusters ===
+        control_list = [u[a] for a in self.axes]
+        thruster_cmds = self.mixer.mix_from_list(control_list)
+
+        # === 3. Публикуем thruster_cmd ===
+        msg = UInt8MultiArray()
+        msg.data = thruster_cmds
+        self.pub_thruster_cmd.publish(msg)
+
+        # === 4. Публикуем ориентацию ===
+        self.pub_yaw.publish(Float64(data=self.imu.yaw))
+        self.pub_pitch.publish(Float64(data=self.imu.pitch))
+        self.pub_roll.publish(Float64(data=self.imu.roll))
+
+    def _init_config(self):
         self.declare_parameter('rate_hz', 100.0)
-        self.rate_hz = float(self.get_parameter(
-            'rate_hz').get_parameter_value().double_value)
-        
+        self.rate_hz = float(self.get_parameter('rate_hz').value)
+
         self.declare_parameter('flag_setup_feedback_speed', False)
-        self.flag_setup_feedback_speed = self.get_parameter(
-            'flag_setup_feedback_speed').get_parameter_value().bool_value
+        self.flag_setup_feedback_speed = bool(self.get_parameter('flag_setup_feedback_speed').value)
 
-        self.declare_parameter('topic_imu_angular', '/vectornav/raw/common')
-        self.declare_parameter('topic_imu_linear_accel',
-                               '/vectornav/imu_accel')
-        self.declare_parameter('topic_imu_angular_rate', '/vectornav/imu')
-        self.declare_parameter('topic_loop_flags', '/control/loop_flags')
-        self.declare_parameter('topic_pressure_sensor', '/sensors/pressure')
-        self.declare_parameter('topic_control_data', '/control/data')
-        self.declare_parameter('vectornav_yaw_offset_deg', 0.0)
+        self.declare_parameter('debug_publish', False)
 
-        self.topic_imu_angular = self.get_parameter(
-            'topic_imu_angular').get_parameter_value().string_value
-        self.topic_imu_linear_accel = self.get_parameter(
-            'topic_imu_linear_accel').get_parameter_value().string_value
-        self.topic_imu_angular_rate = self.get_parameter(
-            'topic_imu_angular_rate').get_parameter_value().string_value
-        self.topic_loop_flags = self.get_parameter(
-            'topic_loop_flags').get_parameter_value().string_value
-        self.topic_pressure_sensor = self.get_parameter(
-            'topic_pressure_sensor').get_parameter_value().string_value
-        self.topic_control_data = self.get_parameter(
-            'topic_control_data').get_parameter_value().string_value
-        self.vectornav_yaw_offset = float(self.get_parameter(
-            'vectornav_yaw_offset_deg').get_parameter_value().double_value)
-        
-        # --- yaw zeroing ---
-        self.yaw_zero_offset = 0.0
-        self.imu_yaw_raw = 0.0
+        defaults = {
+            'topic_imu_angular': '/vectornav/raw/common',
+            'topic_imu_linear_accel': '/vectornav/imu_accel',
+            'topic_imu_angular_rate': '/vectornav/imu',
+            'topic_dvl_data': '/dvl/data',
+            'topic_loop_flags': '/control/loop_flags',
+            'topic_pressure_sensor': '/sensors/pressure',
+            'topic_control_data': '/control/data',
+            'topic_zero_yaw': '/imu/zero_yaw',
+        }
 
-        self.declare_parameter('topic_zero_yaw', '/imu/zero_yaw')
-        self.topic_zero_yaw = self.get_parameter(
-            'topic_zero_yaw').get_parameter_value().string_value
+        for name, default in defaults.items():
+            self.declare_parameter(name, default)
+            setattr(self, name, self.get_parameter(name).value)
 
-        self.sub_zero_yaw = self.create_subscription(
-            Bool, self.topic_zero_yaw, self.zero_yaw_callback, 10)
+        self.declare_parameter('axes', ["surge", "sway", "heave", "roll", "pitch", "yaw"])
+        self.axes = list(self.get_parameter('axes').value)
 
-        
-        if not self.has_parameter('thrusters'):
-            self.declare_parameter('thrusters', ["",""])
+        self.declare_parameter('use_dvl_velocity', False)
+        self.use_dvl_velocity = bool(self.get_parameter('use_dvl_velocity').value)
 
-        self.declare_parameter('axes_u', ["u_surge", "u_sway", "u_heave", "u_roll", "u_pitch", "u_yaw"])
-        self.thrusters = list(self.get_parameter('thrusters').get_parameter_value().string_array_value)
-        self.axes_u = list(self.get_parameter('axes_u').get_parameter_value().string_array_value)
-        
+        self.declare_parameter('use_distance_measurement', False)
+        self.use_distance_measurement = bool(self.get_parameter('use_distance_measurement').value)
 
+        self.declare_parameter('dvl_velocity_alpha', 0.2)
+        self.dvl_velocity_alpha = float(self.get_parameter('dvl_velocity_alpha').value)
+
+        self.declare_parameter('dvl_timeout_sec', 0.5)
+        self.dvl_timeout_sec = float(self.get_parameter('dvl_timeout_sec').value)
+
+        self.declare_parameter('thrusters', Parameter.Type.STRING_ARRAY)
+        self.thrusters = list(self.get_parameter('thrusters').value)
+
+    def _init_control_core(self):
         coeffs = {}
-        for t in self.thrusters:
+        for thr in self.thrusters:
             row = []
-            for a in self.axes_u:
-                param_name = f"{t}_{a}"
-                if not self.has_parameter(param_name):
-                    self.declare_parameter(param_name, 0)
-                p = self.get_parameter(param_name).get_parameter_value()
-                val = p.integer_value
-                row.append(val)
-            coeffs[t] = row
+            for axis in self.axes:
+                pname = f"{thr}_{axis}"
+                if not self.has_parameter(pname):
+                    self.declare_parameter(
+                        pname,
+                        0.0,
+                        ParameterDescriptor(dynamic_typing=True),
+                    )
+                row.append(float(self.get_parameter(pname).value))
+            coeffs[thr] = row
 
-        # create pure mixer
-        self.mixer = ThrusterMixer(self.thrusters, self.axes_u, coeffs)
-        self.get_logger().info(f"ThrusterMixer initialized: thrusters={self.thrusters}, axes={self.axes_u}, coeffs= {coeffs}")
-
-        # subscribe to parameter changes to update coeffs dynamically
-
-        self.controllers = {}
+        self.mixer = ThrusterMixer(self.thrusters, self.axes, coeffs)
 
         axis_class_map = {
             'yaw': YawController,
@@ -113,194 +151,249 @@ class StingrayCoreControlNode(Node):
             'roll': RollController,
             'heave': DepthController,
             'surge': SurgeController,
-            'sway': SwayController
+            'sway': SwayController,
         }
 
-        self.declare_parameter('axes', ["surge", "sway", "heave", "roll", "pitch", "yaw"])
-        self.axes = list(self.get_parameter('axes').get_parameter_value().string_array_value)
-
-        # внутри ноды
+        self.controllers = {}
+        self.param_keys = ["K_p", "K_1", "K_2", "K_i", "I_min", "I_max", "out_sat", "ap_K", "ap_T"]
         for axis in self.axes:
-            # Получаем список ключей для оси
-            self.declare_parameter(axis, ["K_p", "K_1", "K_2", "K_i", "I_min", "I_max", "out_sat", "ap_K", "ap_T"])
-            self.param_keys = self.get_parameter(axis).get_parameter_value().string_array_value
-
-            # Загружаем параметры
-            params_dict = {}
+            params = {}
             for key in self.param_keys:
-                param_name = f'controllers.{axis}.{key}'
-                self.declare_parameter(param_name, 0.0)
-                params_dict[key] = self.get_parameter(param_name).value
+                pname = f"controllers.{axis}.{key}"
+                self.declare_parameter(
+                    pname,
+                    0.0,
+                    ParameterDescriptor(dynamic_typing=True),
+                )
+                params[key] = float(self.get_parameter(pname).value)
 
-            # Инициализируем контроллер конкретного класса
-            ctrl_class = axis_class_map[axis]  # всегда берём нужный класс
-            self.controllers[axis] = ctrl_class(**params_dict)
+            if axis in ("pitch", "roll"):
+                for key in ("grav_bias", "grav_gain", "grav_offset_deg"):
+                    pname = f"controllers.{axis}.{key}"
+                    self.declare_parameter(
+                        pname,
+                        0.0,
+                        ParameterDescriptor(dynamic_typing=True),
+                    )
+                    params[key] = float(self.get_parameter(pname).value)
 
+            self.controllers[axis] = axis_class_map[axis](**params)
 
-        self.get_logger().info(f"Controllers initialized: {self.controllers}")
+        for ctrl in self.controllers.values():
+            ctrl.set_debug_hook(self.debug_cb)
 
-
-        qos = QoSProfile(depth=10)
-
-        # --- подписки ---
-        self.sub_imu_angular = self.create_subscription(
-            CommonGroup, "/vectornav/raw/common", self.imu_angular_callback, qos_profile_sensor_data)
-        self.sub_imu_linear_accel = self.create_subscription(
-            Vector3, self.topic_imu_linear_accel, self.imu_linear_accel_callback, qos)
-        self.sub_imu_angular_rate = self.create_subscription(
-            Imu, self.topic_imu_angular_rate, self.imu_angular_rate_callback, qos)
-        
-        # --- my orientation publishers ---
-        self.pub_yaw   = self.create_publisher(Float64, '~/orientation/yaw', 10)
-        self.pub_pitch = self.create_publisher(Float64, '~/orientation/pitch', 10)
-        self.pub_roll  = self.create_publisher(Float64, '~/orientation/roll', 10)
-
-
-        # loop flags — используем UInt8 (битфлаги)
-        self.sub_control_mode_flags = self.create_subscription(
-            UInt8, self.topic_loop_flags, self.control_mode_flags_callback, qos)
-
-        # pressure: обычно Float32
-        self.sub_pressure_sensor = self.create_subscription(
-            Float32, self.topic_pressure_sensor, self.pressure_sensor_callback, qos)
-
-        # control data (входные "impact" команды)
-        self.sub_control_data = self.create_subscription(
-            Twist, self.topic_control_data, self.control_data_callback, qos)
-
-        # паблишер
-        self.pub_thruster_cmd = self.create_publisher(
-            UInt8MultiArray, '/thruster/cmd', qos)
-
-        # --- инициализация состояний ---
-        self.imu_yaw = 0.0
-        self.imu_pitch = 0.0
-        self.imu_roll = 0.0
-        self.imu_accel_x = 0.0
-        self.imu_accel_y = 0.0
-        self.imu_accel_z = 0.0
-        self.imu_rate_x = 0.0
-        self.imu_rate_y = 0.0
-        self.imu_rate_z = 0.0
-
-        # входные импакты (по умолчанию нули)
-        self.impact_surge = 0.0
-        self.impact_sway = 0.0
-        self.impact_depth = 0.0
-        self.impact_roll = 0.0
-        self.impact_pitch = 0.0
-        self.impact_yaw = 0.0
-
-        # флаги управления (по умолчанию off)
-        self.control_mode_flag_surge = False
-        self.control_mode_flag_sway = False
-        self.control_mode_flag_heave = False
-        self.control_mode_flag_yaw = False
-        self.control_mode_flag_pitch = False
-        self.control_mode_flag_roll = False
-
+        self.imu = ImuState()
+        self.control = ControlState.from_axes(self.axes)
         self.depth = 0.0
-        self.yaw_ctrl = YawController(
-            K_p=self.controllers['yaw'].K_p,
-            K_1=self.controllers['yaw'].K_1,
-            K_2=self.controllers['yaw'].K_2,
-            K_i=self.controllers['yaw'].K_i,
-            I_max=self.controllers['yaw'].I_max,
-            I_min=self.controllers['yaw'].I_min,
-            out_sat=self.controllers['yaw'].out_sat,
-            ap_K=self.controllers['yaw'].ap_K,
-            ap_T=self.controllers['yaw'].ap_T
-        )
-        self.depth_ctrl = DepthController(
-            K_p=self.controllers['heave'].K_p,
-            K_1=self.controllers['heave'].K_1,
-            K_2=self.controllers['heave'].K_2,
-            K_i=self.controllers['heave'].K_i,
-            I_max=self.controllers['heave'].I_max,
-            I_min=self.controllers['heave'].I_min,
-            out_sat=self.controllers['heave'].out_sat,
-            ap_K=self.controllers['heave'].ap_K,
-            ap_T=self.controllers['heave'].ap_T
-        )
+        self.distance_to_bottom = 0.0
 
-        self.pitch_ctrl = PitchController(
-            K_p=self.controllers['heave'].K_p,
-            K_1=self.controllers['heave'].K_1,
-            K_2=self.controllers['heave'].K_2,
-            K_i=self.controllers['heave'].K_i,
-            I_max=self.controllers['heave'].I_max,
-            I_min=self.controllers['heave'].I_min,
-            out_sat=self.controllers['heave'].out_sat,
-            ap_K=self.controllers['heave'].ap_K,
-            ap_T=self.controllers['heave'].ap_T
-        )
+        self.surge_velocity_imu = 0.0
+        self.sway_velocity_imu = 0.0
+        self.heave_velocity_imu = 0.0
+        self.surge_velocity_est = 0.0
+        self.sway_velocity_est = 0.0
+        self.heave_velocity_est = 0.0
 
-        # self.roll_ctrl = RollController(Kp=1.0, K_stage=1.0, out_sat=100.0, ap_K=1.0, ap_T=0.1)
-        # self.surge_ctrl = SurgeController(Kp=1.0, out_sat=100.0)
-        # self.sway_ctrl = SwayController(Kp=1.0, out_sat=100.0)
+        self.dvl_velocity_x = 0.0
+        self.dvl_velocity_y = 0.0
+        self.dvl_velocity_z = 0.0
+        self.dvl_velocity_valid = False
+        self.dvl_last_time = 0.0
 
-        self.declare_parameter('debug_publish', False)
-        self.pub_err_position   = self.create_publisher(Float64, "~/debug/err_position", 10)
-        self.pub_output_pi      = self.create_publisher(Float64, "~/debug/output_pi", 10)
-        self.pub_feedback_speed = self.create_publisher(Float64, "~/debug/feedback_speed", 10)
-        self.pub_measurement_rate    = self.create_publisher(Float64, "~/debug/measurement_rate", 10)
-        self.pub_out            = self.create_publisher(Float64, "~/debug/out", 10)
-        self.yaw_ctrl.set_debug_hook(self.debug_cb)
-        self.depth_ctrl.set_debug_hook(self.debug_cb)
+        self.yaw_zero_offset = 0.0
+        self.imu_yaw_raw = 0.0
+
+        self.axis_ctrl: dict[str, AxisController] = {
+            "yaw": AngularAxisController(
+                controller=self.controllers["yaw"],
+                angle_fn=lambda: self.imu.yaw,
+                rate_fn=lambda: self.imu.rate_z,
+                feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
+            ),
+            "pitch": AngularAxisController(
+                controller=self.controllers["pitch"],
+                angle_fn=lambda: self.imu.pitch,
+                rate_fn=lambda: self.imu.rate_y,
+                feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
+            ),
+            "roll": AngularAxisController(
+                controller=self.controllers["roll"],
+                angle_fn=lambda: self.imu.roll,
+                rate_fn=lambda: self.imu.rate_x,
+                feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
+            ),
+            "heave": LinearAxisController(
+                controller=self.controllers["heave"],
+                pos_fn=lambda: self.depth,
+                vel_fn=self._get_heave_velocity_measurement,
+                accel_fn=lambda: self.imu.accel_z,
+                feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
+            ),
+            "surge": LinearVelocityAxisController(
+                controller=self.controllers["surge"],
+                vel_fn=self._get_surge_velocity_measurement,
+                accel_fn=lambda: self.imu.accel_x,
+            ),
+            "sway": LinearVelocityAxisController(
+                controller=self.controllers["sway"],
+                vel_fn=self._get_sway_velocity_measurement,
+                accel_fn=lambda: self.imu.accel_y,
+            ),
+        }
+
+        # fallback для остальных осей
+        # for axis in self.axes:
+        #     if axis not in self.axis_ctrl:
+        #         self.axis_ctrl[axis] = PassthroughAxisController()
 
 
+    def _init_ros_interfaces(self):
+        self._init_subscriptions()
+        self._init_publishers()
         self.add_on_set_parameters_callback(self._on_params_changed)
 
-        # таймер
+    def _init_runtime(self):
         self.last_time = time.time()
         self.timer = self.create_timer(1.0 / self.rate_hz, self.control_loop)
-
-        self._last_status_log = 0.0
-        self._status_log_interval = 1.0  # сек
-
-        self.get_logger().info(
-            f"StingrayCoreControlNode started at {self.rate_hz} Hz")
 
     def normalize_angle_deg(self, angle_deg):
         """Нормализует угол в градусах в диапазон [-180, 180)."""
         a = (angle_deg + 180.0) % 360.0 - 180.0
         return a
 
-    def control_loop(self):
-        now = time.time()
-        dt = now - self.last_time if self.last_time is not None else 0.0
-        self.last_time = now
-        self.last_dt = dt
-        # self.get_logger().info(f"self.flag_setup_feedback_speed={self.flag_setup_feedback_speed}")
-        # === 1. Определяем управляющие воздействия ===
-        u_surge = self.compute_surge() if self.control_mode_flag_surge else self.impact_surge
-        u_sway = self.compute_sway() if self.control_mode_flag_sway else self.impact_sway
-        u_heave = self.compute_heave() if self.control_mode_flag_heave else self.impact_depth
-        u_roll = self.compute_roll() if self.control_mode_flag_roll else self.impact_roll
-        u_pitch = self.compute_pitch() if self.control_mode_flag_pitch else self.impact_pitch
-        u_yaw = self.compute_yaw() if self.control_mode_flag_yaw else self.impact_yaw
+    def _is_dvl_fresh(self) -> bool:
+        if self.dvl_last_time <= 0.0:
+            return False
+        return (time.time() - self.dvl_last_time) <= self.dvl_timeout_sec
 
-        # === 2. Преобразуем в команды thrusters ===
-        control_list = [u_surge, u_sway, u_heave, u_roll, u_pitch, u_yaw]
-        thruster_cmds = self.mixer.mix_from_list(control_list)
+    def _update_motion_estimation(self, dt: float):
+        # IMU-only оценка скоростей интегрированием ускорений
+        self.surge_velocity_imu += self.imu.accel_x * dt
+        self.sway_velocity_imu += self.imu.accel_y * dt
+        self.heave_velocity_imu += self.imu.accel_z * dt
 
-        # === 3. Публикуем UInt8MultiArray ===
-        msg = UInt8MultiArray()
-        msg.data = thruster_cmds
-        self.pub_thruster_cmd.publish(msg)
+        use_dvl_now = self.use_dvl_velocity and self.dvl_velocity_valid and self._is_dvl_fresh()
+        alpha = max(0.0, min(1.0, self.dvl_velocity_alpha))
 
-        # === 4. Публикуем ориентацию ===
-        self.pub_yaw.publish(Float64(data=self.imu_yaw))
-        self.pub_pitch.publish(Float64(data=self.imu_pitch))
-        self.pub_roll.publish(Float64(data=self.imu_roll))
+        if use_dvl_now:
+            # IMU + DVL: blended correction для снижения дрейфа IMU
+            self.surge_velocity_est = alpha * self.surge_velocity_imu + (1.0 - alpha) * self.dvl_velocity_x
+            self.sway_velocity_est = alpha * self.sway_velocity_imu + (1.0 - alpha) * self.dvl_velocity_y
+            self.heave_velocity_est = alpha * self.heave_velocity_imu + (1.0 - alpha) * self.dvl_velocity_z
+        else:
+            # IMU-only
+            self.surge_velocity_est = self.surge_velocity_imu
+            self.sway_velocity_est = self.sway_velocity_imu
+            self.heave_velocity_est = self.heave_velocity_imu
 
+    def _get_surge_velocity_measurement(self) -> float:
+        return self.surge_velocity_est
 
-        # Логируем статус 1 раз в секунду, а не каждый тик
-        if now - self._last_status_log > self._status_log_interval:
-            # self.get_logger().info(f"Thrusters command: {thruster_cmds}")
-            # self.get_logger().debug(f"Control loop tick: dt={dt:.6f} s")
-            self._last_status_log = now
+    def _get_sway_velocity_measurement(self) -> float:
+        return self.sway_velocity_est
 
+    def _get_heave_velocity_measurement(self) -> float:
+        return self.heave_velocity_est
+
+    def _init_subscriptions(self):
+        # Explicit QoS profiles for deterministic behavior by topic class.
+        qos_sensor = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE,
+        )
+
+        qos_command = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=5,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE,
+        )
+
+        qos_event = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE,
+        )
+
+        self.sub_imu_angular = self.create_subscription(
+            CommonGroup, self.topic_imu_angular,
+            self.imu_angular_callback, qos_sensor
+        )
+
+        self.sub_imu_linear_accel = self.create_subscription(
+            Vector3, self.topic_imu_linear_accel,
+            self.imu_linear_accel_callback, qos_sensor
+        )
+
+        self.sub_imu_angular_rate = self.create_subscription(
+            Imu, self.topic_imu_angular_rate,
+            self.imu_angular_rate_callback, qos_sensor
+        )
+
+        self.sub_dvl_data = self.create_subscription(
+            DVL, self.topic_dvl_data,
+            self.dvl_data_callback, qos_sensor
+        )
+
+        self.sub_control_mode_flags = self.create_subscription(
+            UInt8, self.topic_loop_flags,
+            self.control_mode_flags_callback, qos_command
+        )
+
+        self.sub_pressure_sensor = self.create_subscription(
+            Float32, self.topic_pressure_sensor,
+            self.pressure_sensor_callback, qos_sensor
+        )
+
+        self.sub_control_data = self.create_subscription(
+            Twist, self.topic_control_data,
+            self.control_data_callback, qos_command
+        )
+
+        self.sub_zero_yaw = self.create_subscription(
+            Bool, self.topic_zero_yaw,
+            self.zero_yaw_callback, qos_event
+        )
+
+    def _init_publishers(self):
+        qos_actuation = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE,
+        )
+
+        qos_telemetry = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE,
+        )
+
+        qos_debug = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE,
+        )
+
+        self.pub_thruster_cmd = self.create_publisher(
+            UInt8MultiArray, '/thruster/cmd', qos_actuation
+        )
+
+        self.pub_yaw = self.create_publisher(Float64, '~/orientation/yaw', qos_telemetry)
+        self.pub_pitch = self.create_publisher(Float64, '~/orientation/pitch', qos_telemetry)
+        self.pub_roll = self.create_publisher(Float64, '~/orientation/roll', qos_telemetry)
+
+        self.pub_err_position = self.create_publisher(Float64, "~/debug/err_position", qos_debug)
+        self.pub_output_pi = self.create_publisher(Float64, "~/debug/output_pi", qos_debug)
+        self.pub_feedback_speed = self.create_publisher(Float64, "~/debug/feedback_speed", qos_debug)
+        self.pub_measurement_rate = self.create_publisher(Float64, "~/debug/measurement_rate", qos_debug)
+        self.pub_out = self.create_publisher(Float64, "~/debug/out", qos_debug)
+    
     # --- Колбэки ---
     def imu_angular_callback(self, msg: CommonGroup):
         try:
@@ -308,36 +401,49 @@ class StingrayCoreControlNode(Node):
 
             self.imu_yaw_raw = float(ypr.x)
 
-            self.imu_yaw = self.normalize_angle_deg(
-                self.imu_yaw_raw - self.yaw_zero_offset
+            self.imu.yaw = self.normalize_angle_deg(
+            self.imu_yaw_raw - self.yaw_zero_offset
             )
-            self.imu_pitch = float(ypr.y)
-            self.imu_roll  = float(ypr.z)
+            self.imu.pitch = float(ypr.y)
+            self.imu.roll = float(ypr.z)
 
         except Exception as e:
             self.get_logger().warning(
                 f"Error parsing CommonGroup yawpitchroll: {e}"
             )
 
-    def imu_linear_accel_callback(self, msg: Vector3):
-        try:
-            self.imu_accel_x = float(msg.x)
-            self.imu_accel_y = float(msg.y)
-            self.imu_accel_z = float(msg.z)
-        except Exception as e:
-            self.get_logger().warning(
-                f"Error parsing imu_linear_accel msg: {e}")
-
-
     def imu_angular_rate_callback(self, msg: Imu):
         try:
-            self.imu_rate_x = float(msg.angular_velocity.x)
-            self.imu_rate_y = float(msg.angular_velocity.y)
-            self.imu_rate_z = float(msg.angular_velocity.z)
+            self.imu.rate_x = float(msg.angular_velocity.x)
+            self.imu.rate_y = float(msg.angular_velocity.y)
+            self.imu.rate_z = float(msg.angular_velocity.z)
         except Exception as e:
             self.get_logger().warning(
                 f"Error parsing imu angular_velocity from Imu msg: {e}"
             )
+
+    def imu_linear_accel_callback(self, msg: Vector3):
+        try:
+            self.imu.accel_x = float(msg.x)
+            self.imu.accel_y = float(msg.y)
+            self.imu.accel_z = float(msg.z)
+        except Exception as e:
+            self.get_logger().warning(
+                f"Error parsing imu linear acceleration from Vector3 msg: {e}"
+            )
+
+    def dvl_data_callback(self, msg: DVL):
+        try:
+            self.dvl_velocity_x = float(msg.velocity.x)
+            self.dvl_velocity_y = float(msg.velocity.y)
+            self.dvl_velocity_z = float(msg.velocity.z)
+            self.dvl_velocity_valid = bool(msg.velocity_valid)
+            self.dvl_last_time = time.time()
+
+            if self.use_distance_measurement:
+                self.distance_to_bottom = float(msg.altitude)
+        except Exception as e:
+            self.get_logger().warning(f"Error parsing DVL msg: {e}")
     
     def zero_yaw_callback(self, msg: Bool):
         if not msg.data:
@@ -354,250 +460,112 @@ class StingrayCoreControlNode(Node):
             self.get_logger().warning(f"Error parsing depth msg: {e}")
 
     def control_data_callback(self, msg: Twist):
-        # self.get_logger().info(f"control_data_callback: {msg}")
+        self.control.impact["surge"] = float(msg.linear.x)
+        self.control.impact["sway"]  = float(msg.linear.y)
+        self.control.impact["heave"] = float(msg.linear.z)
 
-        # impact команды — просто копируем вход
-        self.impact_surge = float(msg.linear.x)
-        self.impact_sway = float(msg.linear.y)
-        self.impact_depth = float(msg.linear.z)
-        self.impact_roll = float(msg.angular.x)
-        self.impact_pitch = float(msg.angular.y)
-        self.impact_yaw = float(msg.angular.z)
+        self.control.impact["roll"]  = float(msg.angular.x)
+        self.control.impact["pitch"] = float(msg.angular.y)
+        self.control.impact["yaw"]   = float(msg.angular.z)
 
     def control_mode_flags_callback(self, msg: UInt8):
         flags = int(msg.data)
-        self.control_mode_flag_surge = bool(flags & (1 << 0))
-        self.control_mode_flag_sway = bool(flags & (1 << 1))
-        self.control_mode_flag_heave = bool(flags & (1 << 2))
-        self.control_mode_flag_yaw = bool(flags & (1 << 3))
-        self.get_logger().info(f"control_mode_flag_yaw set to {self.control_mode_flag_yaw}")
-        self.control_mode_flag_pitch = bool(flags & (1 << 4))
-        self.control_mode_flag_roll = bool(flags & (1 << 5))
-
-    # === Заглушки регуляторов ===
-    def compute_surge(self):
-        dt = self.last_dt
-        return self.ux_ctrl.update(self.impact_surge, self.imu_accel_x, 0.0, dt)
-
-    def compute_sway(self):
-        dt = self.last_dt
-        return self.uy_ctrl.update(self.impact_sway, self.imu_accel_y, 0.0, dt)
-
-    def compute_heave(self):
-        dt = self.last_dt
-        return self.depth_ctrl.update(
-            self.impact_depth,
-            self.depth,
-            dt,
-            self.flag_setup_feedback_speed,
-            param_update={
-                "K_p": self.controllers["heave"].K_p,
-                "K_i": self.controllers["heave"].K_i,
-                "K_1": self.controllers["heave"].K_1,
-                "K_2": self.controllers["heave"].K_2,
-                "ap_T": self.controllers["heave"].ap_T,
-                "ap_K": self.controllers["heave"].ap_K,
-                "out_sat": self.controllers["heave"].out_sat,
-            })
-
-
-    def compute_roll(self):
-        dt = self.last_dt
-        # return self.roll_ctrl.update(self.impact_roll, self.imu_roll, self.imu_rate_x, dt)
-
-    def compute_pitch(self):
-        dt = self.last_dt
-        return self.pitch_ctrl.update(
-            self.impact_pitch,
-            self.imu_pitch,
-            self.imu_rate_y,
-            dt,
-            self.flag_setup_feedback_speed,
-            param_update={
-                "K_p": self.controllers["pitch"].K_p,
-                "K_i": self.controllers["pitch"].K_i,
-                "K_1": self.controllers["pitch"].K_1,
-                "K_2": self.controllers["pitch"].K_2,
-                "ap_T": self.controllers["pitch"].ap_T,
-                "ap_K": self.controllers["pitch"].ap_K,
-                "out_sat": self.controllers["pitch"].out_sat,
-            })
-
-    def compute_yaw(self):
-        dt = self.last_dt
-        return self.yaw_ctrl.update(
-            self.impact_yaw,
-            self.imu_yaw,
-            self.imu_rate_z,
-            dt,
-            self.flag_setup_feedback_speed,
-            param_update={
-                "K_p": self.controllers["yaw"].K_p,
-                "K_i": self.controllers["yaw"].K_i,
-                "K_1": self.controllers["yaw"].K_1,
-                "K_2": self.controllers["yaw"].K_2,
-                "ap_T": self.controllers["yaw"].ap_T,
-                "ap_K": self.controllers["yaw"].ap_K,
-                "out_sat": self.controllers["yaw"].out_sat,
-            })
-
-
+        self.control.enabled["surge"] = bool(flags & (1 << 0))
+        self.control.enabled["sway"]  = bool(flags & (1 << 1))
+        self.control.enabled["heave"] = bool(flags & (1 << 2))
+        self.control.enabled["yaw"]   = bool(flags & (1 << 3))
+        self.control.enabled["pitch"] = bool(flags & (1 << 4))
+        self.control.enabled["roll"]  = bool(flags & (1 << 5))
 
     def _on_params_changed(self, params: list[Parameter]) -> SetParametersResult:
         try:
             thruster_params: list[Parameter] = []
             controller_params: list[Parameter] = []
-            other_params: list[Parameter] = []
+            node_params: list[Parameter] = []
 
-            # Разделяем входные параметры по назначению
+            # --- 1. Классификация параметров ---
             for p in params:
-                name = p.name
+                if self._is_thruster_param(p.name):
+                    thruster_params.append(p)
+                elif self._is_controller_param(p.name):
+                    controller_params.append(p)
+                else:
+                    node_params.append(p)
 
-                # 1) thruster params: "<thruster>_<axis_u>"
-                matched_thruster = False
-                for thr in self.thrusters:
-                    for a in self.axes_u:
-                        if name == f"{thr}_{a}":
-                            thruster_params.append(p)
-                            matched_thruster = True
-                            break
-                    if matched_thruster:
-                        break
-                if matched_thruster:
-                    continue
+            # --- 2. Применяем controller params ---
+            for p in controller_params:
+                _, axis, key = p.name.split(".", 2)
 
-                # 2) controller params: "controllers.<axis>.<key>"
-                matched_controller = False
-                for axis in self.axes:
-                    prefix = f'controllers.{axis}.'
-                    if name.startswith(prefix):
-                        controller_params.append(p)
+                ctrl = self.controllers.get(axis)
+                if ctrl and hasattr(ctrl, key):
+                    setattr(ctrl, key, p.value)
+                    self.get_logger().info(
+                        f"Controller '{axis}': {key} = {p.value}"
+                    )
+                else:
+                    self.get_logger().warning(
+                        f"Ignored controller param: {p.name}"
+                    )
 
-                        # имя параметра внутри контроллера
-                        key = name[len(prefix):]
+            # --- 3. Применяем node params ---
+            for p in node_params:
+                if hasattr(self, p.name):
+                    setattr(self, p.name, p.value)
+                    self.get_logger().info(
+                        f"Node param updated: {p.name} = {p.value}"
+                    )
 
-                        # обновляем параметр в объекте контроллера
-                        if axis in self.controllers and hasattr(self.controllers[axis], key):
-                            self.controllers[axis].__dict__[key] = p.value
-                            self.get_logger().info(
-                                f"Controller '{axis}': {key} = {p.value}"
-                            )
-                        else:
-                            self.get_logger().warning(
-                                f"Controller '{axis}' has no param '{key}'"
-                            )
-
-                        matched_controller = True
-                        break
-
-                if matched_controller:
-                    continue
-
-                # Остальные параметры
-                other_params.append(p)
-                if hasattr(self, name):
-                    setattr(self, name, p.value)
-                    self.get_logger().info(f"Node param updated: {name} = {p.value}")
-
-            # Сохраняем изменения в файлы конфигурации
+            # --- 4. Сохраняем параметры ---
             if thruster_params:
-                try:
-                    save_params(self, param_list=thruster_params, config_name="thruster_matrix")
-                except Exception as e:
-                    self.get_logger().error(f"Error saving thruster params: {e}")
+                save_params(self, thruster_params, "thruster_matrix")
 
             if controller_params:
-                try:
-                    save_params(self, param_list=controller_params, config_name="controllers")
-                except Exception as e:
-                    self.get_logger().error(f"Error saving controller params: {e}")
+                save_params(self, controller_params, "controllers")
 
-            if other_params:
-                names = [p.name for p in other_params]
-                save_params(self, param_list=other_params, config_name="stingray_core_control_node")
-                self.get_logger().info(f"Other params changed (not handled specially): {names}")
+            if node_params:
+                save_params(self, node_params, "stingray_core_control_node")
 
-            # --- Обновляем коэффициенты в mixer для изменённых thruster params ---
+            # --- 5. Обновляем mixer ---
             if thruster_params:
-                # Построим словарь частичного обновления: thruster -> row
-                coeffs_update = {}
-                # Инициализируем строки из текущих coeffs (если mixer есть), чтобы заполнить отсутствующие оси нулями
-                current_coeffs = {}
-                if hasattr(self, 'mixer') and self.mixer is not None:
-                    current_coeffs = {t: list(self.mixer.coeffs.get(t, [0.0]*len(self.axes_u))) for t in self.thrusters}
-                else:
-                    # если mixer ещё нет — создаём шаблон с нулями
-                    current_coeffs = {t: [0.0]*len(self.axes_u) for t in self.thrusters}
+                self._update_mixer_from_params(thruster_params)
 
-                for p in thruster_params:
-                    # Найдём, какой thruster и какая ось
-                    # формат: "<thruster>_<axis_u>" где axis_u точно равна одному из self.axes_u
-                    name = p.name
-                    found = False
-                    for thr in self.thrusters:
-                        for idx, a in enumerate(self.axes_u):
-                            if name == f"{thr}_{a}":
-                                # получаем значение параметра; p.value — универсально
-                                try:
-                                    val = float(p.value)
-                                except Exception:
-                                    # бывало, что числовые параметры приходят как ParameterValue объект
-                                    try:
-                                        val = float(p.get_parameter_value().double_value)
-                                    except Exception:
-                                        try:
-                                            val = float(p.get_parameter_value().integer_value)
-                                        except Exception:
-                                            val = 0.0
-                                # гарантируем наличие строки
-                                row = coeffs_update.get(thr, current_coeffs.get(thr, [0.0]*len(self.axes_u))).copy()
-                                row[idx] = val
-                                coeffs_update[thr] = row
-                                found = True
-                                break
-                        if found:
-                            break
+            return SetParametersResult(successful=True)
 
-                # Применяем частичное обновление к mixer
-                if coeffs_update:
-                    try:
-                        # Если mixer отсутствует — создаём новый целиком (безопасность)
-                        if not hasattr(self, 'mixer') or self.mixer is None:
-                            # попытка собрать полный coeffs: пробуем прочитать параметры ноды
-                            full_coeffs = {}
-                            for t in self.thrusters:
-                                row = []
-                                for a in self.axes_u:
-                                    pname = f"{t}_{a}"
-                                    if self.has_parameter(pname):
-                                        try:
-                                            pv = self.get_parameter(pname).get_parameter_value()
-                                            # pv может быть integer_value или double_value
-                                            if pv.type == pv.Type.INTEGER:
-                                                row.append(float(pv.integer_value))
-                                            else:
-                                                row.append(float(pv.double_value))
-                                        except Exception:
-                                            row.append(0.0)
-                                    else:
-                                        row.append(0.0)
-                                full_coeffs[t] = row
-                            self.mixer = ThrusterMixer(self.thrusters, self.axes_u, full_coeffs)
-                            self.get_logger().info("Mixer recreated because it was missing when params changed.")
-                        else:
-                            # Обновляем только изменённые строки
-                            self.mixer.update_coeffs(coeffs_update)
-
-                        # Логируем, какие thrusters обновлены
-                        updated = ", ".join(f"{k}:{v}" for k, v in coeffs_update.items())
-                        self.get_logger().info(f"Thruster coeffs updated: {updated}")
-                    except Exception as e:
-                        self.get_logger().error(f"Failed to update mixer coeffs: {e}")
-
-            return SetParametersResult(successful=True, reason='ok')
         except Exception as e:
-            self.get_logger().error(f"_on_params_changed exception: {e}")
+            self.get_logger().error(f"_on_params_changed failed: {e}")
             return SetParametersResult(successful=False, reason=str(e))
+
+    def _update_mixer_from_params(self, params: list[Parameter]):
+        coeffs_update = {}
+
+        for p in params:
+            for thr in self.thrusters:
+                if not p.name.startswith(f"{thr}_"):
+                    continue
+
+                axis = p.name[len(thr) + 1 :]
+                if axis not in self.axes:
+                    continue
+
+                idx = self.axes.index(axis)
+                row = list(self.mixer.coeffs.get(thr, [0.0] * len(self.axes)))
+                row[idx] = float(p.value)
+                coeffs_update[thr] = row
+
+        if coeffs_update:
+            self.mixer.update_coeffs(coeffs_update)
+            self.get_logger().info(
+                f"Updated thruster coeffs: {coeffs_update}"
+            )
+
+    def _is_thruster_param(self, name: str) -> bool:
+        return any(
+            name.startswith(f"{thr}_") and name[len(thr)+1:] in self.axes
+            for thr in self.thrusters
+        )
+
+    def _is_controller_param(self, name: str) -> bool:
+        return name.startswith("controllers.")
         
     def debug_cb(self, data: dict):
         if not self.get_parameter("debug_publish").value:
