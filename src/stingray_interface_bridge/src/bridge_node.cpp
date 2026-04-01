@@ -36,7 +36,7 @@ StingrayInterfaceBridge::StingrayInterfaceBridge(const rclcpp::NodeOptions & opt
   enable_loop_protection_ = this->get_parameter("enable_loop_protection").as_bool();
 
   // Build QoS
-  rclcpp::QoS pub_qos(rclcpp::KeepLast(qos_depth));
+  auto pub_qos = rclcpp::QoS(rclcpp::KeepLast(qos_depth));
   pub_qos.durability_volatile();
   if (qos_reliability == "best_effort") {
     pub_qos.best_effort();

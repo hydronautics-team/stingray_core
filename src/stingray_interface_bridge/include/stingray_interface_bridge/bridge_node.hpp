@@ -50,7 +50,7 @@ private:
   stingray_core_interfaces::msg::UVState uv_state_msg_{};
 
   bool enable_loop_protection_{false};
-  rclcpp::Time last_pub_stamp_{0, RCL_ROS_TIME};
+  rclcpp::Time last_pub_stamp_{0, 0, RCL_ROS_TIME};
 
   std::string input_service_;
   std::string input_stabilization_service_;
