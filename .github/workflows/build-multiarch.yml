@@ -30,25 +30,14 @@ jobs:
         run: |
           BRANCH_TAG=${GITHUB_REF_NAME#test/}   # убираем 'test/' из имени ветки
           docker tag ${{ env.DOCKER_HUB_REPO }}:${{ github.sha }} ${{ env.DOCKER_HUB_REPO }}:$BRANCH_TAG
-
-      - name: Build ROS packages inside container
-        run: |
-          docker run --rm \
-            -v "$(pwd)":/stingray_core \
-            ${{ env.DOCKER_HUB_REPO }}:${{ github.sha }} \
-            bash -c "cd /stingray_core && colcon build --packages-select \
-              dvl_msgs \
-              stingray_core_control \
-              stingray_core_communication \
-              serial_driver \
-              io_context \
-              asio_cmake_module \
-              vectornav_msgs \
-              vectornav \
-              stingray_core_launch \
-              pressure_sensor"
-          
       
+      - name: Make build.sh executable
+        run: chmod +x build.sh
+              
+      - name: Run script inside container (build/test)
+        run: |
+          docker run --rm -v "$(pwd)":/stingray_core ${{ env.DOCKER_HUB_REPO }}:${{ github.sha }} ./build.sh
+
       - name: Push commit hash tag
         run: docker push ${{ env.DOCKER_HUB_REPO }}:${{ github.sha }}
 
