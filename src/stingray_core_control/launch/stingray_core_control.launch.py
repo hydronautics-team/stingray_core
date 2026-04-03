@@ -35,8 +35,8 @@ def generate_launch_description():
 
         DeclareLaunchArgument(
             'topic_imu_linear_accel',
-            default_value='/vectornav/imu_accel',
-            description='Topic for IMU linear acceleration (Vector3)'
+            default_value='/vectornav/imu',
+            description='Topic for IMU linear acceleration (Imu.linear_acceleration)'
         ),
 
         DeclareLaunchArgument(
