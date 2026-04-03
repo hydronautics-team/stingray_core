@@ -7,7 +7,7 @@ on:
       - test/**
 
 env:
-  DOCKER_HUB_REPO: yourusername/your-image-name
+  DOCKER_HUB_REPO: hydronautics/stingray_core
 
 jobs:
   build:
