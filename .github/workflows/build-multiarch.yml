@@ -1,38 +1,45 @@
 name: Build and Push Docker Image
 
-# Триггер на пуш из любой ветки
 on:
-  push: {}
+  push:
+    branches:
+      - main
+      - test/**
+
+env:
+  DOCKER_HUB_REPO: yourusername/your-image-name
 
 jobs:
   build:
-    if: startsWith(github.event.head_commit.message, 'build:')
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v1
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v2
-        with:
-          context: .
-          file: docker/Dockerfile
-          push: true
-          # Можно тегировать образ по имени ветки, чтобы отличать сборки
-          tags: hydronautics/stingray_core:latest
-          platforms: linux/amd64,linux/arm64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Build Docker image with commit hash tag
+        run: docker build -t ${{ env.DOCKER_HUB_REPO }}:${{ github.sha }} .
+
+      - name: Add branch tag for test branches
+        if: startsWith(github.ref_name, 'test/')
+        run: |
+          BRANCH_TAG=${GITHUB_REF_NAME#test/}   # убираем 'test/' из имени ветки
+          docker tag ${{ env.DOCKER_HUB_REPO }}:${{ github.sha }} ${{ env.DOCKER_HUB_REPO }}:$BRANCH_TAG
+
+      - name: Run script inside container (build/test)
+        run: |
+          docker run --rm ${{ env.DOCKER_HUB_REPO }}:${{ github.sha }} ./run_rov.sh
+
+      - name: Push commit hash tag
+        run: docker push ${{ env.DOCKER_HUB_REPO }}:${{ github.sha }}
+
+      - name: Push branch tag (for test branches)
+        if: startsWith(github.ref_name, 'test/')
+        run: |
+          BRANCH_TAG=${GITHUB_REF_NAME#test/}
+          docker push ${{ env.DOCKER_HUB_REPO }}:$BRANCH_TAG
