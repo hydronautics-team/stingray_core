@@ -59,8 +59,8 @@ def generate_launch_description():
 
         DeclareLaunchArgument(
             'topic_pressure_sensor',
-            default_value='/sensors/pressure',
-            description='Topic for pressure/depth (Float32)'
+            default_value='/stingray_core/pressure_sensor/depth',
+            description='Topic for pressure/depth (Float64)'
         ),
 
         DeclareLaunchArgument(
