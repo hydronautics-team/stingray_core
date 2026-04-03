@@ -2,7 +2,7 @@
 set -e
 # set -x   # раскомментируй для отладки — покажет, какую именно команду запускает скрипт
 
-IMAGE_NAME="stingray_core"
+IMAGE_NAME="hydronautics/stingray_core:workflow"
 CONTAINER_NAME="stingray_core"
 
 # xhost +si:localuser:root

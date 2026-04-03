@@ -31,19 +31,26 @@ jobs:
       - name: Build Docker image with commit hash tag
         run: docker build -f docker/Dockerfile -t ${{ env.DOCKER_HUB_REPO }}:${{ github.sha }} .
 
-      - name: Add branch tag for test branches
-        if: startsWith(github.ref_name, 'test/')
-        run: |
-          BRANCH_TAG=${GITHUB_REF_NAME#test/}   # убираем 'test/' из имени ветки
-          docker tag ${{ env.DOCKER_HUB_REPO }}:${{ github.sha }} ${{ env.DOCKER_HUB_REPO }}:$BRANCH_TAG
-      
       - name: Make build.sh executable
         run: chmod +x build.sh
               
-      - name: Run script inside container (build/test)
+      - name: Run build script and commit changes to image
         run: |
-          docker run --rm -v "$(pwd)":/stingray_core ${{ env.DOCKER_HUB_REPO }}:${{ github.sha }} ./build.sh
+          # Создаём контейнер (не запускаем сразу)
+          CONTAINER_ID=$(docker create -v "$(pwd)":/stingray_core ${{ env.DOCKER_HUB_REPO }}:${{ github.sha }} ./build.sh)
+          # Запускаем и ждём завершения
+          docker start -a $CONTAINER_ID
+          # Сохраняем изменения (папки build, install, log) в новый слой образа
+          docker commit $CONTAINER_ID ${{ env.DOCKER_HUB_REPO }}:${{ github.sha }}
+          # Удаляем временный контейнер
+          docker rm $CONTAINER_ID
 
+      - name: Add branch tag for test branches
+        if: startsWith(github.ref_name, 'test/')
+        run: |
+          BRANCH_TAG=${GITHUB_REF_NAME#test/}
+          docker tag ${{ env.DOCKER_HUB_REPO }}:${{ github.sha }} ${{ env.DOCKER_HUB_REPO }}:$BRANCH_TAG
+      
       - name: Push commit hash tag
         run: docker push ${{ env.DOCKER_HUB_REPO }}:${{ github.sha }}
 
