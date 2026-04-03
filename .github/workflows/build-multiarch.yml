@@ -23,7 +23,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build Docker image with commit hash tag
-        run: docker build -t ${{ env.DOCKER_HUB_REPO }}:${{ github.sha }} .
+        run: docker build -f docker/Dockerfile -t ${{ env.DOCKER_HUB_REPO }}:${{ github.sha }} .
 
       - name: Add branch tag for test branches
         if: startsWith(github.ref_name, 'test/')
