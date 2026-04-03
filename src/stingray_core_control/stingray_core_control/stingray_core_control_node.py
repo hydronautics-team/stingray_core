@@ -19,7 +19,7 @@ from rcl_interfaces.msg import SetParametersResult
 import time
 
 from geometry_msgs.msg import Twist, Vector3
-from std_msgs.msg import Float32, Float64, UInt8, Bool, UInt8MultiArray
+from std_msgs.msg import Float64, UInt8, Bool, UInt8MultiArray
 from sensor_msgs.msg import Imu
 from vectornav_msgs.msg import CommonGroup
 from dvl_msgs.msg import DVL
@@ -101,7 +101,7 @@ class StingrayCoreControlNode(Node):
             'topic_imu_angular_rate': '/vectornav/imu',
             'topic_dvl_data': '/dvl/data',
             'topic_loop_flags': '/control/loop_flags',
-            'topic_pressure_sensor': '/sensors/pressure',
+            'topic_pressure_sensor': '/stingray_core/pressure_sensor/depth',
             'topic_control_data': '/control/data',
             'topic_zero_yaw': '/imu/zero_yaw',
         }
@@ -344,7 +344,7 @@ class StingrayCoreControlNode(Node):
         )
 
         self.sub_pressure_sensor = self.create_subscription(
-            Float32, self.topic_pressure_sensor,
+            Float64, self.topic_pressure_sensor,
             self.pressure_sensor_callback, qos_sensor
         )
 
@@ -453,7 +453,7 @@ class StingrayCoreControlNode(Node):
         self.get_logger().info(
             f"Yaw zeroed at {self.yaw_zero_offset:.2f} deg")
 
-    def pressure_sensor_callback(self, msg: Float32):
+    def pressure_sensor_callback(self, msg: Float64):
         try:
             self.depth = float(msg.data)
         except Exception as e:
