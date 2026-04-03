@@ -3,7 +3,7 @@
     self_addr: 2
     dev_addr: 1
     device_name: /dev/ttyAMA1
-    baud_rate: 9600
+    baud_rate: 115200
     flow_control: none
     parity: none
     stop_bits: "1"
