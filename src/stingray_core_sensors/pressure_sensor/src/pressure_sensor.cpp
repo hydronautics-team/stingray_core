@@ -1,7 +1,6 @@
 #include <pressure_sensor/pressure_sensor.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <exception>
-#include <regex>
 
 namespace stingray_core::pressure_sensor {
 
@@ -23,18 +22,8 @@ PressureSensor::PressureSensor(rclcpp::NodeOptions options)
 
 void PressureSensor::data_raw_callback(
     const std_msgs::msg::String::ConstSharedPtr& msg) {
-    static const std::regex kNumberPattern(
-        R"([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)");
-    std::smatch match;
-    if (!std::regex_search(msg->data, match, kNumberPattern)) {
-        RCLCPP_WARN(node_->get_logger(),
-                    "No numeric value found in payload '%s'",
-                    msg->data.c_str());
-        return;
-    }
-
     try {
-        const double depth = std::stod(match.str()) * config_.dump_param;
+        const double depth = std::stod(msg->data) * config_.dump_param;
         publish_depth(depth);
     } catch (const std::exception& e) {
         RCLCPP_WARN(node_->get_logger(),

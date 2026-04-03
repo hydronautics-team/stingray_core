@@ -57,5 +57,5 @@ def generate_launch_description():
         thruster_link,
         core_control,
         pressure_link,
-        # pressure_sensor,
+        pressure_sensor,
     ])
