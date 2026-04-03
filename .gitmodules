@@ -1,9 +1,9 @@
 [submodule "src/stingray_core_sensors/dvl-a50"]
 	path = src/stingray_core_sensors/dvl-a50
-	url = git@github.com:paagutie/dvl-a50.git
+	url = https://github.com/paagutie/dvl-a50.git
 [submodule "src/stingray_core_sensors/dvl_msgs"]
 	path = src/stingray_core_sensors/dvl_msgs
-	url = git@github.com:paagutie/dvl_msgs.git
+	url = https://github.com/paagutie/dvl_msgs.git
 [submodule "src/stingray_core_communication/Hydrolib-soft"]
 	path = src/stingray_core_communication/Hydrolib-soft
 	url = https://github.com/SeaJackal/Hydrolib-soft.git
