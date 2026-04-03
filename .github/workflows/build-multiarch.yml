@@ -33,7 +33,7 @@ jobs:
 
       - name: Run script inside container (build/test)
         run: |
-          docker run --rm ${{ env.DOCKER_HUB_REPO }}:${{ github.sha }} ./run_rov.sh
+          docker run --rm -v "$(pwd)":/stingray_core ${{ env.DOCKER_HUB_REPO }}:${{ github.sha }} ./build.sh
 
       - name: Push commit hash tag
         run: docker push ${{ env.DOCKER_HUB_REPO }}:${{ github.sha }}
