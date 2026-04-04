@@ -85,6 +85,8 @@ class StingrayCoreControlNode(Node):
         self.pub_yaw.publish(Float64(data=self.imu.yaw))
         self.pub_pitch.publish(Float64(data=self.imu.pitch))
         self.pub_roll.publish(Float64(data=self.imu.roll))
+        self.pub_depth.publish(Float64(data=self.depth))
+
 
     def _init_config(self):
         self.declare_parameter('rate_hz', 100.0)
@@ -387,6 +389,8 @@ class StingrayCoreControlNode(Node):
         self.pub_yaw = self.create_publisher(Float64, '~/orientation/yaw', qos_telemetry)
         self.pub_pitch = self.create_publisher(Float64, '~/orientation/pitch', qos_telemetry)
         self.pub_roll = self.create_publisher(Float64, '~/orientation/roll', qos_telemetry)
+        self.pub_depth = self.create_publisher(Float64, '~/orientation/depth', qos_telemetry)
+        
 
         self.pub_err_position = self.create_publisher(Float64, "~/debug/err_position", qos_debug)
         self.pub_output_pi = self.create_publisher(Float64, "~/debug/output_pi", qos_debug)
