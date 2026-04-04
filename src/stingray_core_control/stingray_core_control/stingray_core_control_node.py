@@ -85,6 +85,8 @@ class StingrayCoreControlNode(Node):
         self.pub_yaw.publish(Float64(data=self.imu.yaw))
         self.pub_pitch.publish(Float64(data=self.imu.pitch))
         self.pub_roll.publish(Float64(data=self.imu.roll))
+        self.pub_depth.publish(Float64(data=self.depth))
+
 
     def _init_config(self):
         self.declare_parameter('rate_hz', 100.0)
@@ -97,7 +99,7 @@ class StingrayCoreControlNode(Node):
 
         defaults = {
             'topic_imu_angular': '/vectornav/raw/common',
-            'topic_imu_linear_accel': '/vectornav/imu_accel',
+            'topic_imu_linear_accel': '/vectornav/imu',
             'topic_imu_angular_rate': '/vectornav/imu',
             'topic_dvl_data': '/dvl/data',
             'topic_loop_flags': '/control/loop_flags',
@@ -324,7 +326,7 @@ class StingrayCoreControlNode(Node):
         )
 
         self.sub_imu_linear_accel = self.create_subscription(
-            Vector3, self.topic_imu_linear_accel,
+            Imu, self.topic_imu_linear_accel,
             self.imu_linear_accel_callback, qos_sensor
         )
 
@@ -387,6 +389,8 @@ class StingrayCoreControlNode(Node):
         self.pub_yaw = self.create_publisher(Float64, '~/orientation/yaw', qos_telemetry)
         self.pub_pitch = self.create_publisher(Float64, '~/orientation/pitch', qos_telemetry)
         self.pub_roll = self.create_publisher(Float64, '~/orientation/roll', qos_telemetry)
+        self.pub_depth = self.create_publisher(Float64, '~/orientation/depth', qos_telemetry)
+        
 
         self.pub_err_position = self.create_publisher(Float64, "~/debug/err_position", qos_debug)
         self.pub_output_pi = self.create_publisher(Float64, "~/debug/output_pi", qos_debug)
@@ -422,14 +426,14 @@ class StingrayCoreControlNode(Node):
                 f"Error parsing imu angular_velocity from Imu msg: {e}"
             )
 
-    def imu_linear_accel_callback(self, msg: Vector3):
+    def imu_linear_accel_callback(self, msg: Imu):
         try:
-            self.imu.accel_x = float(msg.x)
-            self.imu.accel_y = float(msg.y)
-            self.imu.accel_z = float(msg.z)
+            self.imu.accel_x = float(msg.linear_acceleration.x)
+            self.imu.accel_y = float(msg.linear_acceleration.y)
+            self.imu.accel_z = float(msg.linear_acceleration.z)
         except Exception as e:
             self.get_logger().warning(
-                f"Error parsing imu linear acceleration from Vector3 msg: {e}"
+                f"Error parsing imu linear acceleration from Imu msg: {e}"
             )
 
     def dvl_data_callback(self, msg: DVL):
