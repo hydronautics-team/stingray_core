@@ -9,12 +9,12 @@ def generate_launch_description():
     comm_pkg = get_package_share_directory('stingray_core_communication')
     control_pkg = get_package_share_directory('stingray_core_control')
     vectornav_pkg = get_package_share_directory('vectornav')
-    stingray_interfaces_bridge_pkg = get_package_share_directory('stingray_interfaces_bridge')
+    stingray_interface_bridge_pkg = get_package_share_directory('stingray_interface_bridge')
 
     thruster_link_launch = os.path.join(comm_pkg, 'launch', 'thruster_link.launch.py')
     core_control_launch = os.path.join(control_pkg, 'launch', 'stingray_core_control.launch.py')
     vectornav_launch = os.path.join(vectornav_pkg, 'launch', 'vectornav.launch.py')
-    stingray_interfaces_bridge_launch = os.path.join(stingray_interfaces_bridge_pkg, 'launch', 'stingray_interfaces_bridge.launch.py')
+    stingray_interface_bridge_launch = os.path.join(stingray_interface_bridge_pkg, 'launch', 'stingray_interface_bridge.launch.py')
 
     thruster_link = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(thruster_link_launch)
@@ -28,8 +28,8 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(vectornav_launch)
     )
 
-    stingray_interfaces_bridge = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(stingray_interfaces_bridge_launch)
+    stingray_interface_bridge = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(stingray_interface_bridge_launch)
     )
 
     return LaunchDescription([
@@ -37,5 +37,5 @@ def generate_launch_description():
         core_control,
         # ms5837,
         vectornav,
-        stingray_interfaces_bridge
+        stingray_interface_bridge
     ])
