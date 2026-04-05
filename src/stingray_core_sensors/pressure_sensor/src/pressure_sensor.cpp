@@ -23,7 +23,10 @@ PressureSensor::PressureSensor(rclcpp::NodeOptions options)
 void PressureSensor::data_raw_callback(
     const std_msgs::msg::String::ConstSharedPtr& msg) {
     try {
-        const double depth = std::stod(msg->data) * config_.dump_param;
+        double depth = std::stod(msg->data) * config_.dump_param / 10.0;
+        if (depth > 1000) {
+            depth = 0;
+        }
         publish_depth(depth);
     } catch (const std::exception& e) {
         RCLCPP_WARN(node_->get_logger(),
@@ -33,7 +36,7 @@ void PressureSensor::data_raw_callback(
     }
 }
 
-void PressureSensor::publish_depth(const double depth) {
+void PressureSensor::publish_depth(double depth) {
     auto depth_msg = std_msgs::msg::Float64();
     depth_msg.data = depth;
     RCLCPP_DEBUG(node_->get_logger(), "Published depth: %.3f m", depth);

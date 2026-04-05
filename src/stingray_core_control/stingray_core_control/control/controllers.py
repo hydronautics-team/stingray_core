@@ -237,7 +237,7 @@ class PitchController(BaseController):
             * self.grav_gain
         )
 
-        error_speed = output_pi + grav + setspeed - feedback_speed
+        error_speed = output_pi + setspeed - feedback_speed
 
         if self.out_sat is not None:
             out = saturation(error_speed, self.out_sat, -self.out_sat)
@@ -309,7 +309,7 @@ class RollController(BaseController):
         feedback_speed = ap * self.K_2
 
         # -------- итог --------
-        error_speed = output_pi + grav + setspeed - feedback_speed
+        error_speed = output_pi + setspeed - feedback_speed
 
         if self.out_sat is not None:
             out = saturation(error_speed, self.out_sat, -self.out_sat)
@@ -355,7 +355,9 @@ class DepthController(BaseController):
         dt = max(min(dt, 0.05), 1e-3)
 
         # -------- скорость глубины --------
-        depth_rate = measurement_rate
+        #depth_rate = measurement_rate
+        depth_rate = (measurement-self.prev_depth)/dt
+
         self.prev_depth = measurement
 
         # -------- режим настройки скорости --------

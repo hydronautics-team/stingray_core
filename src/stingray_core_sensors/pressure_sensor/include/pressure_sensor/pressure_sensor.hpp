@@ -31,7 +31,7 @@ class PressureSensor {
 
    private:
     void data_raw_callback(const std_msgs::msg::String::ConstSharedPtr& msg);
-    void publish_depth(const double depth);
+    void publish_depth(double depth);
 
     rclcpp::Node::SharedPtr node_;
     PressureSensorConfig config_;

@@ -4,7 +4,7 @@ stingray_core_control_node:
     surge_upper_left_sway: 0
     surge_upper_left_heave: 0
     surge_upper_left_roll: 0
-    surge_upper_left_pitch: -1
+    surge_upper_left_pitch: 1
     surge_upper_left_yaw: 0
     depth_front_right_surge: 0
     depth_front_right_sway: 0
@@ -28,7 +28,7 @@ stingray_core_control_node:
     surge_upper_right_sway: 0
     surge_upper_right_heave: 0
     surge_upper_right_roll: 0
-    surge_upper_right_pitch: 1
+    surge_upper_right_pitch: -1
     surge_upper_right_yaw: 0
     sway_back_surge: 0
     sway_back_sway: -1
@@ -52,11 +52,11 @@ stingray_core_control_node:
     surge_lower_left_sway: 0
     surge_lower_left_heave: 0
     surge_lower_left_roll: 0
-    surge_lower_left_pitch: -1
+    surge_lower_left_pitch: 1
     surge_lower_left_yaw: 0
     surge_lower_right_surge: 1
     surge_lower_right_sway: 0
     surge_lower_right_heave: 0
     surge_lower_right_roll: 0
-    surge_lower_right_pitch: -1
+    surge_lower_right_pitch: 1
     surge_lower_right_yaw: 0
