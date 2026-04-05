@@ -44,8 +44,8 @@ WORKDIR /stingray_core
 
 RUN groupadd -f i2c && usermod -aG i2c root
 
-COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+# COPY docker/entrypoint.sh /entrypoint.sh
+# RUN chmod +x /entrypoint.sh
 
-ENTRYPOINT ["/entrypoint.sh"]
+# ENTRYPOINT ["/entrypoint.sh"]
 CMD ["bash"]

@@ -7,6 +7,7 @@ CONTAINER_NAME="stingray_core"
 
 # xhost +si:localuser:root
 
+docker pull $IMAGE_NAME
 
 if [ "$(docker ps -a -q -f name=^/${CONTAINER_NAME}$)" ]; then
     echo "Container '$CONTAINER_NAME' already exists. Removing..."

@@ -11,4 +11,3 @@ else
   echo "[INFO] Локальная сборка не найдена (install/setup.bash отсутствует)"
 fi
 
-exec "$@"
