@@ -11,6 +11,7 @@ def generate_launch_description():
     pressure_pkg = get_package_share_directory('pressure_sensor')
     ms5837_pkg = get_package_share_directory('ms5837_pressure_sensor')
     vectornav_pkg = get_package_share_directory('vectornav')
+    dvl_pkg = get_package_share_directory('dvl_a50')
 
     pressure_link_launch = os.path.join(comm_pkg, 'launch', 'pressure_link.launch.py')
     thruster_link_launch = os.path.join(comm_pkg, 'launch', 'thruster_link.launch.py')
@@ -20,6 +21,7 @@ def generate_launch_description():
     pressure_sensor_launch = os.path.join(pressure_pkg, 'launch', 'pressure_sensor.launch.py')
     ms5837_launch = os.path.join(ms5837_pkg, 'launch', 'ms5837.launch.py')
     vectornav_launch = os.path.join(vectornav_pkg, 'launch', 'vectornav.launch.py')
+    dvl_launch = os.path.join(dvl_pkg, 'launch', 'dvl_a50.launch.py')
 
     thruster_link = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(thruster_link_launch),
@@ -53,10 +55,15 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(vectornav_launch)
     )
 
+    dvl = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(dvl_launch)
+    )
+
     return LaunchDescription([
         thruster_link,
         core_control,
         pressure_link,
         pressure_sensor,
         vectornav,
+        dvl,
     ])
