@@ -1,6 +1,7 @@
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import TextSubstitution
 from ament_index_python.packages import get_package_share_directory
 import os
 
@@ -29,13 +30,17 @@ def generate_launch_description():
     )
 
     stingray_interface_bridge = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(stingray_interface_bridge_launch)
+        PythonLaunchDescriptionSource(stingray_interface_bridge_launch),
+        launch_arguments={
+            "input_service": TextSubstitution(text="/stingray/services/set_twist"),
+            "input_stabilization_service": TextSubstitution(text="/stingray/services/set_stabilization"),
+        }.items(),
     )
 
     return LaunchDescription([
-        thruster_link,
+        # thruster_link,
         core_control,
         # ms5837,
-        vectornav,
+        # vectornav,
         stingray_interface_bridge
     ])

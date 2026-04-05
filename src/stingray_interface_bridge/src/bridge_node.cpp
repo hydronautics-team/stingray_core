@@ -55,7 +55,7 @@ StingrayInterfaceBridge::StingrayInterfaceBridge(const rclcpp::NodeOptions & opt
 
   control_data_publisher_ = this->create_publisher<geometry_msgs::msg::Twist>(output_topic_, pub_qos);
   loop_flags_publisher_ = this->create_publisher<std_msgs::msg::UInt8>(loop_flags_topic_, pub_qos);
-  uv_state_publisher_ = this->create_publisher<stingray_core_interfaces::msg::UVState>(uv_state_topic_, pub_qos);
+  uv_state_publisher_ = this->create_publisher<stingray_interfaces::msg::UVState>(uv_state_topic_, pub_qos);
 
   imu_angular_sub_ = this->create_subscription<vectornav_msgs::msg::CommonGroup>(
     imu_angular_topic_,
@@ -73,13 +73,13 @@ StingrayInterfaceBridge::StingrayInterfaceBridge(const rclcpp::NodeOptions & opt
     std::bind(&StingrayInterfaceBridge::handle_depth, this, _1));
 
   // Service callback: map srv/SetTwist -> geometry_msgs/Twist publication
-  set_twist_service_ = this->create_service<stingray_core_interfaces::srv::SetTwist>(
+  set_twist_service_ = this->create_service<stingray_interfaces::srv::SetTwist>(
     input_service_,
     std::bind(&StingrayInterfaceBridge::handle_set_twist, this, _1, _2)
   );
 
   // Service callback: map srv/SetStabilization -> std_msgs/UInt8 loop flags publication
-  set_stabilization_service_ = this->create_service<stingray_core_interfaces::srv::SetStabilization>(
+  set_stabilization_service_ = this->create_service<stingray_interfaces::srv::SetStabilization>(
     input_stabilization_service_,
     std::bind(&StingrayInterfaceBridge::handle_set_stabilization, this, _1, _2)
   );
@@ -95,8 +95,8 @@ StingrayInterfaceBridge::StingrayInterfaceBridge(const rclcpp::NodeOptions & opt
 }
 
 void StingrayInterfaceBridge::handle_set_twist(
-  const std::shared_ptr<stingray_core_interfaces::srv::SetTwist::Request> request,
-  std::shared_ptr<stingray_core_interfaces::srv::SetTwist::Response> response)
+  const std::shared_ptr<stingray_interfaces::srv::SetTwist::Request> request,
+  std::shared_ptr<stingray_interfaces::srv::SetTwist::Response> response)
 {
   // Single-threaded executor assumed: no mutex required.
   twist_msg_.linear.x = static_cast<double>(request->surge);
@@ -120,8 +120,8 @@ void StingrayInterfaceBridge::handle_set_twist(
 }
 
 void StingrayInterfaceBridge::handle_set_stabilization(
-  const std::shared_ptr<stingray_core_interfaces::srv::SetStabilization::Request> request,
-  std::shared_ptr<stingray_core_interfaces::srv::SetStabilization::Response> response)
+  const std::shared_ptr<stingray_interfaces::srv::SetStabilization::Request> request,
+  std::shared_ptr<stingray_interfaces::srv::SetStabilization::Response> response)
 {
   // bit0 surge, bit1 sway, bit2 heave(depth), bit3 yaw, bit4 pitch, bit5 roll
   uint8_t flags = 0u;

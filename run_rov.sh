@@ -8,6 +8,7 @@ echo "----------------------------------------"
 
 colcon build --packages-select \
     dvl_msgs \
+    stingray_interfaces \
     stingray_core_control \
     stingray_core_communication \
     serial_driver \

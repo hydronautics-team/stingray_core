@@ -9,7 +9,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(stingray_core_interfaces REQUIRED)
+find_package(stingray_interfaces REQUIRED)
 find_package(vectornav_msgs REQUIRED)
 
 include_directories(include)
@@ -23,7 +23,7 @@ ament_target_dependencies(${PROJECT_NAME}
   rclcpp
   geometry_msgs
   std_msgs
-  stingray_core_interfaces
+  stingray_interfaces
   vectornav_msgs
 )
 
