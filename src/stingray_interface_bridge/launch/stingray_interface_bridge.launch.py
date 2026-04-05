@@ -6,10 +6,10 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     input_service_arg = DeclareLaunchArgument(
-        "input_service", default_value="/set_twist"
+        "input_service", default_value="/stingray/services/set_twist"
     )
     input_stabilization_service_arg = DeclareLaunchArgument(
-        "input_stabilization_service", default_value="/set_stabilization"
+        "input_stabilization_service", default_value="/stingray/services/set_stabilization"
     )
     output_topic_arg = DeclareLaunchArgument(
         "output_topic", default_value="/control/data"

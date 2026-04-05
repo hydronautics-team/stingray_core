@@ -11,8 +11,8 @@ StingrayInterfaceBridge::StingrayInterfaceBridge(const rclcpp::NodeOptions & opt
 : rclcpp::Node("stingray_interface_bridge", options)
 {
   // Declare parameters
-  this->declare_parameter<std::string>("input_service", "/set_twist");
-  this->declare_parameter<std::string>("input_stabilization_service", "/set_stabilization");
+  this->declare_parameter<std::string>("input_service", "/stingray/services/set_twist");
+  this->declare_parameter<std::string>("input_stabilization_service", "/stingray/services/set_stabilization");
   this->declare_parameter<std::string>("output_topic", "/control/data");
   this->declare_parameter<std::string>("loop_flags_topic", "/control/loop_flags");
   this->declare_parameter<std::string>("uv_state_topic", "/stingray/topics/uv_state");
