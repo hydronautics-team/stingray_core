@@ -199,7 +199,6 @@ void VnSensorMsgs::sub_vn_common(const vectornav_msgs::msg::CommonGroup::SharedP
 
     acc.y = -acc.y;
     gyro.x = -gyro.x;
-    gyro.y = -gyro.y;
     gyro.z = -gyro.z;
 
     msg.linear_acceleration = acc;
@@ -224,7 +223,6 @@ void VnSensorMsgs::sub_vn_common(const vectornav_msgs::msg::CommonGroup::SharedP
 
     // FIX: FRD → FRD (Y вправо)
     acc.y = -acc.y;
-    gyro.y = -gyro.y;
 
     msg.linear_acceleration = acc;
     msg.angular_velocity = gyro;

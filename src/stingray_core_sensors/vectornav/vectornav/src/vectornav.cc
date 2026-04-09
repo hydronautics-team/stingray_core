@@ -806,6 +806,9 @@ void Vectornav::parseCommonGroup(
   if (compositeData.hasYawPitchRoll()) {
     auto ypr = compositeData.yawPitchRoll();
 
+    // pitch (индекс 1)
+    ypr[1] = -ypr[1];
+
     // roll (индекс 2)
     ypr[2] = -ypr[2] + 180;
 

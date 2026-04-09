@@ -18,7 +18,7 @@ colcon build --packages-select \
     vectornav \
     stingray_core_launch \
     stingray_interface_bridge
-    # ms5837_pressure_sensor
+    pressure_sensor
 
 echo "----------------------------------------"
 echo "🔄 Sourcing install/setup.bash ..."

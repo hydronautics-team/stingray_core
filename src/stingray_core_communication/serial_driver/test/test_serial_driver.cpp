@@ -41,6 +41,10 @@ TEST(SerialDriverTest, PropertiesTest)
   driver.init_port(dev_name, config);
 
   EXPECT_EQ(driver.port()->device_name(), dev_name);
+  EXPECT_EQ(driver.port()->direction_gpio(), -1);
+
+  driver.init_port(dev_name, config, 42);
+  EXPECT_EQ(driver.port()->direction_gpio(), 42);
 
   ctx.waitForExit();
 }

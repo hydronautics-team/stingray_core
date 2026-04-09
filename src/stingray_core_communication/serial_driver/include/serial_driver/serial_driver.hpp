@@ -31,7 +31,9 @@ class SerialDriver
 public:
   explicit SerialDriver(const IoContext & ctx);
 
-  void init_port(const std::string & device_name, const SerialPortConfig & config);
+  void init_port(
+    const std::string & device_name, const SerialPortConfig & config,
+    int direction_gpio = -1);
 
   std::shared_ptr<SerialPort> port() const;
 
