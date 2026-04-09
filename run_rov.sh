@@ -17,7 +17,7 @@ colcon build --packages-select \
     vectornav_msgs \
     vectornav \
     stingray_core_launch \
-    stingray_interface_bridge
+    stingray_interface_bridge \
     pressure_sensor
 
 echo "----------------------------------------"
