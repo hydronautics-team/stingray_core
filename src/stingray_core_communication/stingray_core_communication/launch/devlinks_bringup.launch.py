@@ -15,4 +15,7 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(f"{share}/launch/power_link.launch.py")
         ),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(f"{share}/launch/modem_link.launch.py")
+        ),
     ])

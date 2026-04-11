@@ -1,0 +1,8 @@
+/**:
+  ros__parameters:
+    device_name: /dev/ttyAMA3
+    baud_rate: 9600
+    flow_control: none
+    parity: none
+    stop_bits: "1"
+    direction_gpio: -1
