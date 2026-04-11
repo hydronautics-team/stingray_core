@@ -6,10 +6,12 @@
 #include "geometry_msgs/msg/vector3.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/float32.hpp"
 #include "std_msgs/msg/int32.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "std_msgs/msg/u_int8.hpp"
+#include "std_srvs/srv/trigger.hpp"
 #include "stingray_interfaces/msg/uv_state.hpp"
 #include "stingray_interfaces/srv/set_stabilization.hpp"
 #include "stingray_interfaces/srv/set_twist.hpp"
@@ -29,6 +31,10 @@ private:
     const std::shared_ptr<stingray_interfaces::srv::SetStabilization::Request> request,
     std::shared_ptr<stingray_interfaces::srv::SetStabilization::Response> response);
 
+  void handle_reset_imu(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+
   void handle_imu_angular(const vectornav_msgs::msg::CommonGroup::SharedPtr msg);
   void handle_imu_linear_accel(const geometry_msgs::msg::Vector3::SharedPtr msg);
   void handle_depth(const std_msgs::msg::Float32::SharedPtr msg);
@@ -37,9 +43,11 @@ private:
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr control_data_publisher_;
   rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr loop_flags_publisher_;
   rclcpp::Publisher<stingray_interfaces::msg::UVState>::SharedPtr uv_state_publisher_;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr imu_zero_yaw_publisher_;
 
   rclcpp::Service<stingray_interfaces::srv::SetTwist>::SharedPtr set_twist_service_;
   rclcpp::Service<stingray_interfaces::srv::SetStabilization>::SharedPtr set_stabilization_service_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr reset_imu_service_;
 
   rclcpp::Subscription<vectornav_msgs::msg::CommonGroup>::SharedPtr imu_angular_sub_;
   rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr imu_linear_accel_sub_;
@@ -57,6 +65,8 @@ private:
   std::string output_topic_;
   std::string loop_flags_topic_;
   std::string uv_state_topic_;
+  std::string reset_imu_service_name_;
+  std::string imu_zero_yaw_topic_;
   std::string imu_angular_topic_;
   std::string imu_linear_accel_topic_;
   std::string depth_topic_;

@@ -16,6 +16,8 @@ StingrayInterfaceBridge::StingrayInterfaceBridge(const rclcpp::NodeOptions & opt
   this->declare_parameter<std::string>("output_topic", "/control/data");
   this->declare_parameter<std::string>("loop_flags_topic", "/control/loop_flags");
   this->declare_parameter<std::string>("uv_state_topic", "/stingray/topics/uv_state");
+  this->declare_parameter<std::string>("reset_imu_service", "/stingray/services/reset_imu");
+  this->declare_parameter<std::string>("imu_zero_yaw_topic", "/imu/zero_yaw");
   this->declare_parameter<std::string>("imu_angular_topic", "/vectornav/raw/common");
   this->declare_parameter<std::string>("imu_linear_accel_topic", "/vectornav/imu_accel");
   this->declare_parameter<std::string>("depth_topic", "/sensors/pressure");
@@ -28,6 +30,8 @@ StingrayInterfaceBridge::StingrayInterfaceBridge(const rclcpp::NodeOptions & opt
   output_topic_ = this->get_parameter("output_topic").as_string();
   loop_flags_topic_ = this->get_parameter("loop_flags_topic").as_string();
   uv_state_topic_ = this->get_parameter("uv_state_topic").as_string();
+  reset_imu_service_name_ = this->get_parameter("reset_imu_service").as_string();
+  imu_zero_yaw_topic_ = this->get_parameter("imu_zero_yaw_topic").as_string();
   imu_angular_topic_ = this->get_parameter("imu_angular_topic").as_string();
   imu_linear_accel_topic_ = this->get_parameter("imu_linear_accel_topic").as_string();
   depth_topic_ = this->get_parameter("depth_topic").as_string();
@@ -56,6 +60,7 @@ StingrayInterfaceBridge::StingrayInterfaceBridge(const rclcpp::NodeOptions & opt
   control_data_publisher_ = this->create_publisher<geometry_msgs::msg::Twist>(output_topic_, pub_qos);
   loop_flags_publisher_ = this->create_publisher<std_msgs::msg::UInt8>(loop_flags_topic_, pub_qos);
   uv_state_publisher_ = this->create_publisher<stingray_interfaces::msg::UVState>(uv_state_topic_, pub_qos);
+  imu_zero_yaw_publisher_ = this->create_publisher<std_msgs::msg::Bool>(imu_zero_yaw_topic_, pub_qos);
 
   imu_angular_sub_ = this->create_subscription<vectornav_msgs::msg::CommonGroup>(
     imu_angular_topic_,
@@ -84,13 +89,22 @@ StingrayInterfaceBridge::StingrayInterfaceBridge(const rclcpp::NodeOptions & opt
     std::bind(&StingrayInterfaceBridge::handle_set_stabilization, this, _1, _2)
   );
 
+  // Service callback: map std_srvs/Trigger reset_imu -> std_msgs/Bool publication to /imu/zero_yaw
+  reset_imu_service_ = this->create_service<std_srvs::srv::Trigger>(
+    reset_imu_service_name_,
+    std::bind(&StingrayInterfaceBridge::handle_reset_imu, this, _1, _2)
+  );
+
   RCLCPP_INFO(
     this->get_logger(),
-    "Started StingrayInterfaceBridge: twist_service='%s' -> '%s', stabilization_service='%s' -> '%s', uv_state='%s'",
+    "Started StingrayInterfaceBridge: twist_service='%s' -> '%s', stabilization_service='%s' -> '%s', "
+    "reset_imu_service='%s' -> '%s', uv_state='%s'",
     input_service_.c_str(),
     output_topic_.c_str(),
     input_stabilization_service_.c_str(),
     loop_flags_topic_.c_str(),
+    reset_imu_service_name_.c_str(),
+    imu_zero_yaw_topic_.c_str(),
     uv_state_topic_.c_str());
 }
 
@@ -151,6 +165,20 @@ void StingrayInterfaceBridge::handle_set_stabilization(
 
   loop_flags_publisher_->publish(loop_flags_msg_);
   publish_uv_state();
+
+  response->success = true;
+  response->message = "ok";
+}
+
+void StingrayInterfaceBridge::handle_reset_imu(
+  const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+  std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+{
+  (void)request;
+
+  std_msgs::msg::Bool zero_yaw_msg;
+  zero_yaw_msg.data = true;
+  imu_zero_yaw_publisher_->publish(zero_yaw_msg);
 
   response->success = true;
   response->message = "ok";

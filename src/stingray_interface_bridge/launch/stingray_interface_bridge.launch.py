@@ -20,6 +20,12 @@ def generate_launch_description():
     uv_state_topic_arg = DeclareLaunchArgument(
         "uv_state_topic", default_value="/stingray/topics/uv_state"
     )
+    reset_imu_service_arg = DeclareLaunchArgument(
+        "reset_imu_service", default_value="/stingray/services/reset_imu"
+    )
+    imu_zero_yaw_topic_arg = DeclareLaunchArgument(
+        "imu_zero_yaw_topic", default_value="/imu/zero_yaw"
+    )
     imu_angular_topic_arg = DeclareLaunchArgument(
         "imu_angular_topic", default_value="/vectornav/raw/common"
     )
@@ -46,6 +52,8 @@ def generate_launch_description():
                 "output_topic": LaunchConfiguration("output_topic"),
                 "loop_flags_topic": LaunchConfiguration("loop_flags_topic"),
                 "uv_state_topic": LaunchConfiguration("uv_state_topic"),
+                "reset_imu_service": LaunchConfiguration("reset_imu_service"),
+                "imu_zero_yaw_topic": LaunchConfiguration("imu_zero_yaw_topic"),
                 "imu_angular_topic": LaunchConfiguration("imu_angular_topic"),
                 "imu_linear_accel_topic": LaunchConfiguration("imu_linear_accel_topic"),
                 "depth_topic": LaunchConfiguration("depth_topic"),
@@ -63,6 +71,8 @@ def generate_launch_description():
             output_topic_arg,
             loop_flags_topic_arg,
             uv_state_topic_arg,
+            reset_imu_service_arg,
+            imu_zero_yaw_topic_arg,
             imu_angular_topic_arg,
             imu_linear_accel_topic_arg,
             depth_topic_arg,
