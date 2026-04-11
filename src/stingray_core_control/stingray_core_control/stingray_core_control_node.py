@@ -474,12 +474,26 @@ class StingrayCoreControlNode(Node):
 
     def control_mode_flags_callback(self, msg: UInt8):
         flags = int(msg.data)
-        self.control.enabled["surge"] = bool(flags & (1 << 0))
-        self.control.enabled["sway"]  = bool(flags & (1 << 1))
-        self.control.enabled["heave"] = bool(flags & (1 << 2))
-        self.control.enabled["yaw"]   = bool(flags & (1 << 3))
-        self.control.enabled["pitch"] = bool(flags & (1 << 4))
-        self.control.enabled["roll"]  = bool(flags & (1 << 5))
+        new_enabled = {
+            "surge": bool(flags & (1 << 0)),
+            "sway":  bool(flags & (1 << 1)),
+            "heave": bool(flags & (1 << 2)),
+            "yaw":   bool(flags & (1 << 3)),
+            "pitch": bool(flags & (1 << 4)),
+            "roll":  bool(flags & (1 << 5)),
+        }
+
+        changed = []
+        for axis, new_value in new_enabled.items():
+            old_value = bool(self.control.enabled.get(axis, False))
+            if old_value != new_value:
+                changed.append(f"{axis}: {old_value} -> {new_value}")
+            self.control.enabled[axis] = new_value
+
+        if changed:
+            self.get_logger().info(
+                f"Control flags changed (0x{flags:02X}): " + ", ".join(changed)
+            )
 
     def _on_params_changed(self, params: list[Parameter]) -> SetParametersResult:
         try:
