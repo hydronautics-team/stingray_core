@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <cstdint>
 
 #include "geometry_msgs/msg/vector3.hpp"
 #include "geometry_msgs/msg/twist.hpp"
@@ -39,6 +40,10 @@ private:
   void handle_imu_linear_accel(const geometry_msgs::msg::Vector3::SharedPtr msg);
   void handle_depth(const std_msgs::msg::Float32::SharedPtr msg);
   void publish_uv_state();
+  void publish_filtered_twist();
+  bool is_axis_closed(uint8_t bit) const;
+  bool has_nonzero_open_loop_command() const;
+  void update_republish_state();
 
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr control_data_publisher_;
   rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr loop_flags_publisher_;
@@ -52,10 +57,14 @@ private:
   rclcpp::Subscription<vectornav_msgs::msg::CommonGroup>::SharedPtr imu_angular_sub_;
   rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr imu_linear_accel_sub_;
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr depth_sub_;
+  rclcpp::TimerBase::SharedPtr twist_republish_timer_;
 
   geometry_msgs::msg::Twist twist_msg_{};
+  geometry_msgs::msg::Twist last_twist_request_{};
   std_msgs::msg::UInt8 loop_flags_msg_{};
   stingray_interfaces::msg::UVState uv_state_msg_{};
+  bool has_twist_request_{false};
+  bool republish_enabled_{false};
 
   bool enable_loop_protection_{false};
   rclcpp::Time last_pub_stamp_{0, 0, RCL_ROS_TIME};

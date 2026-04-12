@@ -388,7 +388,7 @@ class StingrayCoreControlNode(Node):
         qos_telemetry = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             depth=10,
-            reliability=ReliabilityPolicy.BEST_EFFORT,
+            reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.VOLATILE,
         )
 
@@ -630,8 +630,6 @@ class StingrayCoreControlNode(Node):
         self.pub_feedback_speed.publish(Float64(data=data["feedback_speed"]))
         self.pub_measurement_rate.publish(Float64(data=data["measurement_rate"]))
         self.pub_out.publish(Float64(data=data["out"]))
-
-
 
 
 def main(args=None):

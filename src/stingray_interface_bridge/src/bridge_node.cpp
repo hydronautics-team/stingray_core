@@ -1,11 +1,13 @@
 #include "stingray_interface_bridge/bridge_node.hpp"
 
 #include <cstdint>
+#include <chrono>
 
 #include "rclcpp/qos.hpp"
 
 using std::placeholders::_1;
 using std::placeholders::_2;
+using namespace std::chrono_literals;
 
 StingrayInterfaceBridge::StingrayInterfaceBridge(const rclcpp::NodeOptions & options)
 : rclcpp::Node("stingray_interface_bridge", options)
@@ -55,6 +57,7 @@ StingrayInterfaceBridge::StingrayInterfaceBridge(const rclcpp::NodeOptions & opt
   twist_msg_.angular.x = 0.0;
   twist_msg_.angular.y = 0.0;
   twist_msg_.angular.z = 0.0;
+  last_twist_request_ = twist_msg_;
   loop_flags_msg_.data = 0u;
 
   control_data_publisher_ = this->create_publisher<geometry_msgs::msg::Twist>(output_topic_, pub_qos);
@@ -95,6 +98,15 @@ StingrayInterfaceBridge::StingrayInterfaceBridge(const rclcpp::NodeOptions & opt
     std::bind(&StingrayInterfaceBridge::handle_reset_imu, this, _1, _2)
   );
 
+  // Republish twist at 100 Hz for open-loop axes.
+  twist_republish_timer_ = this->create_wall_timer(
+    10ms,
+    [this]() {
+      if (republish_enabled_) {
+        publish_filtered_twist();
+      }
+    });
+
   RCLCPP_INFO(
     this->get_logger(),
     "Started StingrayInterfaceBridge: twist_service='%s' -> '%s', stabilization_service='%s' -> '%s', "
@@ -113,20 +125,22 @@ void StingrayInterfaceBridge::handle_set_twist(
   std::shared_ptr<stingray_interfaces::srv::SetTwist::Response> response)
 {
   // Single-threaded executor assumed: no mutex required.
-  twist_msg_.linear.x = static_cast<double>(request->surge);
-  twist_msg_.linear.y = static_cast<double>(request->sway);
-  twist_msg_.linear.z = static_cast<double>(request->depth);
-  twist_msg_.angular.x = static_cast<double>(request->roll);
-  twist_msg_.angular.y = static_cast<double>(request->pitch);
-  twist_msg_.angular.z = static_cast<double>(request->yaw);
+  last_twist_request_.linear.x = static_cast<double>(request->surge);
+  last_twist_request_.linear.y = static_cast<double>(request->sway);
+  last_twist_request_.linear.z = static_cast<double>(request->depth);
+  last_twist_request_.angular.x = static_cast<double>(request->roll);
+  last_twist_request_.angular.y = static_cast<double>(request->pitch);
+  last_twist_request_.angular.z = static_cast<double>(request->yaw);
+  has_twist_request_ = true;
+  update_republish_state();
 
   // Optionally track last publication time for loop protection
   if (enable_loop_protection_) {
     last_pub_stamp_ = this->now();
   }
 
-  // Publish the message. Publishing is thread-safe in rclcpp.
-  control_data_publisher_->publish(twist_msg_);
+  // Publish once immediately; periodic timer is enabled only for non-zero open-loop commands.
+  publish_filtered_twist();
 
   // Fill response
   response->success = true;
@@ -163,7 +177,9 @@ void StingrayInterfaceBridge::handle_set_stabilization(
     last_pub_stamp_ = this->now();
   }
 
+  update_republish_state();
   loop_flags_publisher_->publish(loop_flags_msg_);
+  publish_filtered_twist();
   publish_uv_state();
 
   response->success = true;
@@ -208,4 +224,50 @@ void StingrayInterfaceBridge::handle_depth(const std_msgs::msg::Float32::SharedP
 void StingrayInterfaceBridge::publish_uv_state()
 {
   uv_state_publisher_->publish(uv_state_msg_);
+}
+
+bool StingrayInterfaceBridge::is_axis_closed(uint8_t bit) const
+{
+  return (loop_flags_msg_.data & static_cast<uint8_t>(1u << bit)) != 0u;
+}
+
+bool StingrayInterfaceBridge::has_nonzero_open_loop_command() const
+{
+  // bit0 surge, bit1 sway, bit2 heave(depth), bit3 yaw, bit4 pitch, bit5 roll
+  if (!is_axis_closed(0) && last_twist_request_.linear.x != 0.0) {
+    return true;
+  }
+  if (!is_axis_closed(1) && last_twist_request_.linear.y != 0.0) {
+    return true;
+  }
+  if (!is_axis_closed(2) && last_twist_request_.linear.z != 0.0) {
+    return true;
+  }
+  if (!is_axis_closed(3) && last_twist_request_.angular.z != 0.0) {
+    return true;
+  }
+  if (!is_axis_closed(4) && last_twist_request_.angular.y != 0.0) {
+    return true;
+  }
+  if (!is_axis_closed(5) && last_twist_request_.angular.x != 0.0) {
+    return true;
+  }
+  return false;
+}
+
+void StingrayInterfaceBridge::update_republish_state()
+{
+  republish_enabled_ = has_twist_request_ && has_nonzero_open_loop_command();
+}
+
+void StingrayInterfaceBridge::publish_filtered_twist()
+{
+  if (!has_twist_request_) {
+    return;
+  }
+
+  // Publish full command as-is. This keeps closed-loop setpoints updated (e.g. yaw=180).
+  twist_msg_ = last_twist_request_;
+
+  control_data_publisher_->publish(twist_msg_);
 }
