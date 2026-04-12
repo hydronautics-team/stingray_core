@@ -27,7 +27,7 @@ def generate_launch_description():
         "imu_zero_yaw_topic", default_value="/imu/zero_yaw"
     )
     imu_angular_topic_arg = DeclareLaunchArgument(
-        "imu_angular_topic", default_value="/vectornav/raw/common"
+        "imu_angular_topic", default_value="/stingray_core_control_node/orientation/yaw"
     )
     imu_linear_accel_topic_arg = DeclareLaunchArgument(
         "imu_linear_accel_topic", default_value="/vectornav/imu_accel"

@@ -20,7 +20,7 @@ StingrayInterfaceBridge::StingrayInterfaceBridge(const rclcpp::NodeOptions & opt
   this->declare_parameter<std::string>("uv_state_topic", "/stingray/topics/uv_state");
   this->declare_parameter<std::string>("reset_imu_service", "/stingray/services/reset_imu");
   this->declare_parameter<std::string>("imu_zero_yaw_topic", "/imu/zero_yaw");
-  this->declare_parameter<std::string>("imu_angular_topic", "/vectornav/raw/common");
+  this->declare_parameter<std::string>("imu_angular_topic", "/stingray_core_control_node/orientation/yaw");
   this->declare_parameter<std::string>("imu_linear_accel_topic", "/vectornav/imu_accel");
   this->declare_parameter<std::string>("depth_topic", "/sensors/pressure");
   this->declare_parameter<int>("qos_depth", 1);
