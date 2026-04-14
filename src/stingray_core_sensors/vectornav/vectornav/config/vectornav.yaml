@@ -7,7 +7,7 @@ vectornav:
     # Async Output Type (ASCII)
     AsyncDataOutputType: 0           # VNOFF
     # Async output Frequency (Hz)
-    AsyncDataOutputFrequency: 20
+    AsyncDataOutputFrequency: 40
     # Sync control
     syncInMode: 3                    # SYNCINMODE_COUNT
     syncInEdge: 0                    # SYNCINEDGE_RISING
@@ -27,7 +27,7 @@ vectornav:
     # Binary output register 1
     BO1:
       asyncMode: 3                   # ASYNCMODE_BOTH
-      rateDivisor: 40                # 20 Hz
+      rateDivisor: 20                # 20 Hz
       commonField: 0x7FFF
       timeField: 0x0000              # TIMEGROUP_NONE
       imuField: 0x0000               # IMUGROUP_NONE
