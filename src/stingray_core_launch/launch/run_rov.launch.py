@@ -47,9 +47,9 @@ def generate_launch_description():
         }.items()
     )
 
-    # pressure_sensor = IncludeLaunchDescription(
-    #     PythonLaunchDescriptionSource(pressure_sensor_launch)
-    # )
+    pressure_sensor = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(pressure_sensor_launch)
+    )
 
     core_control = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(core_control_launch)
@@ -66,8 +66,8 @@ def generate_launch_description():
     return LaunchDescription([
         thruster_link,
         core_control,
-        # pressure_link,
-        panel_link,
+        pressure_link,
+        # panel_link,
         # pressure_sensor,
-        vectornav,
+        # vectornav,
     ])

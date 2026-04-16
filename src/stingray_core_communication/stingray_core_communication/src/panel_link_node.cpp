@@ -26,11 +26,12 @@ public:
         auto timer_callback = [this]() -> void
         {
             serialWrite(static_cast<const void *>(displayMemomry_.data()), VmaStatusAddr_, VmaStatusLen_);
-            serialRead(static_cast<void *>(displayMemomry_.data()), MissionAddr_, 1);
+            serialRead(static_cast<void *>(displayMemomry_.data()+MissionAddr_), MissionAddr_, 1);
             publishRaw(displayMemomry_[MissionAddr_]);
+            RCLCPP_INFO(this->get_logger(), "Send");
         };
         timer_ = this->create_wall_timer(500ms, timer_callback);
-        RCLCPP_INFO(this->get_logger(), "Thrusters driver node initialized");
+        RCLCPP_INFO(this->get_logger(), "Panel driver node initialized");
     }
 
 private:
@@ -45,7 +46,13 @@ private:
     {
         if (!msg->data.empty())
         {
-            std::memcpy(&displayMemomry_, msg->data.data(), msg->data.size());
+            for (size_t i = 0; i < 10; i++)
+            {
+                displayMemomry_[i] = 1;
+            }
+            
+
+            // std::memcpy(&displayMemomry_, msg->data.data(), msg->data.size());
         }
     }
     rclcpp::Subscription<std_msgs::msg::UInt8MultiArray>::SharedPtr thrusters_sub_;
