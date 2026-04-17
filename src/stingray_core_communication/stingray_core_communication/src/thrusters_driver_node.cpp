@@ -3,14 +3,15 @@
 #include <functional>
 #include <memory>
 #include <vector>
+#include<chrono>
 
+#include "link_node_base.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/u_int8_multi_array.hpp"
-#include "link_node_base.hpp"
 
 namespace stingray_core
 {
-
+using namespace std::chrono_literals;
 class ThrustersDriverNode : public baseLink::LinkNodeBase
 {
 public:
@@ -19,7 +20,16 @@ public:
     {
         thrusters_sub_ = this->create_subscription<std_msgs::msg::UInt8MultiArray>(
             "/thruster/cmd", 10, std::bind(&ThrustersDriverNode::thrustersCallback, this, std::placeholders::_1));
-            
+        plate_vma_telemetry_pub_ = this->create_publisher<std_msgs::msg::UInt8MultiArray>("/thruster/telemetry", 10);
+        telemetry_.fill(0);
+        auto timer_callback = [this]() -> void
+        {
+            serialRead(static_cast<void *>(telemetry_.data()), TelemetryAddr_, TelemetryLen_);
+            auto msg = std_msgs::msg::UInt8MultiArray();
+            msg.data = createPacket(telemetry_.data(), TelemetryLen_);
+            plate_vma_telemetry_pub_->publish(std::move(msg));
+        };
+        timer_ = this->create_wall_timer(500ms, timer_callback);
         RCLCPP_INFO(this->get_logger(), "Thrusters driver node initialized");
     }
 
@@ -33,10 +43,19 @@ private:
             serialWrite(data, 0, length);
         }
     }
-
-    rclcpp::Subscription<std_msgs::msg::UInt8MultiArray>::SharedPtr thrusters_sub_;
-
     
+    static std::vector<uint8_t> createPacket(const void *data, unsigned length)
+    {
+        const auto *value = static_cast<const uint8_t *>(data);
+        return std::vector<uint8_t>(value, value + length);
+    }
+    static constexpr uint8_t TelemetryLen_{5};
+    static constexpr uint8_t TelemetryAddr_{14};
+    std::array<uint8_t, TelemetryLen_> telemetry_;
+
+    rclcpp::TimerBase::SharedPtr timer_;
+    rclcpp::Subscription<std_msgs::msg::UInt8MultiArray>::SharedPtr thrusters_sub_;
+    rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr plate_vma_telemetry_pub_;
 }; // class ThrustersDriverNode
 
 } // namespace stingray_core

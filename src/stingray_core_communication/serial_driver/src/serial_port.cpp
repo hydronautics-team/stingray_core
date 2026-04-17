@@ -62,10 +62,11 @@ SerialPort::~SerialPort()
 
 size_t SerialPort::send(const std::vector<uint8_t> & buff)
 {
-  m_direction_gpio_controller.set_tx();
+  m_direction_gpio_controller.set_rx();
   try {
     const auto sent = m_serial_port.write_some(asio::buffer(buff.data(), buff.size()));
-    m_direction_gpio_controller.set_rx();
+    m_direction_gpio_controller.delay_us(buff.size()*8*9);
+    m_direction_gpio_controller.set_tx();
     return sent;
   } catch (...) {
     set_rx_with_logging(m_direction_gpio_controller, "SerialPort::send");
@@ -80,7 +81,7 @@ size_t SerialPort::receive(std::vector<uint8_t> & buff)
 
 void SerialPort::async_send(const std::vector<uint8_t> & buff)
 {
-  m_direction_gpio_controller.set_tx();
+  m_direction_gpio_controller.set_rx();
   try {
     m_serial_port.async_write_some(
       asio::buffer(buff),
@@ -120,11 +121,12 @@ void SerialPort::async_send_handler(
   size_t bytes_transferred)
 {
   (void)bytes_transferred;
-  set_rx_with_logging(m_direction_gpio_controller, "SerialPort::async_send_handler");
   if (error) {
     RCLCPP_ERROR_STREAM(rclcpp::get_logger("SerialPort::async_send_handler"), error.message());
     return;
   }
+    m_direction_gpio_controller.set_tx();
+
 }
 
 void SerialPort::async_receive_handler(
@@ -166,7 +168,7 @@ int SerialPort::direction_gpio() const
 void SerialPort::open()
 {
   m_direction_gpio_controller.initialize();
-  m_direction_gpio_controller.set_rx();
+  m_direction_gpio_controller.set_tx();
   m_serial_port.open(m_device_name);
   m_serial_port.set_option(spb::baud_rate(m_port_config.get_baud_rate_asio()));
   m_serial_port.set_option(spb::flow_control(m_port_config.get_flow_control_asio()));

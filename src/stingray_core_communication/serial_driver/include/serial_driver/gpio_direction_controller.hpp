@@ -35,7 +35,7 @@ public:
   void initialize();
   void set_tx();
   void set_rx();
-
+  void delay_us(int microseconds);
 private:
   std::string gpio_directory() const;
   std::string direction_path() const;
