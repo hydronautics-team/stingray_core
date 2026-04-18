@@ -804,7 +804,19 @@ void Vectornav::parseCommonGroup(
   }
 
   if (compositeData.hasYawPitchRoll()) {
-    msg.yawpitchroll = toMsg(compositeData.yawPitchRoll());
+    auto ypr = compositeData.yawPitchRoll();
+
+    // pitch (индекс 1)
+    ypr[1] = -ypr[1];
+
+    // roll (индекс 2)
+    ypr[2] = -ypr[2] + 180;
+
+    // нормализация в [-pi, pi]
+    if (ypr[2] >  180) ypr[2] -= 2*180;
+    if (ypr[2] < -180) ypr[2] += 2*180;
+
+    msg.yawpitchroll = toMsg(ypr);
   }
 
   if (compositeData.hasQuaternion()) {

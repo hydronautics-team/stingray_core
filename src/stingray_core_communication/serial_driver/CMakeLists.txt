@@ -33,6 +33,7 @@ find_package(asio_cmake_module REQUIRED)
 find_package(ASIO REQUIRED)
 
 ament_auto_add_library(${PROJECT_NAME} SHARED
+  src/gpio_direction_controller.cpp
   src/serial_port.cpp
   src/serial_driver.cpp
 )
@@ -56,6 +57,7 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 
   set(TEST_FILES
+    test/test_gpio_direction_controller.cpp
     test/test_serial_driver.cpp
     test/test_serial_port.cpp
   )

@@ -29,9 +29,10 @@ SerialDriver::SerialDriver(const IoContext & ctx)
 
 void SerialDriver::init_port(
   const std::string & device_name,
-  const SerialPortConfig & config)
+  const SerialPortConfig & config,
+  int direction_gpio)
 {
-  m_port.reset(new SerialPort(m_ctx, device_name, config));
+  m_port.reset(new SerialPort(m_ctx, device_name, config, direction_gpio));
 }
 
 std::shared_ptr<SerialPort> SerialDriver::port() const

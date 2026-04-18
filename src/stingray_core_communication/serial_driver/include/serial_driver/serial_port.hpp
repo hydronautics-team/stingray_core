@@ -22,6 +22,7 @@
 
 #include "io_context/common.hpp"
 #include "io_context/io_context.hpp"
+#include "serial_driver/gpio_direction_controller.hpp"
 
 using spb = asio::serial_port_base;
 using drivers::common::IoContext;
@@ -173,7 +174,8 @@ public:
   SerialPort(
     const IoContext & ctx,
     const std::string & device_name,
-    const SerialPortConfig serial_port_config);
+    const SerialPortConfig serial_port_config,
+    int direction_gpio = -1);
   ~SerialPort();
 
   SerialPort(const SerialPort &) = delete;
@@ -186,6 +188,10 @@ public:
   /// \brief Function to return the stored serial port configuration
   /// \returns SerialPortConfig object representing the stored serial port configuration
   SerialPortConfig serial_port_config() const;
+
+  /// \brief Function to return configured direction GPIO line number
+  /// \returns GPIO number, or -1 if direction control is disabled
+  int direction_gpio() const;
 
   /// \brief Function to open the serial port as-configured
   void open();
@@ -233,12 +239,14 @@ private:
   std::string m_device_name;
   asio::serial_port m_serial_port;
   SerialPortConfig m_port_config;
+  int m_direction_gpio;
+  GpioDirectionController m_direction_gpio_controller;
   Functor m_func;
   static constexpr size_t m_recv_buffer_size{2048};
   std::vector<uint8_t> m_recv_buffer;
 };
 
 }  // namespace serial_driver
-}  // namespace drivers
+}  // namespace drivers 
 
 #endif  // SERIAL_DRIVER__SERIAL_PORT_HPP_
