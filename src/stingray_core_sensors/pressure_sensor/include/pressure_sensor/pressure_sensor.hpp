@@ -3,7 +3,6 @@
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float64.hpp>
 #include <std_msgs/msg/string.hpp>
-#include <string>
 
 #define DEFAULT_DUMP_PARAM 1.0
 
@@ -11,11 +10,9 @@ namespace stingray_core::pressure_sensor {
 
 struct PressureSensorConfig{
     PressureSensorConfig(const rclcpp::Node::SharedPtr& node)
-    : dump_param(node->declare_parameter<double>("dump_param", DEFAULT_DUMP_PARAM)),
-      data_topic(node->declare_parameter<std::string>("data_topic", "/data_raw"))
+    : dump_param(node->declare_parameter<double>("dump_param", DEFAULT_DUMP_PARAM))
     {}
     const double  dump_param;
-    const std::string data_topic;
 };
 
 class PressureSensor {
@@ -31,7 +28,7 @@ class PressureSensor {
 
    private:
     void data_raw_callback(const std_msgs::msg::String::ConstSharedPtr& msg);
-    void publish_depth(double depth);
+    void publish_depth(const double depth);
 
     rclcpp::Node::SharedPtr node_;
     PressureSensorConfig config_;

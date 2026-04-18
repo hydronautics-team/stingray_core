@@ -1,6 +1,5 @@
 #include <pressure_sensor/pressure_sensor.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <exception>
 
 namespace stingray_core::pressure_sensor {
 
@@ -10,33 +9,22 @@ PressureSensor::PressureSensor(rclcpp::NodeOptions options)
       config_(node_),
       depth_pub_(node_->create_publisher<std_msgs::msg::Float64>("depth", rclcpp::SensorDataQoS())),
       data_raw_sub_(node_->create_subscription<std_msgs::msg::String>(
-          config_.data_topic, rclcpp::SensorDataQoS(),
+          "/stingray_core/depth_link_node/data_raw", rclcpp::SensorDataQoS(),
           [this](const std_msgs::msg::String::ConstSharedPtr& msg) {
               this->data_raw_callback(msg);
           })) {
 
     RCLCPP_INFO(node_->get_logger(), "Pressure sensor node initialized");
     RCLCPP_INFO(node_->get_logger(), "dump_param: %.3f", config_.dump_param);
-    RCLCPP_INFO(node_->get_logger(), "data_topic: %s", config_.data_topic.c_str());
 }
 
 void PressureSensor::data_raw_callback(
     const std_msgs::msg::String::ConstSharedPtr& msg) {
-    try {
-        double depth = std::stod(msg->data) * config_.dump_param / 10.0;
-        if (depth > 1000) {
-            depth = 0;
-        }
-        publish_depth(depth);
-    } catch (const std::exception& e) {
-        RCLCPP_WARN(node_->get_logger(),
-                    "Can't parse pressure payload '%s': %s",
-                    msg->data.c_str(),
-                    e.what());
-    }
+    const double depth = std::stod(msg->data) * config_.dump_param;
+    publish_depth(depth);
 }
 
-void PressureSensor::publish_depth(double depth) {
+void PressureSensor::publish_depth(const double depth) {
     auto depth_msg = std_msgs::msg::Float64();
     depth_msg.data = depth;
     RCLCPP_DEBUG(node_->get_logger(), "Published depth: %.3f m", depth);

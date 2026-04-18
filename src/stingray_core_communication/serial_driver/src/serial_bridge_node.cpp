@@ -15,7 +15,6 @@
 #include "serial_driver/serial_bridge_node.hpp"
 
 #include <memory>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -61,7 +60,7 @@ LNI::CallbackReturn SerialBridgeNode::on_configure(const lc::State & state)
     "serial_read", rclcpp::QoS{100});
 
   try {
-    m_serial_driver->init_port(m_device_name, *m_device_config, m_direction_gpio);
+    m_serial_driver->init_port(m_device_name, *m_device_config);
     if (!m_serial_driver->port()->is_open()) {
       m_serial_driver->port()->open();
       m_serial_driver->port()->async_receive(
@@ -196,17 +195,6 @@ void SerialBridgeNode::get_params()
     throw ex;
   }
 
-  try {
-    m_direction_gpio = declare_parameter<int>("direction_gpio", -1);
-    if (m_direction_gpio < -1) {
-      throw std::invalid_argument{
-              "The direction_gpio parameter must be -1 or a non-negative GPIO number."};
-    }
-  } catch (rclcpp::ParameterTypeException & ex) {
-    RCLCPP_ERROR(get_logger(), "The direction_gpio provided was invalid");
-    throw ex;
-  }
-
   m_device_config = std::make_unique<SerialPortConfig>(baud_rate, fc, pt, sb);
 }
 
@@ -224,7 +212,7 @@ void SerialBridgeNode::subscriber_callback(const UInt8MultiArray::SharedPtr msg)
   if (this->get_current_state().id() == State::PRIMARY_STATE_ACTIVE) {
     std::vector<uint8_t> out;
     drivers::common::from_msg(msg, out);
-    m_serial_driver->port()->send(out);
+    m_serial_driver->port()->async_send(out);
   }
 }
 

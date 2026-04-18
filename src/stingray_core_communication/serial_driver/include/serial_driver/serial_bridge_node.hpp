@@ -87,7 +87,6 @@ private:
 
   std::unique_ptr<IoContext> m_owned_ctx{};
   std::string m_device_name{};
-  int m_direction_gpio{-1};
   std::unique_ptr<SerialPortConfig> m_device_config;
   std::unique_ptr<SerialDriver> m_serial_driver;
   lc::LifecyclePublisher<UInt8MultiArray>::SharedPtr m_publisher;

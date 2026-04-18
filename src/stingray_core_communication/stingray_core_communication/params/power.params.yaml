@@ -5,4 +5,3 @@
     flow_control: none
     parity: none
     stop_bits: "1"
-    direction_gpio: -1
