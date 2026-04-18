@@ -15,7 +15,7 @@ find_package(std_msgs REQUIRED)
 # ---- СБОРКА НОДЫ ----
 add_executable(thrusters_driver_node src/thrusters_driver_node.cpp)
 add_executable(pressure_link_node src/pressure_link_node.cpp)
-add_executable(panel_link_node src/panel_link_node.cpp)
+add_executable(panel_link_node src/pressure_panel_link_node.cpp)
 
 
 # Указываем зависимости для узла

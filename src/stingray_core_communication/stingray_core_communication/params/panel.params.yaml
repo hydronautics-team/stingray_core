@@ -1,7 +1,9 @@
 /**:
   ros__parameters:
     self_addr: 2
-    dev_addr: 3
+    dev_addr: 1
+    disp_addr: 3
+    pressure_addr: 1
     device_name: /dev/ttyUSB0
     baud_rate: 115200
     flow_control: none

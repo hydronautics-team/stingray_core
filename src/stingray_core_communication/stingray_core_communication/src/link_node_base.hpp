@@ -172,7 +172,18 @@ private:
         const void *data = msg->data.data();
         const auto length = static_cast<unsigned>(msg->data.size());
         hydrolib_RingQueue_Push(&tx_queue_, data, static_cast<uint16_t>(length));
-        processIncoming();
+
+        auto previous_queue_length = hydrolib_RingQueue_GetLength(&tx_queue_);
+        while (previous_queue_length > 0)
+        {
+            processIncoming();
+            const auto current_queue_length = hydrolib_RingQueue_GetLength(&tx_queue_);
+            if (current_queue_length >= previous_queue_length)
+            {
+                break;
+            }
+            previous_queue_length = current_queue_length;
+        }
     }
 
     Mode mode_;

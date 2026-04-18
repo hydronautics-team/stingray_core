@@ -66,8 +66,8 @@ def generate_launch_description():
     return LaunchDescription([
         thruster_link,
         core_control,
-        pressure_link,
-        # panel_link,
+        # pressure_link,
+        panel_link,
         # pressure_sensor,
         # vectornav,
     ])
