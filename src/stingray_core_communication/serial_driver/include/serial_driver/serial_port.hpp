@@ -247,6 +247,6 @@ private:
 };
 
 }  // namespace serial_driver
-}  // namespace drivers
+}  // namespace drivers 
 
 #endif  // SERIAL_DRIVER__SERIAL_PORT_HPP_

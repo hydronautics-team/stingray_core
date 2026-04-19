@@ -15,10 +15,14 @@ find_package(std_msgs REQUIRED)
 # ---- СБОРКА НОДЫ ----
 add_executable(thrusters_driver_node src/thrusters_driver_node.cpp)
 add_executable(pressure_link_node src/pressure_link_node.cpp)
+add_executable(panel_link_node src/panel_link_node.cpp)
+
 
 # Указываем зависимости для узла
 ament_target_dependencies(thrusters_driver_node rclcpp std_msgs)
 ament_target_dependencies(pressure_link_node rclcpp std_msgs)
+ament_target_dependencies(panel_link_node rclcpp std_msgs)
+
 
 # add_subdirectory(../../Hydrolib-soft Hydrolib-soft)
 add_subdirectory(../Hydrolib-soft/hydrolib_bus/hydrolib_bus_application hydrolib_bus_application)
@@ -45,11 +49,18 @@ target_link_libraries(pressure_link_node
   HydrolibRingQueue
   HydrolibCommon
 )
+target_link_libraries(panel_link_node
+  HydrolibBusApplication
+  HydrolibBusDatalink
+  HydrolibRingQueue
+  HydrolibCommon
+)
 
 # Устанавливаем исполняемый файл в целевую директорию
 install(TARGETS
   thrusters_driver_node
   pressure_link_node
+  panel_link_node
   DESTINATION lib/${PROJECT_NAME}
 )
 

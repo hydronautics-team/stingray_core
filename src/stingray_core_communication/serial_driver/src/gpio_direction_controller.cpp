@@ -114,14 +114,18 @@ void GpioDirectionController::initialize()
   m_initialized = true;
 }
 
+void GpioDirectionController::delay_us(int microseconds) {
+    std::this_thread::sleep_for(std::chrono::microseconds(microseconds));
+  }
+
 void GpioDirectionController::set_tx()
 {
   if (!is_enabled()) {
     return;
   }
 
-  initialize();
-  write_file(value_path(), "1");
+  // initialize();
+  write_file(value_path(), "0");
 }
 
 void GpioDirectionController::set_rx()
@@ -130,8 +134,8 @@ void GpioDirectionController::set_rx()
     return;
   }
 
-  initialize();
-  write_file(value_path(), "0");
+  // initialize();
+  write_file(value_path(), "1");
 }
 
 }  // namespace serial_driver
