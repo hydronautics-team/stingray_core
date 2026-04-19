@@ -38,10 +38,15 @@ public:
         auto timer_callback = [this]() -> void
         {
             serialWrite(static_cast<const void *>(displayMemomry_.data()), VmaStatusAddr_, VmaStatusLen_);
+            serialWrite(static_cast<const void *>(displayMemomry_.data() + KillSwitchAddr_), KillSwitchAddr_, 1);
+            serialWrite(static_cast<const void *>(displayMemomry_.data() + BatAddr_), BatAddr_, 4);
             serialRead(static_cast<void *>(displayMemomry_.data()+MissionAddr_), MissionAddr_, 1);
             publishRaw(displayMemomry_[MissionAddr_]);
-            RCLCPP_INFO(this->get_logger(), "Send");
         };
+        serialWrite(static_cast<const void *>(mision1), BatAddr_ + 4, 16);
+        serialWrite(static_cast<const void *>(mision2), BatAddr_ + 4 + 16, 16);
+        serialWrite(static_cast<const void *>(mision3), BatAddr_ + 4 + 16 + 16, 16);
+        serialWrite(static_cast<const void *>(mision4), BatAddr_ + 4 + 16 + 16 + 16, 16);
         timer_ = this->create_wall_timer(500ms, timer_callback);
         RCLCPP_INFO(this->get_logger(), "Panel driver node initialized");
     }
@@ -58,18 +63,25 @@ private:
     {
         if (!msg->data.empty())
         {
-            
-            
+            std::memcpy(displayMemomry_.data() + BatAddr_, msg->data.data(), 4);
+            std::memcpy(displayMemomry_.data() + KillSwitchAddr_, msg->data.data() + 4, 1);
         }
     }
     rclcpp::Subscription<std_msgs::msg::UInt8MultiArray>::SharedPtr thrusters_sub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr data_disp_pub_;
 
     rclcpp::TimerBase::SharedPtr timer_;
+    char mision1[16] {'g', 'a', 't', 'e'};
+    char mision2[16] {'t', 'e', 's', 't'};
+    char mision3[16] {'S', 't', 'o', 'p'};
+    char mision4[16] {'M', 'i', 'c', 'h','a', 'e', 'l'};
+    
     static constexpr uint8_t VmaStatusLen_{10};
     static constexpr uint8_t VmaStatusAddr_{0};
     static constexpr uint8_t MissionAddr_{11};
-    std::array<uint8_t, 146> displayMemomry_{};
+    static constexpr uint8_t BatAddr_{12};
+    static constexpr uint8_t KillSwitchAddr_{10};
+    std::array<uint8_t, 146> displayMemomry_{1};
 }; // class PanelLinkNode
 
 } // namespace stingray_core
