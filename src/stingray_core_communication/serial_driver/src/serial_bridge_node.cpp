@@ -224,7 +224,7 @@ void SerialBridgeNode::subscriber_callback(const UInt8MultiArray::SharedPtr msg)
   if (this->get_current_state().id() == State::PRIMARY_STATE_ACTIVE) {
     std::vector<uint8_t> out;
     drivers::common::from_msg(msg, out);
-    m_serial_driver->port()->async_send(out);
+    m_serial_driver->port()->send(out);
   }
 }
 
