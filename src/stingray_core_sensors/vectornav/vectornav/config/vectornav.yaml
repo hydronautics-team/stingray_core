@@ -1,6 +1,6 @@
 vectornav:
   ros__parameters:
-    port: "/dev/ttyAMA2"
+    port: "/dev/ttyAMA3"
     baud: 921600
     reconnect_ms: 500
     # Reference vnproglib-1.2.0.0 headers for enum definitions

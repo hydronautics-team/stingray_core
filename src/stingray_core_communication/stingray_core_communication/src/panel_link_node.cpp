@@ -12,6 +12,18 @@
 
 namespace stingray_core
 {
+    
+struct MemoryMapDisplay
+{
+    int8_t vma_statuses[10];     // 1 = "OK"; 0 = "ERROR"
+    int8_t light_status;         // 1 = ON; 0 = OFF
+    int8_t current_mission;      // current mision's number
+    int16_t batL_voltage;        // 1250 => 12.50
+    int16_t batR_voltage;        // 1250 => 12.50
+    int8_t mission_names[4][16]; // <= 4 mission names (length = 16)
+    int8_t error_logs[4][16];
+    int16_t free_bytes;
+} __attribute__((__packed__));
 
 using namespace std::chrono_literals;
 class PanelLinkNode : public baseLink::LinkNodeBase
@@ -21,7 +33,7 @@ public:
 
     {
         thrusters_sub_ = this->create_subscription<std_msgs::msg::UInt8MultiArray>(
-            "/thruster/cmd", 10, std::bind(&PanelLinkNode::thrustersCallback, this, std::placeholders::_1));
+            "/thruster/telemetry", 10, std::bind(&PanelLinkNode::telemetryCallback, this, std::placeholders::_1));
         data_disp_pub_ = this->create_publisher<std_msgs::msg::String>("data_disp", 10);
         auto timer_callback = [this]() -> void
         {
@@ -42,17 +54,12 @@ private:
         data_disp_pub_->publish(std::move(msg));
     }
 
-    void thrustersCallback(const std_msgs::msg::UInt8MultiArray::SharedPtr msg)
+    void telemetryCallback(const std_msgs::msg::UInt8MultiArray::SharedPtr msg)
     {
         if (!msg->data.empty())
         {
-            for (size_t i = 0; i < 10; i++)
-            {
-                displayMemomry_[i] = 1;
-            }
             
-
-            // std::memcpy(&displayMemomry_, msg->data.data(), msg->data.size());
+            
         }
     }
     rclcpp::Subscription<std_msgs::msg::UInt8MultiArray>::SharedPtr thrusters_sub_;

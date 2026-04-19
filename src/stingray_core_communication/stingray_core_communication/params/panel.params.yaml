@@ -2,7 +2,7 @@
   ros__parameters:
     self_addr: 2
     dev_addr: 3
-    device_name: /dev/ttyUSB0
+    device_name: /dev/ttyAMA1
     baud_rate: 115200
     flow_control: none
     parity: none
