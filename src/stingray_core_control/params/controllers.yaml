@@ -57,6 +57,6 @@ stingray_core_control_node:
     controllers.yaw.K_i: 0.6
     controllers.yaw.I_min: -0.01
     controllers.yaw.I_max: 0.01
-    controllers.yaw.out_sat: 200.0
+    controllers.yaw.out_sat: 180.0
     controllers.yaw.ap_K: 1.0
     controllers.yaw.ap_T: 0.0
