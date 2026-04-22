@@ -42,7 +42,9 @@ def generate_launch_description():
             name='pressure_link_node',
             parameters=[LaunchConfiguration('params_file')],
             remappings=[('data_raw', '/data_raw')],
-            output='screen'
+            output='screen',
+            respawn=True,
+            respawn_delay=2.0,
         )
     ])
 
