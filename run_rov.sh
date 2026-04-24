@@ -8,6 +8,8 @@ echo "----------------------------------------"
 
 colcon build --packages-select \
     dvl_msgs \
+    dvl_a50 \
+    stingray_interfaces \
     stingray_core_control \
     stingray_core_communication \
     serial_driver \
@@ -16,7 +18,12 @@ colcon build --packages-select \
     vectornav_msgs \
     vectornav \
     stingray_core_launch \
+<<<<<<< HEAD
     ms5837_pressure_sensor
+=======
+    stingray_interface_bridge \
+    pressure_sensor
+>>>>>>> origin/develop
 
 echo "----------------------------------------"
 echo "🔄 Sourcing install/setup.bash ..."

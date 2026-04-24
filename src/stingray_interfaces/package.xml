@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>stingray_interfaces</name>
+  <version>0.1.0</version>
+  <description>Compatibility ROS interfaces package for Stingray integration.</description>
+
+  <maintainer email="dev@hydronautics.local">Hydronautics Team</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+
+  <build_depend>rosidl_default_generators</build_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
+
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

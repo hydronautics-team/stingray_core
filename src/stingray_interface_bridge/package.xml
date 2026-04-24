@@ -1,23 +1,23 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>stingray_core_communication</name>
+  <name>stingray_interface_bridge</name>
   <version>0.0.0</version>
-  <description>Communication package for Stingray ROV</description>
-  <maintainer email="root@todo.todo">root</maintainer>
-  <license>Apache License 2.0</license>
+  <description>Bridge from legacy SetTwist service to /control/data Twist topic.</description>
+  <maintainer email="dev@hydronautics.local">Hydronautics Team</maintainer>
+  <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>rclcpp</depend>
+  <depend>geometry_msgs</depend>
   <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>stingray_interfaces</depend>
+  <depend>vectornav_msgs</depend>
 
-  <!-- Добавляем зависимости для launch файлов -->
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
-
-  <!-- Добавляем зависимости для serial_driver -->
-  <depend>serial_driver</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

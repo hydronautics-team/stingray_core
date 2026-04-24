@@ -66,11 +66,20 @@ class StingrayCoreControlNode(Node):
         for axis in self.axes:
             if axis in self.axis_ctrl and self.control.enabled[axis]:
                 u[axis] = self.axis_ctrl[axis].compute(
-                    target=self.control.impact[axis],
+                    target=self.control_setpoint[axis],
                     dt=self.last_dt,
                 )
             else:
-                u[axis] = self.control.impact[axis]
+                # Для разомкнутого контура воздействие одноразовое: 1 цикл,
+                # затем сбрасывается до следующей новой команды.
+                if self.open_loop_pending[axis]:
+                    u[axis] = self.control_input[axis]
+                    self.open_loop_pending[axis] = False
+                else:
+                    u[axis] = 0.0
+
+            # Оставляем последнее фактически применённое воздействие в state
+            self.control.impact[axis] = u[axis]
 
         # === 2. Преобразуем в команды thrusters ===
         control_list = [u[a] for a in self.axes]
@@ -184,6 +193,14 @@ class StingrayCoreControlNode(Node):
 
         self.imu = ImuState()
         self.control = ControlState.from_axes(self.axes)
+
+        # Последняя полученная команда из /control/data
+        self.control_input: dict[str, float] = {axis: 0.0 for axis in self.axes}
+        # Удерживаемые цели для замкнутых контуров
+        self.control_setpoint: dict[str, float] = {axis: 0.0 for axis in self.axes}
+        # Флаг одноразовой подачи для разомкнутых контуров
+        self.open_loop_pending: dict[str, bool] = {axis: False for axis in self.axes}
+
         self.depth = 0.0
         self.distance_to_bottom = 0.0
 
@@ -369,7 +386,7 @@ class StingrayCoreControlNode(Node):
         qos_telemetry = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             depth=10,
-            reliability=ReliabilityPolicy.BEST_EFFORT,
+            reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.VOLATILE,
         )
 
@@ -460,22 +477,55 @@ class StingrayCoreControlNode(Node):
             self.get_logger().warning(f"Error parsing depth msg: {e}")
 
     def control_data_callback(self, msg: Twist):
-        self.control.impact["surge"] = float(msg.linear.x)
-        self.control.impact["sway"]  = float(msg.linear.y)
-        self.control.impact["heave"] = float(msg.linear.z)
+        incoming = {
+            "surge": float(msg.linear.x),
+            "sway": float(msg.linear.y),
+            "heave": float(msg.linear.z),
+            "roll": float(msg.angular.x),
+            "pitch": float(msg.angular.y),
+            "yaw": float(msg.angular.z),
+        }
 
-        self.control.impact["roll"]  = float(msg.angular.x)
-        self.control.impact["pitch"] = float(msg.angular.y)
-        self.control.impact["yaw"]   = float(msg.angular.z)
+        for axis, value in incoming.items():
+            self.control_input[axis] = value
+
+            if self.control.enabled.get(axis, False):
+                # Замкнутый контур: держим setpoint до новой команды.
+                self.control_setpoint[axis] = value
+            else:
+                # Разомкнутый контур: дать команду только на один цикл.
+                self.open_loop_pending[axis] = True
 
     def control_mode_flags_callback(self, msg: UInt8):
         flags = int(msg.data)
-        self.control.enabled["surge"] = bool(flags & (1 << 0))
-        self.control.enabled["sway"]  = bool(flags & (1 << 1))
-        self.control.enabled["heave"] = bool(flags & (1 << 2))
-        self.control.enabled["yaw"]   = bool(flags & (1 << 3))
-        self.control.enabled["pitch"] = bool(flags & (1 << 4))
-        self.control.enabled["roll"]  = bool(flags & (1 << 5))
+        new_enabled = {
+            "surge": bool(flags & (1 << 0)),
+            "sway":  bool(flags & (1 << 1)),
+            "heave": bool(flags & (1 << 2)),
+            "yaw":   bool(flags & (1 << 3)),
+            "pitch": bool(flags & (1 << 4)),
+            "roll":  bool(flags & (1 << 5)),
+        }
+
+        changed = []
+        for axis, new_value in new_enabled.items():
+            old_value = bool(self.control.enabled.get(axis, False))
+            if old_value != new_value:
+                changed.append(f"{axis}: {old_value} -> {new_value}")
+
+                if new_value:
+                    # При включении контура берём последнюю принятую команду как цель.
+                    self.control_setpoint[axis] = self.control_input[axis]
+                else:
+                    # При выключении контура не повторяем старую команду.
+                    self.open_loop_pending[axis] = False
+
+            self.control.enabled[axis] = new_value
+
+        if changed:
+            self.get_logger().info(
+                f"Control flags changed (0x{flags:02X}): " + ", ".join(changed)
+            )
 
     def _on_params_changed(self, params: list[Parameter]) -> SetParametersResult:
         try:
@@ -576,8 +626,6 @@ class StingrayCoreControlNode(Node):
         self.pub_feedback_speed.publish(Float64(data=data["feedback_speed"]))
         self.pub_measurement_rate.publish(Float64(data=data["measurement_rate"]))
         self.pub_out.publish(Float64(data=data["out"]))
-
-
 
 
 def main(args=None):
