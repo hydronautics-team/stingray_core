@@ -1,7 +1,12 @@
 vectornav:
   ros__parameters:
+<<<<<<< HEAD
     port: "/dev/ttyAMA2"
     baud: 115200
+=======
+    port: "/dev/ttyAMA3"
+    baud: 921600
+>>>>>>> origin/develop
     reconnect_ms: 500
     # Reference vnproglib-1.2.0.0 headers for enum definitions
     # Async Output Type (ASCII)

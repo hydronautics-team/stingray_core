@@ -15,11 +15,24 @@ def saturation(value: float, upper: Optional[float], lower: Optional[float]) -> 
     return value
 
 def normalize_angle_deg(angle_deg: float) -> float:
-    """Нормализует угол в градусах в диапазон (-180, 180]."""
-    a = (angle_deg + 180.0) % 360.0
-    if a <= 0.0:
-        a += 360.0
-    return a - 180.0
+    """Нормализует угол в градусах в диапазон [-180, 180)."""
+    return (angle_deg + 180.0) % 360.0 - 180.0
+
+
+def resolve_half_turn_error(raw_error_deg: float, normalized_error_deg: float) -> float:
+    """
+    Устраняет неоднозначность для ошибки ровно 180°.
+
+    После нормализации в диапазон [-180, 180) +180° превращается в -180°,
+    что может менять знак управляющего воздействия на границе.
+    Здесь сохраняем знак исходной (ненормализованной) ошибки:
+      - raw > 0  -> +180
+      - raw < 0  -> -180
+    """
+    eps = 1e-9
+    if abs(normalized_error_deg + 180.0) < eps and raw_error_deg > 0.0:
+        return 180.0
+    return normalized_error_deg
 
 # -----------------------
 # BaseController (abstract)
@@ -149,7 +162,9 @@ class YawController(BaseController):
             err_position = 0.0
         else:
             # 1) ошибка (с учётом wrap-around)
-            err_position = normalize_angle_deg(setpoint - measurement)
+            raw_err_position = setpoint - measurement
+            err_position = normalize_angle_deg(raw_err_position)
+            err_position = resolve_half_turn_error(raw_err_position, err_position)
 
             # 2) stage (предобработка)  = err * K_1
             stage = err_position * self.K_1
@@ -227,7 +242,7 @@ class PitchController(BaseController):
             setspeed = 0.0
 
         # --- ОС по скорости ---
-        ap = self.aperiodic_step(measurement_rate, dt)
+        ap = self.aperiodic_step(57.3 *measurement_rate, dt)
         feedback_speed = ap * self.K_2
 
         # --- гравитационная компенсация ---
@@ -237,7 +252,7 @@ class PitchController(BaseController):
             * self.grav_gain
         )
 
-        error_speed = output_pi + setspeed - feedback_speed
+        error_speed = output_pi + grav + setspeed - feedback_speed
 
         if self.out_sat is not None:
             out = saturation(error_speed, self.out_sat, -self.out_sat)
@@ -249,7 +264,7 @@ class PitchController(BaseController):
             self.debug_hook({
                 "err_position": err_position,
                 "output_pi": output_pi,
-                "measurement_rate": measurement_rate,
+                "measurement_rate": 57.3 *measurement_rate,
                 "feedback_speed": feedback_speed,
                 "grav": grav,
                 "error_speed": error_speed,
@@ -300,7 +315,7 @@ class RollController(BaseController):
         # -------- гравитационная компенсация --------
         grav = (
             self.grav_bias
-            + math.sin(math.radians(measurement - self.grav_offset_deg))
+            + math.sin(math.radians(setpoint - self.grav_offset_deg))
             * self.grav_gain
         )
 
@@ -309,7 +324,7 @@ class RollController(BaseController):
         feedback_speed = ap * self.K_2
 
         # -------- итог --------
-        error_speed = output_pi + setspeed - feedback_speed
+        error_speed = output_pi + grav + setspeed - feedback_speed
 
         if self.out_sat is not None:
             out = saturation(error_speed, self.out_sat, -self.out_sat)
@@ -355,9 +370,7 @@ class DepthController(BaseController):
         dt = max(min(dt, 0.05), 1e-3)
 
         # -------- скорость глубины --------
-        #depth_rate = measurement_rate
-        depth_rate = (measurement-self.prev_depth)/dt
-
+        depth_rate = measurement_rate
         self.prev_depth = measurement
 
         # -------- режим настройки скорости --------

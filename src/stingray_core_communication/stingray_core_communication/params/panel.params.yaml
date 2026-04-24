@@ -1,8 +1,13 @@
 /**:
   ros__parameters:
+<<<<<<< HEAD
     device_name: /dev/ttyACM1
+=======
+    self_addr: 2
+    dev_addr: 3
+    device_name: /dev/ttyAMA1
+>>>>>>> origin/develop
     baud_rate: 115200
     flow_control: none
     parity: none
     stop_bits: "1"
-    direction_gpio: -1

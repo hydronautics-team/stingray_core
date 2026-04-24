@@ -35,8 +35,8 @@ def generate_launch_description():
 
         DeclareLaunchArgument(
             'topic_imu_linear_accel',
-            default_value='/vectornav/imu',
-            description='Topic for IMU linear acceleration (Imu.linear_acceleration)'
+            default_value='/vectornav/imu_accel',
+            description='Topic for IMU linear acceleration (Vector3)'
         ),
 
         DeclareLaunchArgument(
@@ -59,8 +59,8 @@ def generate_launch_description():
 
         DeclareLaunchArgument(
             'topic_pressure_sensor',
-            default_value='/stingray_core/pressure_sensor/depth',
-            description='Topic for pressure/depth (Float64)'
+            default_value='/sensors/pressure',
+            description='Topic for pressure/depth (Float32)'
         ),
 
         DeclareLaunchArgument(

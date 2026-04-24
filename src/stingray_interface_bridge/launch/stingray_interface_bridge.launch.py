@@ -1,0 +1,83 @@
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
+
+
+def generate_launch_description():
+    input_service_arg = DeclareLaunchArgument(
+        "input_service", default_value="/stingray/services/set_twist"
+    )
+    input_stabilization_service_arg = DeclareLaunchArgument(
+        "input_stabilization_service", default_value="/stingray/services/set_stabilization"
+    )
+    output_topic_arg = DeclareLaunchArgument(
+        "output_topic", default_value="/control/data"
+    )
+    loop_flags_topic_arg = DeclareLaunchArgument(
+        "loop_flags_topic", default_value="/control/loop_flags"
+    )
+    uv_state_topic_arg = DeclareLaunchArgument(
+        "uv_state_topic", default_value="/stingray/topics/uv_state"
+    )
+    reset_imu_service_arg = DeclareLaunchArgument(
+        "reset_imu_service", default_value="/stingray/services/reset_imu"
+    )
+    imu_zero_yaw_topic_arg = DeclareLaunchArgument(
+        "imu_zero_yaw_topic", default_value="/imu/zero_yaw"
+    )
+    imu_angular_topic_arg = DeclareLaunchArgument(
+        "imu_angular_topic", default_value="/stingray_core_control_node/orientation/yaw"
+    )
+    imu_linear_accel_topic_arg = DeclareLaunchArgument(
+        "imu_linear_accel_topic", default_value="/vectornav/imu_accel"
+    )
+    depth_topic_arg = DeclareLaunchArgument(
+        "depth_topic", default_value="/sensors/pressure"
+    )
+    qos_depth_arg = DeclareLaunchArgument("qos_depth", default_value="1")
+    qos_reliability_arg = DeclareLaunchArgument(
+        "qos_reliability", default_value="reliable"
+    )
+
+    node = Node(
+        package="stingray_interface_bridge",
+        executable="stingray_interface_bridge",
+        name="stingray_interface_bridge",
+        output="screen",
+        parameters=[
+            {
+                "input_service": LaunchConfiguration("input_service"),
+                "input_stabilization_service": LaunchConfiguration("input_stabilization_service"),
+                "output_topic": LaunchConfiguration("output_topic"),
+                "loop_flags_topic": LaunchConfiguration("loop_flags_topic"),
+                "uv_state_topic": LaunchConfiguration("uv_state_topic"),
+                "reset_imu_service": LaunchConfiguration("reset_imu_service"),
+                "imu_zero_yaw_topic": LaunchConfiguration("imu_zero_yaw_topic"),
+                "imu_angular_topic": LaunchConfiguration("imu_angular_topic"),
+                "imu_linear_accel_topic": LaunchConfiguration("imu_linear_accel_topic"),
+                "depth_topic": LaunchConfiguration("depth_topic"),
+                "qos_depth": LaunchConfiguration("qos_depth"),
+                "qos_reliability": LaunchConfiguration("qos_reliability"),
+            }
+        ],
+        emulate_tty=True,
+    )
+
+    return LaunchDescription(
+        [
+            input_service_arg,
+            input_stabilization_service_arg,
+            output_topic_arg,
+            loop_flags_topic_arg,
+            uv_state_topic_arg,
+            reset_imu_service_arg,
+            imu_zero_yaw_topic_arg,
+            imu_angular_topic_arg,
+            imu_linear_accel_topic_arg,
+            depth_topic_arg,
+            qos_depth_arg,
+            qos_reliability_arg,
+            node,
+        ]
+    )

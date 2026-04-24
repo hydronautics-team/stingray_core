@@ -1,4 +1,3 @@
 pressure_sensor:
   ros__parameters:
     dump_param: 1.0 # FIXME remove in the future
-    data_topic: /data_raw
