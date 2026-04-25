@@ -51,17 +51,19 @@ void LightsControl::brightness_callback(const std_msgs::msg::Int32::ConstSharedP
 
 void LightsControl::start_blinking(int period_ms)
 {
-    stop_gradient();
-    stop_blinking();
+    if (!is_blinking_) {
+        stop_gradient();
+        stop_blinking();
 
-    is_blinking_ = true;
-    blink_period_ms_ = period_ms;
-    blink_state_ = true;
+        is_blinking_ = true;
+        blink_period_ms_ = period_ms;
+        blink_state_ = true;
 
-    blink_timer_ = node_->create_wall_timer(std::chrono::milliseconds(period_ms / 2), [this]() { this->blink_timer_callback(); });
+        blink_timer_ = node_->create_wall_timer(std::chrono::milliseconds(period_ms / 2), [this]() { this->blink_timer_callback(); });
 
-    publish_cmd(brightness_);
-    RCLCPP_INFO(node_->get_logger(), "Started blinking with period %d ms, brightness %d", blink_period_ms_, brightness_);
+        publish_cmd(brightness_);
+        RCLCPP_INFO(node_->get_logger(), "Started blinking with period %d ms, brightness %d", blink_period_ms_, brightness_);
+    }
 }
 
 void LightsControl::stop_blinking()
@@ -93,20 +95,23 @@ void LightsControl::blink_timer_callback()
 
 void LightsControl::start_gradient(int step_ms)
 {
-    stop_blinking();
-    stop_gradient();
+    if (!is_gradient_)
+    {
+        stop_blinking();
+        stop_gradient();
 
-    is_gradient_ = true;
-    gradient_step_ms_ = step_ms;
-    current_brightness_ = 0;
-    gradient_direction_ = 1;
+        is_gradient_ = true;
+        gradient_step_ms_ = step_ms;
+        current_brightness_ = 0;
+        gradient_direction_ = 1;
 
-    publish_cmd(current_brightness_);
+        publish_cmd(current_brightness_);
 
-    gradient_timer_ =
-        node_->create_wall_timer(std::chrono::milliseconds(gradient_step_ms_), [this]() { this->gradient_timer_callback(); });
+        gradient_timer_ =
+            node_->create_wall_timer(std::chrono::milliseconds(gradient_step_ms_), [this]() { this->gradient_timer_callback(); });
 
-    RCLCPP_INFO(node_->get_logger(), "Started gradient with step %d ms", step_ms);
+        RCLCPP_INFO(node_->get_logger(), "Started gradient with step %d ms", step_ms);
+    }
 }
 
 void LightsControl::stop_gradient()
