@@ -20,7 +20,7 @@ public:
         thrusters_sub_ = this->create_subscription<std_msgs::msg::UInt8MultiArray>(
             "/thruster/cmd", 10, std::bind(&ThrustersDriverNode::thrustersCallback, this, std::placeholders::_1));
         light_sub_ = this->create_subscription<std_msgs::msg::UInt8MultiArray>(
-            "/thruster/cmd", 10, std::bind(&ThrustersDriverNode::lightCallback, this, std::placeholders::_1));
+            "/light/cmd", 10, std::bind(&ThrustersDriverNode::lightCallback, this, std::placeholders::_1));
         plate_vma_telemetry_pub_ = this->create_publisher<std_msgs::msg::UInt8MultiArray>("/thruster/telemetry", 10);
         telemetry_.fill(0);
         auto timer_callback = [this]() -> void
@@ -32,6 +32,8 @@ public:
         };
         timer_ = this->create_wall_timer(500ms, timer_callback);
         RCLCPP_INFO(this->get_logger(), "Thrusters driver node initialized");
+        serialWrite(static_cast<const void *>(thrusterData_.data() + 12), 12, 2);
+
     }
 
 private:
@@ -39,14 +41,14 @@ private:
     {
         if (!msg->data.empty()) {
             std::memcpy(thrusterData_.data(), msg->data.data(), 10);
-            serialWrite(static_cast<const void *>(thrusterData_.data()), 0, 10);
+            serialWrite(static_cast<const void *>(thrusterData_.data()), 0, 14);
         }
     }
     
     void lightCallback(const std_msgs::msg::UInt8MultiArray::SharedPtr msg) {
         if (!msg->data.empty()) {
-            std::memcpy(thrusterData_.data() + 10, msg->data.data(), 2);
-            serialWrite(static_cast<const void *>(thrusterData_.data() + 10), 10, 2);
+            std::memcpy(thrusterData_.data() + 12, msg->data.data(), 2);
+            serialWrite(static_cast<const void *>(thrusterData_.data() + 12), 12, 2);
         }
     }
     static std::vector<uint8_t> createPacket(const void* data, unsigned length)
