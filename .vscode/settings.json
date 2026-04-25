@@ -92,6 +92,12 @@
         "typeinfo": "cpp",
         "valarray": "cpp",
         "variant": "cpp",
-        "span": "cpp"
+        "span": "cpp",
+        "cassert": "cpp",
+        "cerrno": "cpp",
+        "cfloat": "cpp",
+        "charconv": "cpp",
+        "climits": "cpp",
+        "format": "cpp"
     }
 }

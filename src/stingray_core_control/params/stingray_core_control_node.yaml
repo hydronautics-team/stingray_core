@@ -1,21 +1,99 @@
 stingray_core_control_node:
   ros__parameters:
-    rate_hz: 100.0
-    thruster_direction_matrix: [
-      0,0,0,0,0,0,  #   1 - мотор 2 вертикалка левая передняя
-      0,0,0,0,0,0,  #   2 - мотор 1 вертикалка правая передняя
-      0,0,0,0,0,0,  #   3 - мотор 3 вертикалка правая задняя (+ погружение)
-      0,0,0,0,0,0,  #   4 - мотор 4 вертикалка левая задняя (+ погружение)
-      1,1,1,0,0,0,  #   5 - мотор 7 маршевый правый нижний вперед
-      1,1,1,0,0,0,  #   6 - мотор маршевый левый нижний (+ назад)
-      0,1,1,0,0,0,  #   7 - лаг задний
-      1,1,1,0,0,0,  #   8 - марш правыйы верхний
-      0,0,1,0,0,0,  #   9 - лаг передний вправо
-      1,1,1,0,0,0,  #   10 - маршевый верхний левый
-    ]
-
-    topic_control_data: "/control/data"
-    topic_loop_flags: "/control/loop_flags"
-    topic_imu_angular: "/vectornav/angular"
-    topic_imu_linear_accel: "/vectornav/imu_accel"
-    topic_imu_angular_rate: "/vectornav/imu_rate"
+    rate_hz: 70.0
+    topic_control_data: /control/data
+    topic_loop_flags: /control/loop_flags
+    topic_imu_angular: /vectornav/raw/common
+    topic_imu_linear_accel: /vectornav/imu
+    topic_imu_angular_rate: /vectornav/imu
+    topic_dvl_data: /dvl/data
+    thrusters:
+    - surge_upper_left
+    - depth_front_right
+    - sway_front
+    - depth_back_right
+    - surge_upper_right
+    - sway_back
+    - depth_back_left
+    - depth_front_left
+    - surge_lower_left
+    - surge_lower_right
+    - surge_lower_left
+    - sway_back
+    - surge_upper_right
+    - sway_front
+    - surge_upper_left
+    axes:
+    - surge
+    - sway
+    - heave
+    - roll
+    - pitch
+    - yaw
+    yaw:
+    - K_p
+    - K_1
+    - K_2
+    - K_i
+    - I_min
+    - I_max
+    - out_sat
+    - ap_K
+    - ap_T
+    pitch:
+    - K_p
+    - K_1
+    - K_2
+    - K_i
+    - I_min
+    - I_max
+    - out_sat
+    - ap_K
+    - ap_T
+    roll:
+    - K_p
+    - K_1
+    - K_2
+    - K_i
+    - I_min
+    - I_max
+    - out_sat
+    - ap_K
+    - ap_T
+    surge:
+    - K_p
+    - K_1
+    - K_2
+    - K_i
+    - I_min
+    - I_max
+    - out_sat
+    - ap_K
+    - ap_T
+    sway:
+    - K_p
+    - K_1
+    - K_2
+    - K_i
+    - I_min
+    - I_max
+    - out_sat
+    - ap_K
+    - ap_T
+    heave:
+    - K_p
+    - K_1
+    - K_2
+    - K_i
+    - I_min
+    - I_max
+    - out_sat
+    - ap_K
+    - ap_T
+    flag_setup_feedback_speed: false
+    use_dvl_velocity: false
+    use_distance_measurement: false
+    dvl_velocity_alpha: 0.2
+    dvl_timeout_sec: 0.5
+    debug_publish: true
+    use_sim_time: false

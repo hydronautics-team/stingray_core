@@ -8,6 +8,9 @@ RUN apt-get update && apt-get install -y \
     ros-humble-rclcpp ros-humble-std-msgs ros-humble-sensor-msgs ros-humble-udp-msgs \
     bash bash-completion command-not-found less \
     python3-colorama \
+    ros-humble-rqt \
+    ros-humble-rqt-common-plugins \
+    ros-humble-rqt-gui-py \
     && rm -rf /var/lib/apt/lists/*
 
 # Настройка цветного вывода и подсветки
