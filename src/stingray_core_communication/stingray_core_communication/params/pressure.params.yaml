@@ -1,0 +1,10 @@
+/**:
+  ros__parameters:
+    self_addr: 2
+    dev_addr: 1
+    device_name: /dev/ttyAMA2
+    baud_rate: 115200
+    flow_control: none
+    parity: none
+    stop_bits: "1"
+    direction_gpio: 16

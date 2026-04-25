@@ -11,6 +11,13 @@
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>
   <test_depend>python3-pytest</test_depend>
+  <exec_depend>rqt_gui</exec_depend>
+  <exec_depend>rqt_gui_py</exec_depend>
+  <exec_depend>python_qt_binding</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>dvl_msgs</exec_depend>
+  <exec_depend>pyqtgraph</exec_depend> <!-- optional: for plotting -->
 
   <export>
     <build_type>ament_python</build_type>
