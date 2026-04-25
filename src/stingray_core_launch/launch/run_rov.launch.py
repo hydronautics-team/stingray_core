@@ -10,6 +10,8 @@ def generate_launch_description():
     comm_pkg = get_package_share_directory('stingray_core_communication')
     control_pkg = get_package_share_directory('stingray_core_control')
     pressure_pkg = get_package_share_directory('pressure_sensor')
+    light_pkg = get_package_share_directory('lights_device')
+
     vectornav_pkg = get_package_share_directory('vectornav')
     dvl_pkg = get_package_share_directory('dvl_a50')
     stingray_interface_bridge_pkg = get_package_share_directory('stingray_interface_bridge')
@@ -18,14 +20,17 @@ def generate_launch_description():
     thruster_link_launch = os.path.join(comm_pkg, 'launch', 'thruster_link.launch.py')
     panel_link_launch = os.path.join(comm_pkg, 'launch', 'panel_link.launch.py')
     pressure_params = os.path.join(comm_pkg, 'params', 'pressure.params.yaml')
+
     panel_params = os.path.join(comm_pkg, 'params', 'panel.params.yaml')
     thruster_params = os.path.join(comm_pkg, 'params', 'thruster.params.yaml')
     core_control_launch = os.path.join(control_pkg, 'launch', 'stingray_core_control.launch.py')
     pressure_sensor_launch = os.path.join(pressure_pkg, 'launch', 'pressure_sensor.launch.py')
+    lights_device_launch = os.path.join(light_pkg, 'launch', 'lights_device.launch.py')
+
     vectornav_launch = os.path.join(vectornav_pkg, 'launch', 'vectornav.launch.py')
     dvl_launch = os.path.join(dvl_pkg, 'launch', 'dvl_a50.launch.py')
     stingray_interface_bridge_launch = os.path.join(stingray_interface_bridge_pkg, 'launch', 'stingray_interface_bridge.launch.py')
-
+    
     thruster_link = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(thruster_link_launch),
         launch_arguments={
@@ -53,7 +58,11 @@ def generate_launch_description():
     pressure_sensor = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(pressure_sensor_launch)
     )
-
+    
+    lights_device = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(lights_device_launch)
+    )
+    
     core_control = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(core_control_launch)
     )
@@ -77,10 +86,11 @@ def generate_launch_description():
     return LaunchDescription([
         thruster_link,
         core_control,
-        pressure_link,
-        panel_link,
-        pressure_sensor,
-        vectornav,
-        dvl,
+        #pressure_link,
+        #panel_link,
+        #pressure_sensor,
+        lights_device,
+        #vectornav,
+        #dvl,
         stingray_interface_bridge
     ])
