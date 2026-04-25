@@ -41,7 +41,7 @@ private:
     {
         if (!msg->data.empty()) {
             std::memcpy(thrusterData_.data(), msg->data.data(), 10);
-            serialWrite(static_cast<const void *>(thrusterData_.data()), 0, 14);
+            serialWrite(static_cast<const void *>(thrusterData_.data()), 0, 10);
         }
     }
     
