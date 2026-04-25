@@ -3,7 +3,7 @@
 <package format="3">
   <name>lights_device</name>
   <version>0.1.0</version>
-  <description>ROS2 device package for lights</description>
+  <description>Lights device control node for ROS2</description>
   <maintainer email="p.v.elesin@gmail.com">Pavel Elesin</maintainer>
   <license>Apache-2.0</license>
 
@@ -14,7 +14,7 @@
 
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
-  
+
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 
