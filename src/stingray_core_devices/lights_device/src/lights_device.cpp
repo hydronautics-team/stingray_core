@@ -1,5 +1,6 @@
 #include "lights_device/lights_device.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/u_int8_multi_array.hpp"
 
 namespace stingray_core::lights_device
 {
@@ -15,7 +16,6 @@ LightsControl::LightsControl(rclcpp::NodeOptions options)
 
 void LightsControl::data_raw_callback(const std_msgs::msg::Int32::ConstSharedPtr &msg)
 {
-    // Расширьте команды
     switch (msg->data)
     {
     case 0: // OFF
