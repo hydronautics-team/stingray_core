@@ -20,7 +20,7 @@ public:
         thrusters_sub_ = this->create_subscription<std_msgs::msg::UInt8MultiArray>(
             "/thruster/cmd", 10, std::bind(&ThrustersDriverNode::thrustersCallback, this, std::placeholders::_1));
         light_sub_ = this->create_subscription<std_msgs::msg::UInt8MultiArray>(
-            "/lights/brightness", 10, std::bind(&ThrustersDriverNode::lightCallback, this, std::placeholders::_1));
+            "/lights/cmd", 10, std::bind(&ThrustersDriverNode::lightCallback, this, std::placeholders::_1));
         plate_vma_telemetry_pub_ = this->create_publisher<std_msgs::msg::UInt8MultiArray>("/thruster/telemetry", 10);
         telemetry_.fill(0);
         auto timer_callback = [this]() -> void
