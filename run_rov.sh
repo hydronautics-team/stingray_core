@@ -12,6 +12,7 @@ colcon build --packages-select \
     stingray_interfaces \
     stingray_core_control \
     stingray_core_communication \
+    lights_device \
     serial_driver \
     io_context \
     asio_cmake_module \
