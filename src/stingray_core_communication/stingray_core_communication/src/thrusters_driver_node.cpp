@@ -3,7 +3,6 @@
 #include <functional>
 #include <memory>
 #include <vector>
-#include<chrono>
 
 #include "link_node_base.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -20,6 +19,8 @@ public:
     {
         thrusters_sub_ = this->create_subscription<std_msgs::msg::UInt8MultiArray>(
             "/thruster/cmd", 10, std::bind(&ThrustersDriverNode::thrustersCallback, this, std::placeholders::_1));
+        light_sub_ = this->create_subscription<std_msgs::msg::UInt8MultiArray>(
+            "/lights/cmd", 10, std::bind(&ThrustersDriverNode::lightCallback, this, std::placeholders::_1));
         plate_vma_telemetry_pub_ = this->create_publisher<std_msgs::msg::UInt8MultiArray>("/thruster/telemetry", 10);
         telemetry_.fill(0);
         auto timer_callback = [this]() -> void
@@ -31,6 +32,7 @@ public:
         };
         timer_ = this->create_wall_timer(500ms, timer_callback);
         RCLCPP_INFO(this->get_logger(), "Thrusters driver node initialized");
+        serialWrite(static_cast<const void *>(thrusterData_.data() + 12), 12, 2);
     }
 
 private:
@@ -38,12 +40,19 @@ private:
     {
         if (!msg->data.empty())
         {
-            const void *data = msg->data.data();
-            unsigned length = static_cast<unsigned>(msg->data.size());
-            serialWrite(data, 0, length);
+            std::memcpy(thrusterData_.data(), msg->data.data(), 10);
+            serialWrite(static_cast<const void *>(thrusterData_.data()), 0, 10);
         }
     }
-    
+
+    void lightCallback(const std_msgs::msg::UInt8MultiArray::SharedPtr msg)
+    {
+        if (!msg->data.empty())
+        {
+            std::memcpy(thrusterData_.data() + 12, msg->data.data(), 2);
+            serialWrite(static_cast<const void *>(thrusterData_.data() + 12), 12, 2);
+        }
+    }
     static std::vector<uint8_t> createPacket(const void *data, unsigned length)
     {
         const auto *value = static_cast<const uint8_t *>(data);
@@ -51,10 +60,13 @@ private:
     }
     static constexpr uint8_t TelemetryLen_{5};
     static constexpr uint8_t TelemetryAddr_{14};
+    static constexpr uint8_t ThrusterPacketSize_{14};
+    std::array<uint8_t, ThrusterPacketSize_> thrusterData_;
     std::array<uint8_t, TelemetryLen_> telemetry_;
 
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Subscription<std_msgs::msg::UInt8MultiArray>::SharedPtr thrusters_sub_;
+    rclcpp::Subscription<std_msgs::msg::UInt8MultiArray>::SharedPtr light_sub_;
     rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr plate_vma_telemetry_pub_;
 }; // class ThrustersDriverNode
 
