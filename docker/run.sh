@@ -2,10 +2,10 @@
 set -e
 # set -x   # раскомментируй для отладки — покажет, какую именно команду запускает скрипт
 
-IMAGE_NAME="stingray_core"
-CONTAINER_NAME="stingray_core"
+IMAGE_NAME="${IMAGE_NAME:-stingray_core}"
+CONTAINER_NAME="${CONTAINER_NAME:-stingray_core}"
 
-# xhost +si:localuser:root
+xhost +si:localuser:root
 
 
 if [ "$(docker ps -a -q -f name=^/${CONTAINER_NAME}$)" ]; then
@@ -13,7 +13,7 @@ if [ "$(docker ps -a -q -f name=^/${CONTAINER_NAME}$)" ]; then
     docker rm -f $CONTAINER_NAME
 fi
 
-ROS_DOMAIN_ID=1
+ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-1}"
 
 # получим gid группы i2c если есть
 I2C_GID=""

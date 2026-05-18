@@ -9,5 +9,4 @@ colcon build --packages-select \
     asio_cmake_module \
     vectornav_msgs \
     vectornav \
-    stingray_core_launch \
     pressure_sensor

@@ -8,15 +8,18 @@ from launch_ros.actions import Node
 def generate_launch_description():
     package_prefix = get_package_share_directory('stingray_core_control')
 
-    params_file = os.path.join(
+    default_params_file = os.path.join(
         package_prefix, "params", "stingray_core_control_node.yaml"
     )
-    params_file_thruster = os.path.join(
+    default_params_file_thruster = os.path.join(
         package_prefix, "params", "thruster_matrix.yaml"
     )
-    params_file_controllers = os.path.join(
+    default_params_file_controllers = os.path.join(
         package_prefix, "params", "controllers.yaml"
     )
+    params_file = LaunchConfiguration('params_file')
+    params_file_thruster = LaunchConfiguration('params_file_thruster')
+    params_file_controllers = LaunchConfiguration('params_file_controllers')
     rate_hz = LaunchConfiguration('rate_hz')
     topic_imu_linear_accel = LaunchConfiguration('topic_imu_linear_accel')
     topic_imu_angular_rate = LaunchConfiguration('topic_imu_angular_rate')
@@ -27,6 +30,24 @@ def generate_launch_description():
     # thruster_direction_matrix = LaunchConfiguration('thruster_direction_matrix')
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'params_file',
+            default_value=default_params_file,
+            description='Path to stingray_core_control_node params YAML'
+        ),
+
+        DeclareLaunchArgument(
+            'params_file_thruster',
+            default_value=default_params_file_thruster,
+            description='Path to thruster_matrix YAML'
+        ),
+
+        DeclareLaunchArgument(
+            'params_file_controllers',
+            default_value=default_params_file_controllers,
+            description='Path to controllers YAML'
+        ),
+
         DeclareLaunchArgument(
             'rate_hz',
             default_value='100.0',

@@ -2,14 +2,7 @@
 
 set -e
 
-echo "----------------------------------------"
-echo "🔄 Sourcing install/setup.bash ..."
-echo "----------------------------------------"
-
-source install/setup.bash
-
-echo "----------------------------------------"
-echo "🚀 Launching Stingray ROV..."
-echo "----------------------------------------"
-
-ros2 launch stingray_core_launch run_rov.launch.py
+echo "[INFO] Platform launch script moved out of stingray_core."
+echo "Use one of:"
+echo "  ../welt_rov/run_rov.sh"
+echo "  ../nulina_rov/run_rov.sh"
