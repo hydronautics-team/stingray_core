@@ -1,6 +1,5 @@
 FROM ros:humble-ros-base
 
-# Установим нужные пакеты + утилиты для подсветки терминала
 RUN apt-get update && apt-get install -y \
     python3-pip python3-colcon-common-extensions \
     python3-smbus python3-smbus2 libi2c-dev i2c-tools \
@@ -13,6 +12,12 @@ RUN apt-get update && apt-get install -y \
     ros-humble-rqt \
     ros-humble-rqt-common-plugins \
     ros-humble-rqt-gui-py \
+    fswebcam \
+    vlc \
+    ffmpeg \
+    libopencv-dev \
+    libopencv-contrib-dev \
+    && pip3 install opencv-python opencv-contrib-python \
     && rm -rf /var/lib/apt/lists/*
 
 # Настройка цветного вывода и подсветки
