@@ -18,7 +18,6 @@ void sigintHandler(int) {
     running = false;
 }
 
-// Простой фильтр скользящего среднего
 class MovingAverage {
 private:
     deque<double> buffer;
@@ -29,7 +28,6 @@ public:
     double filter(double value) {
         buffer.push_back(value);
         if (buffer.size() > maxSize) buffer.pop_front();
-        
         double sum = 0;
         for (double v : buffer) sum += v;
         return sum / buffer.size();
@@ -38,7 +36,6 @@ public:
     void reset() { buffer.clear(); }
 };
 
-// Фильтр для Vec3d (X, Y, Z)
 class Vec3Filter {
 private:
     MovingAverage x, y, z;
@@ -73,7 +70,6 @@ Vec3d rvecToEuler(const Vec3d& rvec) {
     return Vec3d(yaw, roll, pitch);
 }
 
-// Компенсация наклонов (крен, дифферент) для X и Y
 Vec3d compensateTilt(const Vec3d& tvec, const Vec3d& euler) {
     double pitch = euler[1] * CV_PI / 180.0;  
     double roll  = euler[2] * CV_PI / 180.0;  
@@ -95,9 +91,14 @@ Vec3d compensateTilt(const Vec3d& tvec, const Vec3d& euler) {
 int main() {
     signal(SIGINT, sigintHandler);
     
+    int width = 640;
+    int height = 480;
+    double scale = 3.0;  // 1920/640
+    
+    // Калибровка под 640x480
     Mat cameraMatrix = (Mat_<double>(3, 3) <<
-        839.067428091236, 0, 953.5271775639978,
-        0, 869.6335345962565, 544.2180085851491,
+        839.067428091236 / scale, 0, 953.5271775639978 / scale,
+        0, 869.6335345962565 / scale, 544.2180085851491 / scale,
         0, 0, 1);
     
     Mat distCoeffs = (Mat_<double>(5, 1) <<
@@ -105,9 +106,8 @@ int main() {
     
     float markerSize = 0.10f;
     
-    // Фильтры (размер окна = 5 для плавности без большой задержки)
-    Vec3Filter posFilter(5);   // X, Y, Z
-    Vec3Filter angleFilter(3); // Yaw, Roll, Pitch
+    Vec3Filter posFilter(5);
+    Vec3Filter angleFilter(3);
     
     cout << "\033[2J\033[1;1H";
     cout << "============================================================" << endl;
@@ -115,36 +115,32 @@ int main() {
     cout << "============================================================" << endl;
     cout << "Opening camera..." << endl;
     
-    VideoCapture cap(0, CAP_V4L2);
+    VideoCapture cap(0);
     cap.set(CAP_PROP_FOURCC, VideoWriter::fourcc('M', 'J', 'P', 'G'));
-    cap.set(CAP_PROP_FRAME_WIDTH, 1920);
-    cap.set(CAP_PROP_FRAME_HEIGHT, 1080);
+    cap.set(CAP_PROP_FRAME_WIDTH, width);
+    cap.set(CAP_PROP_FRAME_HEIGHT, height);
     
     if (!cap.isOpened()) {
         cerr << "Error: Cannot open camera" << endl;
         return -1;
     }
     
-    Ptr<aruco::Dictionary> dict = aruco::getPredefinedDictionary(aruco::DICT_4X4_100);
+    Ptr<aruco::Dictionary> dict = aruco::getPredefinedDictionary(aruco::DICT_4X4_50);
     
     Ptr<aruco::DetectorParameters> params = aruco::DetectorParameters::create();
+    params->cornerRefinementMethod = aruco::CORNER_REFINE_SUBPIX;
+    params->cornerRefinementWinSize = 3;
     params->adaptiveThreshWinSizeMin = 3;
     params->adaptiveThreshWinSizeMax = 23;
     params->adaptiveThreshWinSizeStep = 10;
-    params->minMarkerPerimeterRate = 0.03;
-    params->maxMarkerPerimeterRate = 0.8;
-    params->polygonalApproxAccuracyRate = 0.03;
-    params->cornerRefinementMethod = aruco::CORNER_REFINE_SUBPIX;
-    params->cornerRefinementWinSize = 5;
-    params->errorCorrectionRate = 0.6;
     
-    cout << "Camera: MJPG 1920x1080" << endl;
+    cout << "Camera: MJPG " << width << "x" << height << endl;
     cout << "Marker size: " << markerSize * 100 << " cm" << endl;
-    cout << "Filters: pos(5), angle(3), tilt compensation ON" << endl;
+    cout << "Detection: every 3rd frame" << endl;
     cout << "Press Ctrl+C to exit" << endl;
     cout << "------------------------------------------------------------" << endl;
     
-    Mat frame, gray;
+    Mat frame, gray, processed;
     vector<int> ids, lastIds;
     vector<vector<Point2f>> corners, lastCorners;
     vector<Vec3d> rvecs, tvecs, lastRvecs, lastTvecs;
@@ -155,27 +151,46 @@ int main() {
     int fpsFrames = 0;
     auto lastPrint = steady_clock::now();
     
+    int framesWithoutMarker = 0;
+    const int maxFramesWithout = 10;
+    
     while (running) {
         cap >> frame;
         if (frame.empty()) break;
         
         if (frameCount % 3 == 0) {
             cvtColor(frame, gray, COLOR_BGR2GRAY);
-            aruco::detectMarkers(gray, dict, corners, ids, params);
+            
+            // Предобработка
+            Mat blurred;
+            GaussianBlur(gray, blurred, Size(3, 3), 0);
+            adaptiveThreshold(blurred, processed, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 9, 3);
+            
+            aruco::detectMarkers(processed, dict, corners, ids, params);
+            
+            if (ids.empty()) {
+                aruco::detectMarkers(gray, dict, corners, ids, params);
+            }
             
             if (!ids.empty()) {
                 aruco::estimatePoseSingleMarkers(corners, markerSize, cameraMatrix, distCoeffs, rvecs, tvecs);
+                lastIds = ids;
+                lastCorners = corners;
+                lastRvecs = rvecs;
+                lastTvecs = tvecs;
+                framesWithoutMarker = 0;
+            } else {
+                framesWithoutMarker++;
             }
-            
-            lastIds = ids;
-            lastCorners = corners;
-            lastRvecs = rvecs;
-            lastTvecs = tvecs;
         } else {
-            ids = lastIds;
-            corners = lastCorners;
-            rvecs = lastRvecs;
-            tvecs = lastTvecs;
+            if (framesWithoutMarker < maxFramesWithout) {
+                ids = lastIds;
+                corners = lastCorners;
+                rvecs = lastRvecs;
+                tvecs = lastTvecs;
+            } else {
+                ids.clear();
+            }
         }
         
         fpsFrames++;
@@ -195,20 +210,16 @@ int main() {
                 cout << ids.size() << " marker(s): ";
                 for (size_t i = 0; i < ids.size(); i++) {
                     Vec3d rawAngles = rvecToEuler(rvecs[i]);
-                    
-                    // Компенсация наклонов
                     Vec3d compensatedPos = compensateTilt(tvecs[i], rawAngles);
-                    
-                    // Фильтрация
-                    Vec3d filteredPos = posFilter.filter(compensatedPos);
-                    Vec3d filteredAngles = angleFilter.filter(rawAngles);
-                    
+                    Vec3d filteredPos = posFilter.filter(compensatedPos);     
+                    Vec3d filteredAngles = angleFilter.filter(rawAngles);      
+
                     cout << "ID:" << ids[i]
-                         << "|x:" << fixed << setprecision(2) << filteredPos[0]
-                         << " y:" << filteredPos[1]
-                         << " z:" << filteredPos[2] << "m"
-                         << " yaw:" << setprecision(0) << filteredAngles[0] << "\u00B0"
-                         << " roll:" << filteredAngles[1] << "\u00B0"
+                         << "|x:" << fixed << setprecision(2) << filteredPos[0]    
+                         << " y:" << filteredPos[1]                                
+                         << " z:" << filteredPos[2] << "m"                         
+                         << " yaw:" << setprecision(0) << filteredAngles[0] << "\u00B0"  
+                         << " roll:" << filteredAngles[1] << "\u00B0"                    
                          << " pitch:" << filteredAngles[2] << "\u00B0";
                     if (i < ids.size() - 1) cout << " | ";
                 }
