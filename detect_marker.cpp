@@ -6,6 +6,7 @@
 #include <vector>
 #include <cmath>
 #include <signal.h>
+#include <deque>
 
 using namespace std;
 using namespace cv;
@@ -16,6 +17,40 @@ volatile bool running = true;
 void sigintHandler(int) {
     running = false;
 }
+
+// Простой фильтр скользящего среднего
+class MovingAverage {
+private:
+    deque<double> buffer;
+    size_t maxSize;
+public:
+    MovingAverage(size_t size) : maxSize(size) {}
+    
+    double filter(double value) {
+        buffer.push_back(value);
+        if (buffer.size() > maxSize) buffer.pop_front();
+        
+        double sum = 0;
+        for (double v : buffer) sum += v;
+        return sum / buffer.size();
+    }
+    
+    void reset() { buffer.clear(); }
+};
+
+// Фильтр для Vec3d (X, Y, Z)
+class Vec3Filter {
+private:
+    MovingAverage x, y, z;
+public:
+    Vec3Filter(size_t size) : x(size), y(size), z(size) {}
+    
+    Vec3d filter(const Vec3d& v) {
+        return Vec3d(x.filter(v[0]), y.filter(v[1]), z.filter(v[2]));
+    }
+    
+    void reset() { x.reset(); y.reset(); z.reset(); }
+};
 
 Vec3d rvecToEuler(const Vec3d& rvec) {
     Mat R;
@@ -38,6 +73,25 @@ Vec3d rvecToEuler(const Vec3d& rvec) {
     return Vec3d(yaw, roll, pitch);
 }
 
+// Компенсация наклонов (крен, дифферент) для X и Y
+Vec3d compensateTilt(const Vec3d& tvec, const Vec3d& euler) {
+    double pitch = euler[1] * CV_PI / 180.0;  
+    double roll  = euler[2] * CV_PI / 180.0;  
+    
+    double x = tvec[0];
+    double y = tvec[1];
+    double z = tvec[2];
+    
+    if (abs(euler[1]) <= 15.0) {
+        x = x * cos(pitch) + z * sin(pitch);
+    }
+    if (abs(euler[2]) <= 15.0) {
+        y = y * cos(roll) + z * sin(roll);
+    }
+    
+    return Vec3d(y, x, z);
+}
+
 int main() {
     signal(SIGINT, sigintHandler);
     
@@ -50,6 +104,10 @@ int main() {
         0.271577650144495, 0.3342575649939697, 0, 0, 0);
     
     float markerSize = 0.10f;
+    
+    // Фильтры (размер окна = 5 для плавности без большой задержки)
+    Vec3Filter posFilter(5);   // X, Y, Z
+    Vec3Filter angleFilter(3); // Yaw, Roll, Pitch
     
     cout << "\033[2J\033[1;1H";
     cout << "============================================================" << endl;
@@ -69,31 +127,20 @@ int main() {
     
     Ptr<aruco::Dictionary> dict = aruco::getPredefinedDictionary(aruco::DICT_4X4_100);
     
-    // Настройка параметров детектора
     Ptr<aruco::DetectorParameters> params = aruco::DetectorParameters::create();
     params->adaptiveThreshWinSizeMin = 3;
     params->adaptiveThreshWinSizeMax = 23;
     params->adaptiveThreshWinSizeStep = 10;
-    params->minMarkerPerimeterRate = 0.03;  // Минимальный размер маркера (3% от кадра)
-    params->maxMarkerPerimeterRate = 0.8;   // Максимальный размер (80% от кадра)
+    params->minMarkerPerimeterRate = 0.03;
+    params->maxMarkerPerimeterRate = 0.8;
     params->polygonalApproxAccuracyRate = 0.03;
-    params->minCornerDistanceRate = 0.01;
-    params->minDistanceToBorder = 3;
     params->cornerRefinementMethod = aruco::CORNER_REFINE_SUBPIX;
     params->cornerRefinementWinSize = 5;
-    params->cornerRefinementMaxIterations = 30;
-    params->cornerRefinementMinAccuracy = 0.1;
-    params->markerBorderBits = 1;
-    params->perspectiveRemovePixelPerCell = 4;
-    params->perspectiveRemoveIgnoredMarginPerCell = 0.13;
-    params->maxErroneousBitsInBorderRate = 0.35;
-    params->minOtsuStdDev = 5.0;
     params->errorCorrectionRate = 0.6;
     
     cout << "Camera: MJPG 1920x1080" << endl;
     cout << "Marker size: " << markerSize * 100 << " cm" << endl;
-    cout << "Dictionary: DICT_4X4_100" << endl;
-    cout << "Detection: every 3rd frame" << endl;
+    cout << "Filters: pos(5), angle(3), tilt compensation ON" << endl;
     cout << "Press Ctrl+C to exit" << endl;
     cout << "------------------------------------------------------------" << endl;
     
@@ -147,16 +194,28 @@ int main() {
             if (!ids.empty()) {
                 cout << ids.size() << " marker(s): ";
                 for (size_t i = 0; i < ids.size(); i++) {
-                    Vec3d angles = rvecToEuler(rvecs[i]);
+                    Vec3d rawAngles = rvecToEuler(rvecs[i]);
+                    
+                    // Компенсация наклонов
+                    Vec3d compensatedPos = compensateTilt(tvecs[i], rawAngles);
+                    
+                    // Фильтрация
+                    Vec3d filteredPos = posFilter.filter(compensatedPos);
+                    Vec3d filteredAngles = angleFilter.filter(rawAngles);
+                    
                     cout << "ID:" << ids[i]
-                         << "|x:" << fixed << setprecision(2) << tvecs[i][0]
-                         << " y:" << tvecs[i][1]
-                         << " z:" << tvecs[i][2] << "m"
-                         << " yaw:" << setprecision(0) << angles[0] << "\u00B0";
+                         << "|x:" << fixed << setprecision(2) << filteredPos[0]
+                         << " y:" << filteredPos[1]
+                         << " z:" << filteredPos[2] << "m"
+                         << " yaw:" << setprecision(0) << filteredAngles[0] << "\u00B0"
+                         << " roll:" << filteredAngles[1] << "\u00B0"
+                         << " pitch:" << filteredAngles[2] << "\u00B0";
                     if (i < ids.size() - 1) cout << " | ";
                 }
                 cout << "   " << flush;
             } else {
+                posFilter.reset();
+                angleFilter.reset();
                 cout << "Searching...   " << flush;
             }
             lastPrint = now;
