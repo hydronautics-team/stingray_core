@@ -162,7 +162,7 @@ private:
         return std::vector<uint8_t>(value, value + length);
     }
 
-    void readCallback(const std_msgs::msg::UInt8MultiArray::SharedPtr msg)
+    void readCallback(const std_msgs::msg::UInt8MultiArray::SharedPtr& msg)
     {
         if (msg->data.empty())
         {
