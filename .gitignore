@@ -1,5 +1,7 @@
 install/
 log/
+compile_commands.json
+compile_commands.json.tmp
 devel/
 logs/
 build/

@@ -1,16 +1,35 @@
 FROM ros:humble-ros-base
 
-# Установим нужные пакеты + утилиты для подсветки терминала
+# Установим нужные пакеты + инструменты разработки для VS Code Dev Containers
 RUN apt-get update && apt-get install -y \
-    python3-pip python3-colcon-common-extensions \
-    python3-smbus python3-smbus2 libi2c-dev i2c-tools \
-    libasio-dev netcat socat \
-    ros-humble-rclcpp ros-humble-std-msgs ros-humble-sensor-msgs ros-humble-udp-msgs \
-    bash bash-completion command-not-found less \
-    python3-colorama \
+    bash bash-completion build-essential cmake command-not-found gdb git jq less lsb-release \
+    clang clangd clang-format clang-tidy \
+    i2c-tools libasio-dev libboost-all-dev libi2c-dev libserial-dev netcat-openbsd socat \
+    python3-colcon-common-extensions python3-colorama python3-pip python3-pyqtgraph \
+    python3-rosdep python3-smbus python3-smbus2 python3-vcstool \
+    ros-humble-ament-clang-tidy \
+    ros-humble-ament-cmake-gtest \
+    ros-humble-ament-lint-auto \
+    ros-humble-ament-lint-common \
+    ros-humble-geometry-msgs \
+    ros-humble-lifecycle-msgs \
+    ros-humble-launch \
+    ros-humble-launch-ros \
+    ros-humble-python-qt-binding \
+    ros-humble-rclcpp \
+    ros-humble-rclcpp-action \
+    ros-humble-rclcpp-components \
+    ros-humble-rclcpp-lifecycle \
     ros-humble-rqt \
     ros-humble-rqt-common-plugins \
     ros-humble-rqt-gui-py \
+    ros-humble-rosidl-default-generators \
+    ros-humble-rosidl-default-runtime \
+    ros-humble-sensor-msgs \
+    ros-humble-std-msgs \
+    ros-humble-std-srvs \
+    ros-humble-tf2-geometry-msgs \
+    ros-humble-udp-msgs \
     && rm -rf /var/lib/apt/lists/*
 
 # Настройка цветного вывода и подсветки
@@ -32,6 +51,10 @@ RUN echo 'export PS1="\[\033[1;32m\]\u@stingray-container:\w\$\[\033[0m\] "' >> 
 RUN echo 'set -o vi' >> ~/.bashrc && \
     echo 'set editing-mode vi' >> ~/.inputrc && \
     echo 'set show-mode-in-prompt on' >> ~/.inputrc
+
+# ROS/workspace setup for interactive VS Code terminals.
+RUN echo 'source /opt/ros/humble/setup.bash' >> ~/.bashrc && \
+    echo '[ -f /stingray_core/install/setup.bash ] && source /stingray_core/install/setup.bash' >> ~/.bashrc
 
 # Установка переменных окружения для цветного вывода
 ENV TERM=xterm-256color

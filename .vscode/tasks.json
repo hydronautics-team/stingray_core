@@ -1,0 +1,43 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "ROS: build with compile_commands",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-lc",
+                "source /opt/ros/humble/setup.bash && bash ./build.sh"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "clangd: refresh compile_commands",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-lc",
+                "bash .devcontainer/update-compile-commands.sh --skip-build"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "clang-tidy: workspace",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-lc",
+                "bash .devcontainer/run-clang-tidy.sh"
+            ],
+            "problemMatcher": [
+                "$gcc"
+            ]
+        }
+    ]
+}

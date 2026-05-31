@@ -51,6 +51,19 @@ In ~/stingray_core/
 ./docker/build.sh
 ```
 
+## Dev Container
+
+Open the repository in VS Code and run `Dev Containers: Reopen in Container`.
+The container uses the same ROS 2 Humble Dockerfile, installs `clangd` and
+`clang-tidy`, builds the workspace with `CMAKE_EXPORT_COMPILE_COMMANDS=ON`, and
+merges package databases into `compile_commands.json` for clangd.
+
+Useful VS Code tasks:
+
+- `ROS: build with compile_commands`
+- `clangd: refresh compile_commands`
+- `clang-tidy: workspace`
+
 ## Run ROV
 
 In ~/stingray_core/
