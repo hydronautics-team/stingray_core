@@ -97,7 +97,7 @@ Vec3d rvecToEuler(const Vec3d& rvec) {
     double roll = atan2(R.at<double>(2,1), R.at<double>(2,2)) * 180.0/CV_PI;
     if (yaw < 0) yaw += 360.0;
     roll += 180.0; if (roll > 180.0) roll -= 360.0;
-    return Vec3d(yaw, roll, pitch);
+    return Vec3d(yaw, pitch, roll);
 }
 
 Vec3d compensateTilt(const Vec3d& tvec, const Vec3d& euler) {
@@ -105,7 +105,7 @@ Vec3d compensateTilt(const Vec3d& tvec, const Vec3d& euler) {
     double x = tvec[0], y = tvec[1], z = tvec[2];
     if (abs(euler[1]) <= 15.0) x = x*cos(p) + z*sin(p);
     if (abs(euler[2]) <= 15.0) y = y*cos(r) + z*sin(r);
-    return Vec3d(y, x, z);
+    return Vec3d(y, -x, z);
 }
 
 bool loadCalibration(const string& fn, Mat& cam, Mat& dist, int& w, int& h) {
