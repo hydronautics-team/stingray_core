@@ -48,7 +48,6 @@ class StingrayCoreControlNode(Node):
         self.declare_parameter('topic_control_data', '/control/data')
         self.declare_parameter('vectornav_yaw_offset_deg', 0.0)
 
-        
         self.topic_imu_data = self.get_parameter('topic_imu_data').get_parameter_value().string_value
         self.topic_loop_flags = self.get_parameter(
             'topic_loop_flags').get_parameter_value().string_value
@@ -159,6 +158,22 @@ class StingrayCoreControlNode(Node):
         self.pub_thruster_cmd = self.create_publisher(
             UInt8MultiArray, '/thruster/cmd', qos)
 
+        #for vision by Nikita
+        self.vision_yaw = 0.0
+        self.vision_depth = 0.0
+        self.use_vision_yaw = False
+        self.use_vision_depth = False
+
+        self.declare_parameter('use_vision_yaw', False)
+        self.declare_parameter('use_vision_depth', False)
+        self.use_vision_yaw = self.get_parameter('use_vision_yaw').value
+        self.use_vision_depth = self.get_parameter('use_vision_depth').value
+
+        self.sub_vision_yaw = self.create_subscription(
+            Float64, '/control/vision/yaw', self.vision_yaw_callback, 10)
+        self.sub_vision_depth = self.create_subscription(
+            Float64, '/control/vision/depth', self.vision_depth_callback, 10)
+
         # --- инициализация состояний ---
         self.imu_yaw = 0.0
         self.imu_pitch = 0.0
@@ -248,6 +263,7 @@ class StingrayCoreControlNode(Node):
         self.get_logger().info(
             f"StingrayCoreControlNode started at {self.rate_hz} Hz")
 
+
     def normalize_angle_deg(self, angle_deg):
         """Нормализует угол в градусах в диапазон [-180, 180)."""
         a = (angle_deg + 180.0) % 360.0 - 180.0
@@ -289,6 +305,14 @@ class StingrayCoreControlNode(Node):
             self._last_status_log = now
 
     # --- Колбэки ---
+    def vision_yaw_callback(self, msg: Float64):
+        """Получает курс от детектора маркеров."""
+        self.vision_yaw = msg.data
+
+    def vision_depth_callback(self, msg: Float64):
+        """Получает глубину от детектора маркеров."""
+        self.vision_depth = msg.data
+
     def imu_callback(self, msg: Data):
         try:
 
@@ -364,11 +388,30 @@ class StingrayCoreControlNode(Node):
         dt = self.last_dt
         return self.uy_ctrl.update(self.impact_sway, self.imu_accel_y, 0.0, dt)
 
+    # def compute_heave(self):
+    #     dt = self.last_dt
+    #     return self.depth_ctrl.update(
+    #         self.impact_depth,
+    #         self.depth,
+    #         dt,
+    #         self.flag_setup_feedback_speed,
+    #         param_update={
+    #             "K_p": self.controllers["heave"].K_p,
+    #             "K_i": self.controllers["heave"].K_i,
+    #             "K_1": self.controllers["heave"].K_1,
+    #             "K_2": self.controllers["heave"].K_2,
+    #             "ap_T": self.controllers["heave"].ap_T,
+    #             "ap_K": self.controllers["heave"].ap_K,
+    #             "out_sat": self.controllers["heave"].out_sat,
+    #         })
+
     def compute_heave(self):
         dt = self.last_dt
+        # Используем vision если флаг включен, иначе pressure sensor
+        current_depth = self.vision_depth if self.use_vision_depth else self.depth
         return self.depth_ctrl.update(
             self.impact_depth,
-            self.depth,
+            current_depth,
             dt,
             self.flag_setup_feedback_speed,
             param_update={
@@ -380,7 +423,6 @@ class StingrayCoreControlNode(Node):
                 "ap_K": self.controllers["heave"].ap_K,
                 "out_sat": self.controllers["heave"].out_sat,
             })
-
 
     def compute_roll(self):
         dt = self.last_dt
@@ -404,11 +446,31 @@ class StingrayCoreControlNode(Node):
                 "out_sat": self.controllers["pitch"].out_sat,
             })
 
+        # def compute_yaw(self):
+        #     dt = self.last_dt
+        #     return self.yaw_ctrl.update(
+        #         self.impact_yaw,
+        #         self.imu_yaw,
+        #         self.imu_rate_z,
+        #         dt,
+        #         self.flag_setup_feedback_speed,
+        #         param_update={
+        #             "K_p": self.controllers["yaw"].K_p,
+        #             "K_i": self.controllers["yaw"].K_i,
+        #             "K_1": self.controllers["yaw"].K_1,
+        #             "K_2": self.controllers["yaw"].K_2,
+        #             "ap_T": self.controllers["yaw"].ap_T,
+        #             "ap_K": self.controllers["yaw"].ap_K,
+        #             "out_sat": self.controllers["yaw"].out_sat,
+        #         })
+
     def compute_yaw(self):
         dt = self.last_dt
+        # Используем vision если флаг включен, иначе IMU
+        current_yaw = self.vision_yaw if self.use_vision_yaw else self.imu_yaw
         return self.yaw_ctrl.update(
             self.impact_yaw,
-            self.imu_yaw,
+            current_yaw,
             self.imu_rate_z,
             dt,
             self.flag_setup_feedback_speed,
@@ -421,7 +483,6 @@ class StingrayCoreControlNode(Node):
                 "ap_K": self.controllers["yaw"].ap_K,
                 "out_sat": self.controllers["yaw"].out_sat,
             })
-
 
 
     def _on_params_changed(self, params: list[Parameter]) -> SetParametersResult:

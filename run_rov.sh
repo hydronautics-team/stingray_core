@@ -14,7 +14,8 @@ colcon build --packages-select \
     asio_cmake_module \
     power_control \
     ms5837_pressure_sensor\
-    stingray_core_launch
+    stingray_core_launch \
+    detect_marker
 
 echo "----------------------------------------"
 echo "🔄 Sourcing install/setup.bash ..."

@@ -87,6 +87,8 @@ stingray_core_control_node:
     - out_sat
     - ap_K
     - ap_T
-    flag_setup_feedback_speed: false
+    flag_setup_feedback_speed: true
+    use_vision_yaw: true
+    use_vision_depth: true
     debug_publish: true
     use_sim_time: false
