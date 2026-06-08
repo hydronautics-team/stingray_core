@@ -1,14 +1,18 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/aruco.hpp>
 #include <iostream>
+#include <sstream>
+#include <thread>
+#include <mutex>
 #include <iomanip>
 #include <chrono>
 #include <vector>
 #include <cmath>
 #include <signal.h>
-#include <deque>
 #include <fstream>
-#include <algorithm>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
 
 using namespace std;
 using namespace cv;
@@ -17,219 +21,279 @@ using namespace chrono;
 volatile bool running = true;
 void sigintHandler(int) { running = false; }
 
-// Медианный фильтр (лучше скользящего среднего для углов)
-class MedianFilter {
-private:
-    deque<double> buffer;
-    size_t maxSize;
+Mat globalFrame;
+mutex frameMutex;
+string globalJson = "{}";
+mutex jsonMutex;
+
+class YawFilter {
+    double alpha, value;
+    bool first;
 public:
-    MedianFilter(size_t size) : maxSize(size) {}
-    
-    double filter(double value) {
-        buffer.push_back(value);
-        if (buffer.size() > maxSize) buffer.pop_front();
-        
-        vector<double> sorted(buffer.begin(), buffer.end());
-        sort(sorted.begin(), sorted.end());
-        return sorted[sorted.size() / 2];
+    YawFilter(double a = 0.3) : alpha(a), value(0), first(true) {}
+    double filter(double v) {
+        if (first) { value = v; first = false; return v; }
+        double diff = v - value;
+        if (diff > 180) diff -= 360;
+        if (diff < -180) diff += 360;
+        value += alpha * diff;
+        if (value < 0) value += 360;
+        if (value >= 360) value -= 360;
+        return value;
     }
-    
-    void reset() { buffer.clear(); }
+    void reset() { first = true; }
 };
 
-class Vec3MedianFilter {
-private:
-    MedianFilter x, y, z;
+class RollFilter {
+    double alpha, value;
+    bool first;
 public:
-    Vec3MedianFilter(size_t size) : x(size), y(size), z(size) {}
-    Vec3d filter(const Vec3d& v) {
-        return Vec3d(x.filter(v[0]), y.filter(v[1]), z.filter(v[2]));
+    RollFilter(double a = 0.3) : alpha(a), value(0), first(true) {}
+    double filter(double v) {
+        if (first) { value = v; first = false; return v; }
+        double diff = v - value;
+        if (diff > 180) diff -= 360;
+        if (diff < -180) diff += 360;
+        value += alpha * diff;
+        if (value > 180) value -= 360;
+        if (value < -180) value += 360;
+        return value;
     }
-    void reset() { x.reset(); y.reset(); z.reset(); }
+    void reset() { first = true; }
+};
+
+class PitchFilter {
+    double alpha, value;
+    bool first;
+public:
+    PitchFilter(double a = 0.3) : alpha(a), value(0), first(true) {}
+    double filter(double v) {
+        if (first) { value = v; first = false; return v; }
+        value += alpha * (v - value);
+        return value;
+    }
+    void reset() { first = true; }
+};
+
+// Экспоненциальный фильтр для позиции
+class PosFilter {
+    double alpha, value;
+    bool first;
+public:
+    PosFilter(double a = 0.3) : alpha(a), value(0), first(true) {}
+    double filter(double v) {
+        if (first) { value = v; first = false; return v; }
+        value += alpha * (v - value);
+        return value;
+    }
+    void reset() { first = true; }
+    double get() { return value; }
 };
 
 Vec3d rvecToEuler(const Vec3d& rvec) {
-    Mat R;
-    Rodrigues(rvec, R);
-    R = R.t();
-    double roll, pitch, yaw;
-    yaw   = atan2(R.at<double>(1, 0), R.at<double>(0, 0));
-    pitch = asin(-R.at<double>(2, 0));
-    roll  = atan2(R.at<double>(2, 1), R.at<double>(2, 2));
-
-    yaw   = yaw * 180.0 / CV_PI;
-    pitch = -pitch * 180.0 / CV_PI;
-    roll  = roll * 180.0 / CV_PI;
-
+    Mat R; Rodrigues(rvec, R); R = R.t();
+    double yaw = atan2(R.at<double>(1,0), R.at<double>(0,0)) * 180.0/CV_PI;
+    double pitch = -asin(-R.at<double>(2,0)) * 180.0/CV_PI;
+    double roll = atan2(R.at<double>(2,1), R.at<double>(2,2)) * 180.0/CV_PI;
     if (yaw < 0) yaw += 360.0;
-    roll += 180.0;
-    if (roll > 180.0) roll -= 360.0;
-
+    roll += 180.0; if (roll > 180.0) roll -= 360.0;
     return Vec3d(yaw, roll, pitch);
 }
 
 Vec3d compensateTilt(const Vec3d& tvec, const Vec3d& euler) {
-    double pitch = euler[1] * CV_PI / 180.0;  
-    double roll  = euler[2] * CV_PI / 180.0;  
+    double p = euler[1] * CV_PI/180.0, r = euler[2] * CV_PI/180.0;
     double x = tvec[0], y = tvec[1], z = tvec[2];
-
-    if (abs(euler[1]) <= 15.0) x = x * cos(pitch) + z * sin(pitch);
-    if (abs(euler[2]) <= 15.0) y = y * cos(roll) + z * sin(roll);
-    
+    if (abs(euler[1]) <= 15.0) x = x*cos(p) + z*sin(p);
+    if (abs(euler[2]) <= 15.0) y = y*cos(r) + z*sin(r);
     return Vec3d(y, x, z);
 }
 
-bool loadCalibration(const string& filename, Mat& cameraMatrix, Mat& distCoeffs, int& width, int& height) {
-    ifstream f(filename);
-    if (!f.is_open()) return false;
-    
-    string key;
-    double fx = 300, fy = 300, cx = 320, cy = 240;
-    double k1 = 0, k2 = 0, p1 = 0, p2 = 0, k3 = 0;
-    
-    while (f >> key) {
-        if (key.find("\"width\"") != string::npos) { f >> key; width = stoi(key); }
-        if (key.find("\"height\"") != string::npos) { f >> key; height = stoi(key); }
-        if (key.find("\"fx\"") != string::npos) { f >> key; fx = stod(key); }
-        if (key.find("\"fy\"") != string::npos) { f >> key; fy = stod(key); }
-        if (key.find("\"cx\"") != string::npos) { f >> key; cx = stod(key); }
-        if (key.find("\"cy\"") != string::npos) { f >> key; cy = stod(key); }
-        if (key.find("\"k1\"") != string::npos) { f >> key; k1 = stod(key); }
-        if (key.find("\"k2\"") != string::npos) { f >> key; k2 = stod(key); }
-        if (key.find("\"p1\"") != string::npos) { f >> key; p1 = stod(key); }
-        if (key.find("\"p2\"") != string::npos) { f >> key; p2 = stod(key); }
-        if (key.find("\"k3\"") != string::npos) { f >> key; k3 = stod(key); }
+bool loadCalibration(const string& fn, Mat& cam, Mat& dist, int& w, int& h) {
+    ifstream f(fn); if (!f.is_open()) return false;
+    string k; double fx=300,fy=300,cx=320,cy=240,k1=0,k2=0,p1=0,p2=0,k3=0;
+    while (f >> k) {
+        if (k.find("\"fx\"")!=string::npos){f>>k;fx=stod(k);}
+        if (k.find("\"fy\"")!=string::npos){f>>k;fy=stod(k);}
+        if (k.find("\"cx\"")!=string::npos){f>>k;cx=stod(k);}
+        if (k.find("\"cy\"")!=string::npos){f>>k;cy=stod(k);}
+        if (k.find("\"k1\"")!=string::npos){f>>k;k1=stod(k);}
+        if (k.find("\"k2\"")!=string::npos){f>>k;k2=stod(k);}
+        if (k.find("\"p1\"")!=string::npos){f>>k;p1=stod(k);}
+        if (k.find("\"p2\"")!=string::npos){f>>k;p2=stod(k);}
+        if (k.find("\"k3\"")!=string::npos){f>>k;k3=stod(k);}
     }
-    f.close();
-    
-    cameraMatrix = (Mat_<double>(3, 3) << fx, 0, cx, 0, fy, cy, 0, 0, 1);
-    distCoeffs = (Mat_<double>(5, 1) << k1, k2, p1, p2, k3);
+    cam = (Mat_<double>(3,3)<<fx,0,cx,0,fy,cy,0,0,1);
+    dist = (Mat_<double>(5,1)<<k1,k2,p1,p2,k3);
     return true;
 }
 
-// Проверка на выброс: если значение прыгнуло >10° за 1 кадр — игнорируем
-bool isAngleValid(double current, double previous) {
-    if (previous == -999) return true;  // первый кадр
-    return abs(current - previous) < 10.0;
+void httpServer(int port) {
+    int fd = socket(AF_INET, SOCK_STREAM, 0), opt = 1;
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    sockaddr_in addr{}; addr.sin_family=AF_INET; addr.sin_addr.s_addr=INADDR_ANY; addr.sin_port=htons(port);
+    bind(fd,(sockaddr*)&addr,sizeof(addr)); listen(fd,3);
+    cout << "HTTP: http://0.0.0.0:" << port << "/stream | /data | /video" << endl;
+    
+    while (running) {
+        int cl = accept(fd,nullptr,nullptr); if(cl<0) continue;
+        char buf[2048]{}; read(cl,buf,2047); string req(buf);
+        
+        if (req.find("GET /stream") != string::npos) {
+            string hdr = "HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace; boundary=frame\r\nAccess-Control-Allow-Origin: *\r\n\r\n";
+            send(cl,hdr.c_str(),hdr.size(),0);
+            while (running) {
+                Mat f; { lock_guard<mutex> lk(frameMutex); if(!globalFrame.empty()) f=globalFrame.clone(); }
+                if(!f.empty()) {
+                    vector<uchar> jpg; imencode(".jpg",f,jpg,{IMWRITE_JPEG_QUALITY,50});
+                    string b = "--frame\r\nContent-Type: image/jpeg\r\n\r\n";
+                    send(cl,b.c_str(),b.size(),0); send(cl,(char*)jpg.data(),jpg.size(),0); send(cl,"\r\n",2,0);
+                }
+                this_thread::sleep_for(milliseconds(33));
+            }
+        } else if (req.find("GET /data") != string::npos) {
+            string j; { lock_guard<mutex> lk(jsonMutex); j=globalJson; }
+            string rsp = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: "+to_string(j.size())+"\r\n\r\n"+j;
+            send(cl,rsp.c_str(),rsp.size(),0);
+        } else if (req.find("GET /video") != string::npos) {
+            Mat f; { lock_guard<mutex> lk(frameMutex); if(!globalFrame.empty()) f=globalFrame.clone(); }
+            if(!f.empty()) {
+                vector<uchar> jpg; imencode(".jpg",f,jpg,{IMWRITE_JPEG_QUALITY,50});
+                string hdr = "HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: "+to_string(jpg.size())+"\r\n\r\n";
+                send(cl,hdr.c_str(),hdr.size(),0); send(cl,(char*)jpg.data(),jpg.size(),0);
+            }
+        }
+        close(cl);
+    }
+    close(fd);
 }
 
 int main() {
     signal(SIGINT, sigintHandler);
     
-    Mat cameraMatrix, distCoeffs;
-    int width = 640, height = 480;
+    Mat camMat, dist;
+    int w=640, h=480;
+    loadCalibration("camera_calibration.json", camMat, dist, w, h);
     
-    if (!loadCalibration("camera_calibration.json", cameraMatrix, distCoeffs, width, height)) {
-        cameraMatrix = (Mat_<double>(3, 3) << 300, 0, 320, 0, 300, 240, 0, 0, 1);
-        distCoeffs = (Mat_<double>(5, 1) << 0, 0, 0, 0, 0);
-    }
+    float mSize = 0.10f;
     
-    float markerSize = 0.10f;
-    Vec3MedianFilter angleFilter(7);  // Медианный фильтр по 7 кадрам
-    Vec3MedianFilter posFilter(7);    // Медианный фильтр по 7 кадрам
+    // EMA фильтры
+    YawFilter   angF_yaw(0.3);
+    RollFilter  angF_roll(0.3);
+    PitchFilter angF_pitch(0.3);
+    PosFilter posF_x(0.3), posF_y(0.3), posF_z(0.3);
+    
+    // Последние известные данные
+    double lastX=0, lastY=0, lastZ=0, lastYaw=0, lastRoll=0, lastPitch=0;
+    int lastId = -1;
     
     cout << "\033[2J\033[1;1H";
-    cout << "============================================================" << endl;
-    cout << "ArUco MARKER DETECTION" << endl;
+    cout << "ArUco + HTTP (EMA filter, last value hold)" << endl;
     cout << "============================================================" << endl;
     
     VideoCapture cap(0);
-    cap.set(CAP_PROP_FOURCC, VideoWriter::fourcc('M', 'J', 'P', 'G'));
-    cap.set(CAP_PROP_FRAME_WIDTH, width);
-    cap.set(CAP_PROP_FRAME_HEIGHT, height);
+    cap.set(CAP_PROP_FOURCC, VideoWriter::fourcc('M','J','P','G'));
+    cap.set(CAP_PROP_FRAME_WIDTH, w); cap.set(CAP_PROP_FRAME_HEIGHT, h);
+    if (!cap.isOpened()) { cerr << "Camera error" << endl; return 1; }
     
-    if (!cap.isOpened()) { cerr << "Camera error" << endl; return -1; }
+    thread http(httpServer, 8080);
     
-    Ptr<aruco::Dictionary> dict = aruco::getPredefinedDictionary(aruco::DICT_4X4_50);
-    Ptr<aruco::DetectorParameters> params = aruco::DetectorParameters::create();
+    auto dict = aruco::getPredefinedDictionary(aruco::DICT_4X4_50);
+    auto params = aruco::DetectorParameters::create();
     params->cornerRefinementMethod = aruco::CORNER_REFINE_SUBPIX;
     params->cornerRefinementWinSize = 3;
     
-    cout << "Camera: " << width << "x" << height << " | Marker: " << markerSize*100 << "cm" << endl;
-    cout << "Filter: Median(7) + outlier rejection" << endl;
-    cout << "------------------------------------------------------------" << endl;
-    
-    Mat frame, gray, processed;
+    Mat frame, gray, proc;
     vector<int> ids, lastIds;
     vector<vector<Point2f>> corners, lastCorners;
     vector<Vec3d> rvecs, tvecs, lastRvecs, lastTvecs;
     
-    int frameCount = 0, fpsFrames = 0, framesWithoutMarker = 0;
-    double fps = 0;
-    auto fpsStart = steady_clock::now(), lastPrint = steady_clock::now();
-    const int maxFramesWithout = 10;
-    
-    // Предыдущие значения для проверки выбросов
-    double prevYaw = -999, prevRoll = -999, prevPitch = -999;
+    int fc=0, noMarker=0;
+    double fps=0;
+    auto t0=steady_clock::now(), tPrint=steady_clock::now();
+    int fpsCnt=0;
     
     while (running) {
-        cap >> frame;
-        if (frame.empty()) break;
+        cap >> frame; if (frame.empty()) break;
+        Mat disp = frame.clone();
         
-        if (frameCount % 3 == 0) {
+        if (fc % 1 == 0) {
             cvtColor(frame, gray, COLOR_BGR2GRAY);
-            GaussianBlur(gray, processed, Size(3, 3), 0);
-            adaptiveThreshold(processed, processed, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 9, 3);
-            
-            aruco::detectMarkers(processed, dict, corners, ids, params);
+            GaussianBlur(gray, proc, Size(3,3), 0);
+            adaptiveThreshold(proc, proc, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 9, 3);
+            aruco::detectMarkers(proc, dict, corners, ids, params);
             if (ids.empty()) aruco::detectMarkers(gray, dict, corners, ids, params);
             
             if (!ids.empty()) {
-                aruco::estimatePoseSingleMarkers(corners, markerSize, cameraMatrix, distCoeffs, rvecs, tvecs);
-                lastIds = ids; lastCorners = corners; lastRvecs = rvecs; lastTvecs = tvecs;
-                framesWithoutMarker = 0;
-            } else framesWithoutMarker++;
+                aruco::estimatePoseSingleMarkers(corners, mSize, camMat, dist, rvecs, tvecs);
+                lastIds=ids; lastCorners=corners; lastRvecs=rvecs; lastTvecs=tvecs; noMarker=0;
+            } else noMarker++;
         } else {
-            if (framesWithoutMarker < maxFramesWithout) {
-                ids = lastIds; corners = lastCorners; rvecs = lastRvecs; tvecs = lastTvecs;
-            } else ids.clear();
+            if (noMarker<10) { ids=lastIds; corners=lastCorners; rvecs=lastRvecs; tvecs=lastTvecs; }
+            else ids.clear();
         }
         
-        fpsFrames++;
+        stringstream js, term;
+        js << "{\"markers\":[";
+        
+        if (!ids.empty()) {
+            for (size_t i=0; i<ids.size(); i++) {
+                Vec3d ang = rvecToEuler(rvecs[i]);
+                double y=ang[0], r=ang[1], p=ang[2];
+                
+                // EMA фильтр
+                double fy = angF_yaw.filter(y);
+                double fr = angF_roll.filter(r);
+                double fp = angF_pitch.filter(p);
+                
+                Vec3d cPos = compensateTilt(tvecs[i], Vec3d(fy, fr, fp));
+                double fx = posF_x.filter(cPos[0]);
+                double fyy = posF_y.filter(cPos[1]);
+                double fz = posF_z.filter(cPos[2]);
+                
+                lastX=fx; lastY=fyy; lastZ=fz;
+                lastYaw=fy; lastRoll=fr; lastPitch=fp;
+                lastId = ids[i];
+                
+                if (i>0) { js << ","; term << " | "; }
+                js << "{\"id\":"<<ids[i]<<",\"x\":"<<fx<<",\"y\":"<<fyy<<",\"z\":"<<fz
+                   <<",\"yaw\":"<<fy<<",\"roll\":"<<fr<<",\"pitch\":"<<fp<<"}";
+                term << "ID:"<<ids[i]<<"|x:"<<fixed<<setprecision(2)<<fx<<" y:"<<fyy<<" z:"<<fz
+                     <<"m yaw:"<<setprecision(0)<<fy<<"° roll:"<<fr<<"° pitch:"<<fp<<"°";
+                
+                aruco::drawDetectedMarkers(disp, corners, ids);
+                aruco::drawAxis(disp, camMat, dist, rvecs[i], tvecs[i], 0.05);
+            }
+        } else if (lastId >= 0) {
+            js << "{\"id\":"<<lastId<<",\"x\":"<<lastX<<",\"y\":"<<lastY<<",\"z\":"<<lastZ
+               <<",\"yaw\":"<<lastYaw<<",\"roll\":"<<lastRoll<<",\"pitch\":"<<lastPitch<<"}";
+            term << "ID:"<<lastId<<"|x:"<<fixed<<setprecision(2)<<lastX<<" y:"<<lastY<<" z:"<<lastZ
+                 <<"m yaw:"<<setprecision(0)<<lastYaw<<"° roll:"<<lastRoll<<"° pitch:"<<lastPitch<<"° (hold)";
+        }
+        js << "]}";
+        
+        { lock_guard<mutex> lk(jsonMutex); globalJson = js.str(); }
+        { lock_guard<mutex> lk(frameMutex); globalFrame = disp.clone(); }
+        
+        fpsCnt++;
         auto now = steady_clock::now();
-        if (duration<double>(now - fpsStart).count() >= 1.0) {
-            fps = fpsFrames / duration<double>(now - fpsStart).count();
-            fpsFrames = 0; fpsStart = now;
+        if (duration<double>(now-t0).count() >= 1.0) {
+            fps = fpsCnt / duration<double>(now-t0).count();
+            fpsCnt=0; t0=now;
         }
         
-        if (duration<double>(now - lastPrint).count() >= 0.5) {
+        if (duration<double>(now-tPrint).count() >= 0.5) {
             cout << "\r[FPS:" << fixed << setprecision(0) << fps << "] ";
-            if (!ids.empty()) {
-                cout << ids.size() << " marker(s): ";
-                for (size_t i = 0; i < ids.size(); i++) {
-                    Vec3d rawAngles = rvecToEuler(rvecs[i]);
-                    
-                    // Проверка на выбросы
-                    double yaw = rawAngles[0], roll = rawAngles[1], pitch = rawAngles[2];
-                    if (!isAngleValid(yaw, prevYaw)) yaw = prevYaw;
-                    if (!isAngleValid(roll, prevRoll)) roll = prevRoll;
-                    if (!isAngleValid(pitch, prevPitch)) pitch = prevPitch;
-                    
-                    prevYaw = yaw; prevRoll = roll; prevPitch = pitch;
-                    
-                    Vec3d filteredAngles = angleFilter.filter(Vec3d(yaw, roll, pitch));
-                    Vec3d compensatedPos = compensateTilt(tvecs[i], filteredAngles);
-                    Vec3d filteredPos = posFilter.filter(compensatedPos);
-                    
-                    cout << "ID:" << ids[i] << "|x:" << fixed << setprecision(2) << filteredPos[0]
-                         << " y:" << filteredPos[1] << " z:" << filteredPos[2] << "m"
-                         << " yaw:" << setprecision(0) << filteredAngles[0] << "\u00B0"
-                         << " roll:" << filteredAngles[1] << "\u00B0"
-                         << " pitch:" << filteredAngles[2] << "\u00B0";
-                    if (i < ids.size() - 1) cout << " | ";
-                }
-                cout << "   " << flush;
+            if (!ids.empty() || lastId >= 0) {
+                cout << "1 marker(s): " << term.str() << "   " << flush;
             } else {
-                posFilter.reset(); angleFilter.reset();
-                prevYaw = prevRoll = prevPitch = -999;
                 cout << "Searching...   " << flush;
             }
-            lastPrint = now;
+            tPrint = now;
         }
-        frameCount++;
+        fc++;
     }
     
-    cap.release();
+    cap.release(); http.join();
     cout << "\n\nSTOPPED" << endl;
     return 0;
 }
