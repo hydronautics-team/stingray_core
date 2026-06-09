@@ -174,6 +174,20 @@ class StingrayCoreControlNode(Node):
         self.sub_vision_depth = self.create_subscription(
             Float64, '/control/vision/depth', self.vision_depth_callback, 10)
 
+        self.vision_yaw_rate = 0.0
+        self.vision_z_velocity = 0.0
+        self.use_vision_yaw_rate = False
+        self.use_vision_z_velocity = False
+
+        self.declare_parameter('use_vision_yaw_rate', False)
+        self.declare_parameter('use_vision_z_velocity', False)
+        self.use_vision_yaw_rate = self.get_parameter('use_vision_yaw_rate').value
+        self.use_vision_z_velocity = self.get_parameter('use_vision_z_velocity').value
+
+        self.sub_vision_yaw_rate = self.create_subscription(
+            Float64, '/control/vision/yaw_rate', self.vision_yaw_rate_callback, 10)
+        self.sub_vision_z_velocity = self.create_subscription(
+            Float64, '/control/vision/z_velocity', self.vision_z_velocity_callback, 10)
         # --- инициализация состояний ---
         self.imu_yaw = 0.0
         self.imu_pitch = 0.0
@@ -271,10 +285,35 @@ class StingrayCoreControlNode(Node):
 
     def control_loop(self):
         now = time.time()
-        dt = now - self.last_time if self.last_time is not None else 0.0
-        self.last_time = now
+        
+        # === Ждем новый кадр от камеры ===
+        # Проверяем, обновились ли данные от камеры
+        if not hasattr(self, 'last_vision_time'):
+            self.last_vision_time = now
+            self.last_vision_yaw = self.vision_yaw
+            self.last_vision_depth = self.vision_depth
+        
+        # Проверяем, пришел ли новый кадр от камеры
+        vision_updated = (self.vision_yaw != self.last_vision_yaw or 
+                        self.vision_depth != self.last_vision_depth)
+        
+        if vision_updated:
+            # Новый кадр - вычисляем dt как разницу между кадрами
+            dt = now - self.last_vision_time
+            self.last_vision_time = now
+            self.last_vision_yaw = self.vision_yaw
+            self.last_vision_depth = self.vision_depth
+        else:
+            # Нет нового кадра - используем предыдущий dt или пропускаем цикл
+            if hasattr(self, 'last_dt'):
+                dt = self.last_dt
+            else:
+                dt = 0.033  # примерно 30 FPS
+        
+        # Ограничиваем dt разумными пределами
+        dt = max(min(dt, 0.05), 0.001)
         self.last_dt = dt
-        # self.get_logger().info(f"self.flag_setup_feedback_speed={self.flag_setup_feedback_speed}")
+        
         # === 1. Определяем управляющие воздействия ===
         u_surge = self.compute_surge() if self.control_mode_flag_surge else self.impact_surge
         u_sway = self.compute_sway() if self.control_mode_flag_sway else self.impact_sway
@@ -297,11 +336,11 @@ class StingrayCoreControlNode(Node):
         self.pub_pitch.publish(Float64(data=self.imu_pitch))
         self.pub_roll.publish(Float64(data=self.imu_roll))
 
-
-        # Логируем статус 1 раз в секунду, а не каждый тик
+        # Логируем статус
         if now - self._last_status_log > self._status_log_interval:
-            # self.get_logger().info(f"Thrusters command: {thruster_cmds}")
-            # self.get_logger().debug(f"Control loop tick: dt={dt:.6f} s")
+            self.get_logger().info(
+                f"dt: {dt*1000:.1f}ms, yaw: {self.imu_yaw:.1f}°, depth: {self.depth:.2f}m"
+            )
             self._last_status_log = now
 
     # --- Колбэки ---
@@ -312,7 +351,14 @@ class StingrayCoreControlNode(Node):
     def vision_depth_callback(self, msg: Float64):
         """Получает глубину от детектора маркеров."""
         self.vision_depth = msg.data
+    def vision_yaw_rate_callback(self, msg: Float64):
+        """Получает скорость поворота от детектора маркеров."""
+        self.vision_yaw_rate = msg.data
 
+    def vision_z_velocity_callback(self, msg: Float64):
+        """Получает вертикальную скорость от детектора маркеров."""
+        self.vision_z_velocity = msg.data
+        
     def imu_callback(self, msg: Data):
         try:
 
@@ -466,12 +512,19 @@ class StingrayCoreControlNode(Node):
 
     def compute_yaw(self):
         dt = self.last_dt
-        # Используем vision если флаг включен, иначе IMU
-        current_yaw = self.vision_yaw if self.use_vision_yaw else self.imu_yaw
+        
+        if self.use_vision_yaw:
+            current_yaw_raw = self.vision_yaw
+        else:
+            current_yaw_raw = self.imu_yaw
+        
+        current_yaw = self.normalize_angle_deg(current_yaw_raw)
+        target_yaw = self.normalize_angle_deg(self.impact_yaw)
+        
         return self.yaw_ctrl.update(
-            self.impact_yaw,
-            current_yaw,
-            self.imu_rate_z,
+            target_yaw,          
+            current_yaw,         
+            self.imu_rate_z,     
             dt,
             self.flag_setup_feedback_speed,
             param_update={
