@@ -30,7 +30,7 @@ class YawFilter {
     double alpha, value;
     bool first;
 public:
-    YawFilter(double a = 0.3) : alpha(a), value(0), first(true) {}
+    YawFilter(double a = 0.5) : alpha(a), value(0), first(true) {}
     double filter(double v) {
         if (first) { value = v; first = false; return v; }
         double diff = v - value;
@@ -41,14 +41,13 @@ public:
         if (value >= 360) value -= 360;
         return value;
     }
-    void reset() { first = true; }
 };
 
 class RollFilter {
     double alpha, value;
     bool first;
 public:
-    RollFilter(double a = 0.3) : alpha(a), value(0), first(true) {}
+    RollFilter(double a = 0.5) : alpha(a), value(0), first(true) {}
     double filter(double v) {
         if (first) { value = v; first = false; return v; }
         double diff = v - value;
@@ -59,35 +58,30 @@ public:
         if (value < -180) value += 360;
         return value;
     }
-    void reset() { first = true; }
 };
 
 class PitchFilter {
     double alpha, value;
     bool first;
 public:
-    PitchFilter(double a = 0.3) : alpha(a), value(0), first(true) {}
+    PitchFilter(double a = 0.5) : alpha(a), value(0), first(true) {}
     double filter(double v) {
         if (first) { value = v; first = false; return v; }
         value += alpha * (v - value);
         return value;
     }
-    void reset() { first = true; }
 };
 
-// Экспоненциальный фильтр для позиции
 class PosFilter {
     double alpha, value;
     bool first;
 public:
-    PosFilter(double a = 0.3) : alpha(a), value(0), first(true) {}
+    PosFilter(double a = 0.5) : alpha(a), value(0), first(true) {}
     double filter(double v) {
         if (first) { value = v; first = false; return v; }
         value += alpha * (v - value);
         return value;
     }
-    void reset() { first = true; }
-    double get() { return value; }
 };
 
 Vec3d rvecToEuler(const Vec3d& rvec) {
@@ -106,25 +100,6 @@ Vec3d compensateTilt(const Vec3d& tvec, const Vec3d& euler) {
     if (abs(euler[1]) <= 15.0) x = x*cos(p) + z*sin(p);
     if (abs(euler[2]) <= 15.0) y = y*cos(r) + z*sin(r);
     return Vec3d(y, -x, z);
-}
-
-bool loadCalibration(const string& fn, Mat& cam, Mat& dist, int& w, int& h) {
-    ifstream f(fn); if (!f.is_open()) return false;
-    string k; double fx=300,fy=300,cx=320,cy=240,k1=0,k2=0,p1=0,p2=0,k3=0;
-    while (f >> k) {
-        if (k.find("\"fx\"")!=string::npos){f>>k;fx=stod(k);}
-        if (k.find("\"fy\"")!=string::npos){f>>k;fy=stod(k);}
-        if (k.find("\"cx\"")!=string::npos){f>>k;cx=stod(k);}
-        if (k.find("\"cy\"")!=string::npos){f>>k;cy=stod(k);}
-        if (k.find("\"k1\"")!=string::npos){f>>k;k1=stod(k);}
-        if (k.find("\"k2\"")!=string::npos){f>>k;k2=stod(k);}
-        if (k.find("\"p1\"")!=string::npos){f>>k;p1=stod(k);}
-        if (k.find("\"p2\"")!=string::npos){f>>k;p2=stod(k);}
-        if (k.find("\"k3\"")!=string::npos){f>>k;k3=stod(k);}
-    }
-    cam = (Mat_<double>(3,3)<<fx,0,cx,0,fy,cy,0,0,1);
-    dist = (Mat_<double>(5,1)<<k1,k2,p1,p2,k3);
-    return true;
 }
 
 void httpServer(int port) {
@@ -158,7 +133,7 @@ void httpServer(int port) {
             Mat f; { lock_guard<mutex> lk(frameMutex); if(!globalFrame.empty()) f=globalFrame.clone(); }
             if(!f.empty()) {
                 vector<uchar> jpg; imencode(".jpg",f,jpg,{IMWRITE_JPEG_QUALITY,50});
-                string hdr = "HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: "+to_string(jpg.size())+"\r\n\r\n";
+                string hdr = "HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nContent-Length: "+to_string(jpg.size())+"\r\n\r\n";
                 send(cl,hdr.c_str(),hdr.size(),0); send(cl,(char*)jpg.data(),jpg.size(),0);
             }
         }
@@ -170,29 +145,31 @@ void httpServer(int port) {
 int main() {
     signal(SIGINT, sigintHandler);
     
-    Mat camMat, dist;
-    int w=640, h=480;
-    loadCalibration("camera_calibration.json", camMat, dist, w, h);
+    ofstream logFile("marker_log.json");
+    logFile << "[" << endl;
+    bool firstEntry = true;
+    ostringstream logBuffer;
+    auto lastFlush = steady_clock::now();
     
+    Mat camMat = (Mat_<double>(3,3) << 393.621, 0, 315.072, 0, 403.996, 241.373, 0, 0, 1);
+    Mat dist = (Mat_<double>(5,1) << 0.413208, -0.00684427, 0, 0, 0);
     float mSize = 0.10f;
     
-    // EMA фильтры
-    YawFilter   angF_yaw(0.3);
-    RollFilter  angF_roll(0.3);
-    PitchFilter angF_pitch(0.3);
-    PosFilter posF_x(0.3), posF_y(0.3), posF_z(0.3);
+    YawFilter   angF_yaw(0.5);
+    RollFilter  angF_roll(0.5);
+    PitchFilter angF_pitch(0.5);
+    PosFilter posF_x(0.5), posF_y(0.5), posF_z(0.5);
     
-    // Последние известные данные
     double lastX=0, lastY=0, lastZ=0, lastYaw=0, lastRoll=0, lastPitch=0;
     int lastId = -1;
     
     cout << "\033[2J\033[1;1H";
-    cout << "ArUco + HTTP (EMA filter, last value hold)" << endl;
+    cout << "ArUco + HTTP + LOG" << endl;
     cout << "============================================================" << endl;
     
     VideoCapture cap(0);
     cap.set(CAP_PROP_FOURCC, VideoWriter::fourcc('M','J','P','G'));
-    cap.set(CAP_PROP_FRAME_WIDTH, w); cap.set(CAP_PROP_FRAME_HEIGHT, h);
+    cap.set(CAP_PROP_FRAME_WIDTH, 640); cap.set(CAP_PROP_FRAME_HEIGHT, 480);
     if (!cap.isOpened()) { cerr << "Camera error" << endl; return 1; }
     
     thread http(httpServer, 8080);
@@ -211,26 +188,31 @@ int main() {
     double fps=0;
     auto t0=steady_clock::now(), tPrint=steady_clock::now();
     int fpsCnt=0;
+    auto firstFrameTime = steady_clock::time_point();
+    bool firstFrame = true;
     
     while (running) {
         cap >> frame; if (frame.empty()) break;
         Mat disp = frame.clone();
         
-        if (fc % 1 == 0) {
-            cvtColor(frame, gray, COLOR_BGR2GRAY);
-            GaussianBlur(gray, proc, Size(3,3), 0);
-            adaptiveThreshold(proc, proc, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 9, 3);
-            aruco::detectMarkers(proc, dict, corners, ids, params);
-            if (ids.empty()) aruco::detectMarkers(gray, dict, corners, ids, params);
-            
-            if (!ids.empty()) {
-                aruco::estimatePoseSingleMarkers(corners, mSize, camMat, dist, rvecs, tvecs);
-                lastIds=ids; lastCorners=corners; lastRvecs=rvecs; lastTvecs=tvecs; noMarker=0;
-            } else noMarker++;
-        } else {
-            if (noMarker<10) { ids=lastIds; corners=lastCorners; rvecs=lastRvecs; tvecs=lastTvecs; }
-            else ids.clear();
-        }
+        auto frameTime = steady_clock::now();
+        if (firstFrame) { firstFrameTime = frameTime; firstFrame = false; }
+        double t = duration<double>(frameTime - firstFrameTime).count();
+        
+        cvtColor(frame, gray, COLOR_BGR2GRAY);
+        GaussianBlur(gray, proc, Size(3,3), 0);
+        adaptiveThreshold(proc, proc, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 7, 2);
+        
+        aruco::detectMarkers(proc, dict, corners, ids, params);
+        if (ids.empty()) aruco::detectMarkers(gray, dict, corners, ids, params);
+        
+        if (!ids.empty()) {
+            aruco::estimatePoseSingleMarkers(corners, mSize, camMat, dist, rvecs, tvecs);
+            lastIds=ids; lastCorners=corners; lastRvecs=rvecs; lastTvecs=tvecs; noMarker=0;
+        } else noMarker++;
+        
+        if (noMarker < 10) { ids=lastIds; corners=lastCorners; rvecs=lastRvecs; tvecs=lastTvecs; }
+        else ids.clear();
         
         stringstream js, term;
         js << "{\"markers\":[";
@@ -238,12 +220,9 @@ int main() {
         if (!ids.empty()) {
             for (size_t i=0; i<ids.size(); i++) {
                 Vec3d ang = rvecToEuler(rvecs[i]);
-                double y=ang[0], r=ang[1], p=ang[2];
-                
-                // EMA фильтр
-                double fy = angF_yaw.filter(y);
-                double fr = angF_roll.filter(r);
-                double fp = angF_pitch.filter(p);
+                double fy = angF_yaw.filter(ang[0]);
+                double fr = angF_roll.filter(ang[1]);
+                double fp = angF_pitch.filter(ang[2]);
                 
                 Vec3d cPos = compensateTilt(tvecs[i], Vec3d(fy, fr, fp));
                 double fx = posF_x.filter(cPos[0]);
@@ -259,20 +238,56 @@ int main() {
                    <<",\"yaw\":"<<fy<<",\"roll\":"<<fr<<",\"pitch\":"<<fp<<"}";
                 term << "ID:"<<ids[i]<<"|x:"<<fixed<<setprecision(2)<<fx<<" y:"<<fyy<<" z:"<<fz
                      <<"m yaw:"<<setprecision(0)<<fy<<"° roll:"<<fr<<"° pitch:"<<fp<<"°";
-                
-                aruco::drawDetectedMarkers(disp, corners, ids);
-                aruco::drawAxis(disp, camMat, dist, rvecs[i], tvecs[i], 0.05);
             }
+            
+            // Запись в буфер
+            if (!firstEntry) logBuffer << "," << endl;
+            firstEntry = false;
+            logBuffer << "  {\"t\":" << fixed << setprecision(3) << t
+                      << ",\"frame\":" << fc
+                      << ",\"id\":" << lastId
+                      << ",\"x\":" << lastX
+                      << ",\"y\":" << lastY
+                      << ",\"z\":" << lastZ
+                      << ",\"yaw\":" << lastYaw
+                      << ",\"roll\":" << lastRoll
+                      << ",\"pitch\":" << lastPitch
+                      << ",\"fps\":" << fps << "}";
+            
+            aruco::drawDetectedMarkers(disp, corners, ids);
+            aruco::drawAxis(disp, camMat, dist, rvecs[0], tvecs[0], 0.05);
+            
         } else if (lastId >= 0) {
             js << "{\"id\":"<<lastId<<",\"x\":"<<lastX<<",\"y\":"<<lastY<<",\"z\":"<<lastZ
                <<",\"yaw\":"<<lastYaw<<",\"roll\":"<<lastRoll<<",\"pitch\":"<<lastPitch<<"}";
             term << "ID:"<<lastId<<"|x:"<<fixed<<setprecision(2)<<lastX<<" y:"<<lastY<<" z:"<<lastZ
                  <<"m yaw:"<<setprecision(0)<<lastYaw<<"° roll:"<<lastRoll<<"° pitch:"<<lastPitch<<"° (hold)";
+            
+            if (!firstEntry) logBuffer << "," << endl;
+            firstEntry = false;
+            logBuffer << "  {\"t\":" << fixed << setprecision(3) << t
+                      << ",\"frame\":" << fc
+                      << ",\"id\":" << lastId
+                      << ",\"x\":" << lastX
+                      << ",\"y\":" << lastY
+                      << ",\"z\":" << lastZ
+                      << ",\"yaw\":" << lastYaw
+                      << ",\"roll\":" << lastRoll
+                      << ",\"pitch\":" << lastPitch
+                      << ",\"fps\":" << fps << "}";
         }
         js << "]}";
         
         { lock_guard<mutex> lk(jsonMutex); globalJson = js.str(); }
         { lock_guard<mutex> lk(frameMutex); globalFrame = disp.clone(); }
+        
+        // Сброс буфера в файл раз в секунду
+        if (duration<double>(steady_clock::now() - lastFlush).count() >= 1.0) {
+            logFile << logBuffer.str();
+            logFile.flush();
+            logBuffer.str("");
+            lastFlush = steady_clock::now();
+        }
         
         fpsCnt++;
         auto now = steady_clock::now();
@@ -292,6 +307,12 @@ int main() {
         }
         fc++;
     }
+    
+    // Дописать остатки буфера
+    logFile << logBuffer.str();
+    logFile << endl << "]" << endl;
+    logFile.close();
+    cout << "\nLog saved: marker_log.json" << endl;
     
     cap.release(); http.join();
     cout << "\n\nSTOPPED" << endl;

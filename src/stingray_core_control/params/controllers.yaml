@@ -6,7 +6,7 @@ stingray_core_control_node:
     controllers.surge.K_i: 0.0
     controllers.surge.I_min: -5.0
     controllers.surge.I_max: 5.0
-    controllers.surge.out_sat: 1000.0
+    controllers.surge.out_sat: 200.0
     controllers.surge.ap_K: 1.0
     controllers.surge.ap_T: 0.01
     controllers.sway.K_p: 0.8

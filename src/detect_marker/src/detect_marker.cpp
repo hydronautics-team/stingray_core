@@ -150,8 +150,6 @@ int main(int argc, char** argv) {
     auto node = make_shared<rclcpp::Node>("detect_marker_node");
     auto pub_yaw = node->create_publisher<std_msgs::msg::Float64>("/control/vision/yaw", 10);
     auto pub_depth = node->create_publisher<std_msgs::msg::Float64>("/control/vision/depth", 10);
-    
-    // Публикации для скоростей
     auto pub_yaw_rate = node->create_publisher<std_msgs::msg::Float64>("/control/vision/yaw_rate", 10);
     auto pub_z_velocity = node->create_publisher<std_msgs::msg::Float64>("/control/vision/z_velocity", 10);
     
@@ -165,8 +163,6 @@ int main(int argc, char** argv) {
     RollFilter  angF_roll(0.3);
     PitchFilter angF_pitch(0.3);
     PosFilter posF_x(0.3), posF_y(0.3), posF_z(0.3);
-    
-    // Фильтры для скорости
     VelocityFilter velF_yaw(0.3);
     VelocityFilter velF_z(0.3);
     
@@ -174,14 +170,17 @@ int main(int argc, char** argv) {
     double lastYawRate = 0, lastZVelocity = 0;
     int lastId = -1;
     
-    // Для вычисления скорости
     auto lastTime = steady_clock::now();
     double lastYawForVel = 0;
     double lastZForVel = 0;
     bool firstVel = true;
     
+    // Водная предобработка — создаём один раз
+    Ptr<CLAHE> clahe = createCLAHE(2.0, Size(8,8));
+    Mat kernel = getStructuringElement(MORPH_RECT, Size(2,2));
+    
     cout << "\033[2J\033[1;1H";
-    cout << "ArUco + ROS2 + HTTP + VELOCITY" << endl;
+    cout << "ArUco + ROS2 + HTTP + VELOCITY (Underwater)" << endl;
     cout << "============================================================" << endl;
     
     VideoCapture cap(0);
@@ -195,8 +194,17 @@ int main(int argc, char** argv) {
     auto params = aruco::DetectorParameters::create();
     params->cornerRefinementMethod = aruco::CORNER_REFINE_SUBPIX;
     params->cornerRefinementWinSize = 3;
+    params->adaptiveThreshWinSizeMin = 3;
+    params->adaptiveThreshWinSizeMax = 23;
+    params->adaptiveThreshWinSizeStep = 10;
+    params->minMarkerPerimeterRate = 0.015;
+    params->maxMarkerPerimeterRate = 0.8;
+    params->polygonalApproxAccuracyRate = 0.08;
+    params->minCornerDistanceRate = 0.01;
+    params->errorCorrectionRate = 0.7;
+    params->minOtsuStdDev = 3.0;
     
-    Mat frame, gray, proc;
+    Mat frame, gray, proc, temp;
     vector<int> ids;
     vector<vector<Point2f>> corners;
     vector<Vec3d> rvecs, tvecs;
@@ -211,8 +219,11 @@ int main(int argc, char** argv) {
         if (dt > 0.1) dt = 0.033;
         
         cvtColor(frame, gray, COLOR_BGR2GRAY);
+        
+        // Водная предобработка
         GaussianBlur(gray, proc, Size(3,3), 0);
-        adaptiveThreshold(proc, proc, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 9, 3);
+        adaptiveThreshold(proc, proc, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 7, 2);
+        
         aruco::detectMarkers(proc, dict, corners, ids, params);
         if (ids.empty()) aruco::detectMarkers(gray, dict, corners, ids, params);
         
@@ -232,16 +243,13 @@ int main(int argc, char** argv) {
             double fyy = posF_y.filter(cPos[1]);
             double fz = posF_z.filter(cPos[2]);
             
-            // ВЫЧИСЛЯЕМ СКОРОСТИ (только для ROS и терминала)
+            // Скорости
             if (!firstVel && dt > 0) {
                 double yawDiff = fy - lastYawForVel;
                 if (yawDiff > 180) yawDiff -= 360;
                 if (yawDiff < -180) yawDiff += 360;
-                double rawYawRate = yawDiff / dt;
-                lastYawRate = velF_yaw.filter(rawYawRate);
-                
-                double rawZVel = (fz - lastZForVel) / dt;
-                lastZVelocity = velF_z.filter(rawZVel);
+                lastYawRate = velF_yaw.filter(yawDiff / dt);
+                lastZVelocity = velF_z.filter((fz - lastZForVel) / dt);
             }
             
             lastX = fx; lastY = fyy; lastZ = fz;
@@ -251,7 +259,6 @@ int main(int argc, char** argv) {
             lastZForVel = fz;
             firstVel = false;
             
-            // JSON БЕЗ СКОРОСТЕЙ
             js << "{\"id\":" << ids[0]
                << ",\"x\":" << fixed << setprecision(3) << fx
                << ",\"y\":" << fyy
@@ -274,7 +281,6 @@ int main(int argc, char** argv) {
         }
         js << "]}";
         
-        // HTTP
         {
             lock_guard<mutex> lk(jsonMutex);
             globalJson = js.str();
@@ -284,7 +290,6 @@ int main(int argc, char** argv) {
             globalFrame = disp.clone();
         }
         
-        // ROS публикации
         auto msg_yaw = std_msgs::msg::Float64();
         msg_yaw.data = lastYaw;
         pub_yaw->publish(msg_yaw);
@@ -293,7 +298,6 @@ int main(int argc, char** argv) {
         msg_depth.data = lastZ;
         pub_depth->publish(msg_depth);
         
-        // Публикуем скорости в ROS
         auto msg_yaw_rate = std_msgs::msg::Float64();
         msg_yaw_rate.data = lastYawRate;
         pub_yaw_rate->publish(msg_yaw_rate);
@@ -304,7 +308,6 @@ int main(int argc, char** argv) {
         
         lastTime = now;
         
-        // ВЫВОД В ТЕРМИНАЛ (со скоростями)
         static auto tPrint = steady_clock::now();
         auto printNow = steady_clock::now();
         if (duration<double>(printNow - tPrint).count() >= 0.5) {

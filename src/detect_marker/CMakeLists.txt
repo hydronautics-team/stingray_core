@@ -12,6 +12,9 @@ add_executable(detect_marker src/detect_marker.cpp)
 target_link_libraries(detect_marker ${OpenCV_LIBS} pthread)
 ament_target_dependencies(detect_marker rclcpp std_msgs)
 
+# Оптимизация
+target_compile_options(detect_marker PRIVATE -O3 -march=native)
+
 install(TARGETS detect_marker DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 
