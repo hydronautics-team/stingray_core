@@ -1,4 +1,4 @@
-/* XAZX */// Copyright 2026 The Autoware Foundation
+/* XAZX */ // Copyright 2026 The Autoware Foundation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,10 +13,8 @@
 // limitations under the License.
 
 #include "serial_driver/gpio_direction_controller.hpp"
-
 #include <chrono>
-#include <filesystem>
-#include <fstream>
+#include <iostream>
 #include <stdexcept>
 #include <thread>
 
@@ -25,118 +23,77 @@ namespace drivers
 namespace serial_driver
 {
 
-GpioDirectionController::GpioDirectionController(int gpio_number, const std::string & sysfs_root)
-: m_gpio_number(gpio_number),
-  m_sysfs_root(sysfs_root)
+GpioDirectionController::GpioDirectionController(int gpio_number, const std::string &chip_name)
+    : m_gpio_number(gpio_number), m_chip_name(chip_name)
 {
 }
 
-bool GpioDirectionController::is_enabled() const
+GpioDirectionController::~GpioDirectionController()
 {
-  return m_gpio_number >= 0;
-}
-
-int GpioDirectionController::gpio_number() const
-{
-  return m_gpio_number;
-}
-
-std::string GpioDirectionController::gpio_directory() const
-{
-  return m_sysfs_root + "/gpio" + std::to_string(m_gpio_number);
-}
-
-std::string GpioDirectionController::direction_path() const
-{
-  return gpio_directory() + "/direction";
-}
-
-std::string GpioDirectionController::value_path() const
-{
-  return gpio_directory() + "/value";
-}
-
-std::string GpioDirectionController::export_path() const
-{
-  return m_sysfs_root + "/export";
-}
-
-bool GpioDirectionController::path_exists(const std::string & path)
-{
-  return std::filesystem::exists(path);
-}
-
-void GpioDirectionController::wait_for_path(const std::string & path) const
-{
-  constexpr int max_attempts = 50;
-  constexpr auto delay = std::chrono::milliseconds(10);
-
-  for (int i = 0; i < max_attempts; ++i) {
-    if (path_exists(path)) {
-      return;
+    if (m_line_request)
+    {
+        m_line_request->release();
     }
-    std::this_thread::sleep_for(delay);
-  }
-
-  throw std::runtime_error("Timed out waiting for GPIO path: " + path);
 }
 
-void GpioDirectionController::write_file(const std::string & path, const std::string & value) const
-{
-  std::ofstream file(path);
-  if (!file.is_open()) {
-    throw std::runtime_error("Failed to open GPIO sysfs file: " + path);
-  }
+bool GpioDirectionController::is_enabled() const { return m_gpio_number >= 0 && m_initialized; }
 
-  file << value;
-  if (!file) {
-    throw std::runtime_error("Failed to write GPIO sysfs file: " + path);
-  }
-}
+int GpioDirectionController::gpio_number() const { return m_gpio_number; }
 
 void GpioDirectionController::initialize()
 {
-  if (!is_enabled() || m_initialized) {
-    return;
-  }
+    if (m_gpio_number < 0 || m_initialized)
+    {
+        return;
+    }
 
-  if (!path_exists(m_sysfs_root)) {
-    throw std::runtime_error("GPIO sysfs root does not exist: " + m_sysfs_root);
-  }
+    try
+    {
+        // Открываем чип (например, /dev/gpiochip0)
+        m_chip = std::make_unique<gpiod::chip>(m_chip_name);
 
-  if (!path_exists(gpio_directory())) {
-    write_file(export_path(), std::to_string(m_gpio_number));
-    wait_for_path(gpio_directory());
-  }
+        // Настраиваем запрос линии как выход
+        gpiod::line_request::config line_cfg;
+        line_cfg.consumer = "autoware_serial_driver";
+        line_cfg.request_type = gpiod::line_request::DIRECTION_OUTPUT;
+        line_cfg.default_values = {0}; // Изначально устанавливаем в 0 (RX mode)
 
-  write_file(direction_path(), "out");
-  write_file(value_path(), "0");
-  m_initialized = true;
+        // Запрашиваем конкретную линию
+        m_line_request = m_chip->request_line({m_gpio_number}, line_cfg);
+        m_initialized = true;
+    }
+    catch (const std::exception &e)
+    {
+        throw std::runtime_error("Failed to initialize GPIO " + std::to_string(m_gpio_number) + " on " + m_chip_name + ": " +
+                                 e.what());
+    }
 }
-
-void GpioDirectionController::delay_us(int microseconds) {
-    std::this_thread::sleep_for(std::chrono::microseconds(microseconds));
-  }
 
 void GpioDirectionController::set_tx()
 {
-  if (!is_enabled()) {
-    return;
-  }
-
-  // initialize();
-  write_file(value_path(), "0");
+    if (is_enabled())
+    {
+        // Стандарт RS-485: DE (Driver Enable) активен при высоком уровне (1)
+        m_line_request->set_value(m_gpio_number, 1);
+    }
 }
 
 void GpioDirectionController::set_rx()
 {
-  if (!is_enabled()) {
-    return;
-  }
-
-  // initialize();
-  write_file(value_path(), "1");
+    if (is_enabled())
+    {
+        // Возврат в режим приема: низкий уровень (0)
+        m_line_request->set_value(m_gpio_number, 0);
+    }
 }
 
-}  // namespace serial_driver
-}  // namespace drivers
+void GpioDirectionController::delay_us(int microseconds)
+{
+    if (microseconds > 0)
+    {
+        std::this_thread::sleep_for(std::chrono::microseconds(microseconds));
+    }
+}
+
+} // namespace serial_driver
+} // namespace drivers

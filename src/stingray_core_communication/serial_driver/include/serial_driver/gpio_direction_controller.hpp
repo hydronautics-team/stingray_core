@@ -15,6 +15,8 @@
 #ifndef SERIAL_DRIVER__GPIO_DIRECTION_CONTROLLER_HPP_
 #define SERIAL_DRIVER__GPIO_DIRECTION_CONTROLLER_HPP_
 
+#include <gpiod.hpp>
+#include <memory>
 #include <string>
 
 namespace drivers
@@ -25,33 +27,28 @@ namespace serial_driver
 class GpioDirectionController
 {
 public:
-  explicit GpioDirectionController(
-    int gpio_number = -1,
-    const std::string & sysfs_root = "/sys/class/gpio");
+    explicit GpioDirectionController(int gpio_number = -1, const std::string &chip_name = "gpiochip0");
 
-  bool is_enabled() const;
-  int gpio_number() const;
+    ~GpioDirectionController();
 
-  void initialize();
-  void set_tx();
-  void set_rx();
-  void delay_us(int microseconds);
+    bool is_enabled() const;
+    int gpio_number() const;
+
+    void initialize();
+    void set_tx();
+    void set_rx();
+    void delay_us(int microseconds);
+
 private:
-  std::string gpio_directory() const;
-  std::string direction_path() const;
-  std::string value_path() const;
-  std::string export_path() const;
+    int m_gpio_number;
+    std::string m_chip_name;
+    bool m_initialized{false};
 
-  static bool path_exists(const std::string & path);
-  void wait_for_path(const std::string & path) const;
-  void write_file(const std::string & path, const std::string & value) const;
-
-  int m_gpio_number;
-  std::string m_sysfs_root;
-  bool m_initialized{false};
+    std::unique_ptr<gpiod::chip> m_chip;
+    std::unique_ptr<gpiod::line_request> m_line_request;
 };
 
-}  // namespace serial_driver
-}  // namespace drivers
+} // namespace serial_driver
+} // namespace drivers
 
-#endif  // SERIAL_DRIVER__GPIO_DIRECTION_CONTROLLER_HPP_
+#endif // SERIAL_DRIVER__GPIO_DIRECTION_CONTROLLER_HPP_

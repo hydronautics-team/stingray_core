@@ -3,7 +3,7 @@ FROM ros:humble-ros-base
 # Установим нужные пакеты + утилиты для подсветки терминала
 RUN apt-get update && apt-get install -y \
     python3-pip python3-colcon-common-extensions \
-    python3-smbus python3-smbus2 libi2c-dev i2c-tools \
+    python3-smbus python3-smbus2 libi2c-dev i2c-tools gpiod \
     libasio-dev netcat socat \
     ros-humble-rclcpp ros-humble-std-msgs ros-humble-sensor-msgs ros-humble-udp-msgs \
     bash bash-completion command-not-found less \
