@@ -30,9 +30,10 @@ GpioDirectionController::GpioDirectionController(int gpio_number, const std::str
 
 GpioDirectionController::~GpioDirectionController()
 {
-    if (m_line_request)
+    // Освобождаем линию, если она была захвачена
+    if (m_line && m_line->is_requested())
     {
-        m_line_request->release();
+        m_line->release();
     }
 }
 
@@ -49,17 +50,16 @@ void GpioDirectionController::initialize()
 
     try
     {
-        // Открываем чип (например, /dev/gpiochip0)
+        // 1. Открываем чип (например, "gpiochip0")
         m_chip = std::make_unique<gpiod::chip>(m_chip_name);
 
-        // Настраиваем запрос линии как выход
-        gpiod::line_request::config line_cfg;
-        line_cfg.consumer = "autoware_serial_driver";
-        line_cfg.request_type = gpiod::line_request::DIRECTION_OUTPUT;
-        line_cfg.default_values = {0}; // Изначально устанавливаем в 0 (RX mode)
+        // 2. Получаем конкретную линию (GPIO 16)
+        m_line = std::make_unique<gpiod::line>(m_chip->get_line(m_gpio_number));
 
-        // Запрашиваем конкретную линию
-        m_line_request = m_chip->request_line({m_gpio_number}, line_cfg);
+        // 3. Запрашиваем линию как ВЫХОД с начальным значением 0 (режим RX)
+        // API v1.x: request(consumer_name, request_type, default_value)
+        m_line->request({"autoware_serial_driver", gpiod::line_request::DIRECTION_OUTPUT, 0});
+
         m_initialized = true;
     }
     catch (const std::exception &e)
@@ -73,8 +73,8 @@ void GpioDirectionController::set_tx()
 {
     if (is_enabled())
     {
-        // Стандарт RS-485: DE (Driver Enable) активен при высоком уровне (1)
-        m_line_request->set_value(m_gpio_number, 1);
+        // Устанавливаем высокий уровень (1) для разрешения передачи
+        m_line->set_value(1);
     }
 }
 
@@ -82,8 +82,8 @@ void GpioDirectionController::set_rx()
 {
     if (is_enabled())
     {
-        // Возврат в режим приема: низкий уровень (0)
-        m_line_request->set_value(m_gpio_number, 0);
+        // Устанавливаем низкий уровень (0) для разрешения приема
+        m_line->set_value(0);
     }
 }
 

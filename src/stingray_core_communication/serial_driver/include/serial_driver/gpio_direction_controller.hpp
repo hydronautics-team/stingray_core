@@ -15,7 +15,7 @@
 #ifndef SERIAL_DRIVER__GPIO_DIRECTION_CONTROLLER_HPP_
 #define SERIAL_DRIVER__GPIO_DIRECTION_CONTROLLER_HPP_
 
-#include <gpiod.hpp>
+#include <gpiod.hpp> // C++ API для libgpiod v1.x
 #include <memory>
 #include <string>
 
@@ -45,7 +45,8 @@ private:
     bool m_initialized{false};
 
     std::unique_ptr<gpiod::chip> m_chip;
-    std::unique_ptr<gpiod::line_request> m_line_request;
+    // В v1.x работа идет напрямую с объектом линии, а не с line_request
+    std::unique_ptr<gpiod::line> m_line;
 };
 
 } // namespace serial_driver

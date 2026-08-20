@@ -33,7 +33,7 @@ find_package(asio_cmake_module REQUIRED)
 find_package(ASIO REQUIRED)
 
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(GPIOD REQUIRED gpiod)
+pkg_check_modules(GPIOD REQUIRED libgpiodcxx)
 
 ament_auto_add_library(${PROJECT_NAME} SHARED
   src/gpio_direction_controller.cpp
@@ -44,7 +44,7 @@ ament_auto_add_library(${PROJECT_NAME} SHARED
 ament_target_dependencies(${PROJECT_NAME} "ASIO")
 
 target_include_directories(${PROJECT_NAME} PUBLIC ${GPIOD_INCLUDE_DIRS})
-target_link_libraries(${PROJECT_NAME} PUBLIC ${GPIOD_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} ${GPIOD_LIBRARIES})
 
 ament_auto_add_library(${PROJECT_NAME}_nodes SHARED
   src/serial_bridge_node.cpp
