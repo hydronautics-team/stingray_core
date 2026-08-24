@@ -9,6 +9,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(diagnostic_msgs REQUIRED)
 
 include_directories(include)
 
@@ -17,32 +18,39 @@ add_executable(${PROJECT_NAME}
   src/main.cpp
 )
 
-ament_target_dependencies(${PROJECT_NAME} 
+ament_target_dependencies(${PROJECT_NAME}
   rclcpp
   sensor_msgs
   std_msgs
+  diagnostic_msgs
 )
 
-install(TARGETS ${PROJECT_NAME}
+install(
+  TARGETS ${PROJECT_NAME}
   DESTINATION lib/${PROJECT_NAME}
 )
 
-install(DIRECTORY include/
+install(
+  DIRECTORY include/
   DESTINATION include/
 )
 
-install(DIRECTORY launch/
-  DESTINATION share/${PROJECT_NAME}/
+install(
+  DIRECTORY launch/
+  DESTINATION share/${PROJECT_NAME}/launch
 )
 
-install(DIRECTORY config/
-  DESTINATION share/${PROJECT_NAME}/
+install(
+  DIRECTORY config/
+  DESTINATION share/${PROJECT_NAME}/config
 )
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
+
   set(ament_cmake_copyright_FOUND TRUE)
   set(ament_cmake_cpplint_FOUND TRUE)
+
   ament_lint_auto_find_test_dependencies()
 endif()
 

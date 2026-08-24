@@ -6,13 +6,13 @@
 
 #include "link_node_base.hpp"
 #include "rclcpp/rclcpp.hpp"
-#include "std_msgs/msg/u_int8_multi_array.hpp"
+#include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/string.hpp"
-
+#include "std_msgs/msg/u_int8_multi_array.hpp"
 
 namespace stingray_core
 {
-    
+
 struct MemoryMapDisplay
 {
     int8_t vma_statuses[10];     // 1 = "OK"; 0 = "ERROR"
@@ -30,18 +30,20 @@ class PanelLinkNode : public baseLink::LinkNodeBase
 {
 public:
     PanelLinkNode() : LinkNodeBase("Panel_driver_node", 2, 3)
-
     {
         thrusters_sub_ = this->create_subscription<std_msgs::msg::UInt8MultiArray>(
             "/thruster/telemetry", 10, std::bind(&PanelLinkNode::telemetryCallback, this, std::placeholders::_1));
-        data_disp_pub_ = this->create_publisher<std_msgs::msg::String>("data_disp", 10);
+        data_disp_pub_ = this->create_publisher<std_msgs::msg::String>("/raw_panel_data", 10);
+        kill_switch_pub_ = this->create_publisher<std_msgs::msg::Bool>("/safety/kill_switch", 10);
+        battery_pub_ = this->create_publisher<std_msgs::msg::UInt8MultiArray>("/power/battery/raw", rclcpp::SensorDataQoS());
+
         auto timer_callback = [this]() -> void
         {
-            serialWrite(static_cast<const void *>(displayMemomry_.data()), VmaStatusAddr_, VmaStatusLen_);
-            serialWrite(static_cast<const void *>(displayMemomry_.data() + KillSwitchAddr_), KillSwitchAddr_, 1);
-            serialWrite(static_cast<const void *>(displayMemomry_.data() + BatAddr_), BatAddr_, 4);
-            serialRead(static_cast<void *>(displayMemomry_.data()+MissionAddr_), MissionAddr_, 1);
-            publishRaw(displayMemomry_[MissionAddr_]);
+            serialWrite(static_cast<const void *>(displayMemory_.data()), VmaStatusAddr_, VmaStatusLen_);
+            serialWrite(static_cast<const void *>(displayMemory_.data() + KillSwitchAddr_), KillSwitchAddr_, 1);
+            serialWrite(static_cast<const void *>(displayMemory_.data() + BatAddr_), BatAddr_, 4);
+            serialRead(static_cast<void *>(displayMemory_.data() + MissionAddr_), MissionAddr_, 1);
+            publishRaw(displayMemory_[MissionAddr_]);
         };
         serialWrite(static_cast<const void *>(mision1), BatAddr_ + 4, 16);
         serialWrite(static_cast<const void *>(mision2), BatAddr_ + 4 + 16, 16);
@@ -61,27 +63,54 @@ private:
 
     void telemetryCallback(const std_msgs::msg::UInt8MultiArray::SharedPtr msg)
     {
-        if (!msg->data.empty())
+        if (msg->data.size() < 5)
         {
-            std::memcpy(displayMemomry_.data() + BatAddr_, msg->data.data(), 4);
-            std::memcpy(displayMemomry_.data() + KillSwitchAddr_, msg->data.data() + 4, 1);
+            RCLCPP_WARN(this->get_logger(), "Invalid telemetry packet size: %zu", msg->data.size());
+            return;
         }
+
+        std::memcpy(displayMemory_.data() + BatAddr_, msg->data.data(), 4);
+        displayMemory_[KillSwitchAddr_] = msg->data[4];
+        publishBattery();
+        publishKillSwitch();
     }
+
+    void publishKillSwitch()
+    {
+        std_msgs::msg::Bool kill_switch_msg;
+        kill_switch_msg.data = displayMemory_[KillSwitchAddr_] != 0;
+        kill_switch_pub_->publish(std::move(kill_switch_msg));
+    }
+
+    void publishBattery()
+    {
+        std_msgs::msg::UInt8MultiArray msg;
+        msg.data.resize(4);
+
+        msg.data[0] = displayMemory_[BatAddr_];
+        msg.data[1] = displayMemory_[BatAddr_ + 1];
+        msg.data[2] = displayMemory_[BatAddr_ + 2];
+        msg.data[3] = displayMemory_[BatAddr_ + 3];
+
+        battery_pub_->publish(std::move(msg));
+    }
+
     rclcpp::Subscription<std_msgs::msg::UInt8MultiArray>::SharedPtr thrusters_sub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr data_disp_pub_;
-
+    rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr battery_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr kill_switch_pub_;
     rclcpp::TimerBase::SharedPtr timer_;
-    char mision1[16] {'g', 'a', 't', 'e'};
-    char mision2[16] {'t', 'e', 's', 't'};
-    char mision3[16] {'S', 't', 'o', 'p'};
-    char mision4[16] {'M', 'i', 'c', 'h','a', 'e', 'l'};
-    
+    char mision1[16]{'g', 'a', 't', 'e'};
+    char mision2[16]{'t', 'e', 's', 't'};
+    char mision3[16]{'S', 't', 'o', 'p'};
+    char mision4[16]{'M', 'i', 'c', 'h', 'a', 'e', 'l'};
+
     static constexpr uint8_t VmaStatusLen_{10};
     static constexpr uint8_t VmaStatusAddr_{0};
     static constexpr uint8_t MissionAddr_{11};
     static constexpr uint8_t BatAddr_{12};
     static constexpr uint8_t KillSwitchAddr_{10};
-    std::array<uint8_t, 146> displayMemomry_{1};
+    std::array<uint8_t, 146> displayMemory_{1};
 }; // class PanelLinkNode
 
 } // namespace stingray_core

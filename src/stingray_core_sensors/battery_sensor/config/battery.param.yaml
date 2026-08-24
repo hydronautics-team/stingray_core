@@ -1,6 +1,33 @@
-battery_sensor_node:
+battery_sensor:
   ros__parameters:
-    voltage_scale: 1.0 # FIXME change in the future
+    voltage_scale: 0.01
     current_scale: 0.0 # FIXME remove in the future
     filter_window: 0.0 # FIXME remove in the future
     low_battery_threshold: 13.6
+
+    battery_voltage_0: 12.00
+    battery_percentage_0: 0.0
+
+    battery_voltage_1: 14.40
+    battery_percentage_1: 20.0
+
+    battery_voltage_2: 14.80
+    battery_percentage_2: 30.0
+
+    battery_voltage_3: 15.00
+    battery_percentage_3: 40.0
+
+    battery_voltage_4: 15.30
+    battery_percentage_4: 50.0
+
+    battery_voltage_5: 15.60
+    battery_percentage_5: 60.0
+
+    battery_voltage_6: 16.00
+    battery_percentage_6: 80.0
+
+    battery_voltage_7: 16.40
+    battery_percentage_7: 90.0
+
+    battery_voltage_8: 16.80
+    battery_percentage_8: 100.0
