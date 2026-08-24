@@ -5,7 +5,7 @@ battery_sensor:
     filter_window: 0.0 # FIXME remove in the future
     low_battery_threshold: 13.6
 
-    battery_voltage_0: 12.00
+    battery_voltage_0: 13.20
     battery_percentage_0: 0.0
 
     battery_voltage_1: 14.40
