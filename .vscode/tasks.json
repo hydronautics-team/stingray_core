@@ -2,12 +2,12 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "ROS: build with compile_commands",
+            "label": "ROS2: Build workspace",
             "type": "shell",
             "command": "bash",
             "args": [
                 "-lc",
-                "source /opt/ros/humble/setup.bash && bash ./build.sh"
+                "bash ./build.sh"
             ],
             "group": {
                 "kind": "build",
@@ -18,7 +18,19 @@
             ]
         },
         {
-            "label": "clangd: refresh compile_commands",
+            "label": "ROS2: Test workspace",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-lc",
+                "source /opt/ros/humble/setup.bash && source install/setup.bash && colcon test && colcon test-result --verbose"
+            ],
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Clangd: Refresh compile_commands",
             "type": "shell",
             "command": "bash",
             "args": [
@@ -28,7 +40,7 @@
             "problemMatcher": []
         },
         {
-            "label": "clang-tidy: workspace",
+            "label": "Clang-Tidy: Workspace",
             "type": "shell",
             "command": "bash",
             "args": [

@@ -28,7 +28,7 @@ docker run -it --rm \
   --network host \
   -v "$(pwd)":/stingray_core \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
-  -v /dev:/dev\
+  -v /dev:/dev \
   -e DISPLAY="$DISPLAY" \
   -e ROS_DOMAIN_ID=$ROS_DOMAIN_ID \
   "$IMAGE_NAME"
