@@ -28,6 +28,7 @@
             "extensions": [
                 "llvm-vs-code-extensions.vscode-clangd",
                 "ms-iot.vscode-ros",
+                "redhat.vscode-yaml",
                 "ms-python.python",
                 "ms-python.vscode-pylance",
                 "ms-vscode.cmake-tools",
