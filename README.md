@@ -34,6 +34,31 @@ After refactoring, packages are grouped in `src/` as follows:
   - `src/stingray_core_control`
   - `src/stingray_core_launch`
 
+## Development environment
+
+The project provides a Dev Container with the required development tools and dependencies.
+
+The recommended way to work with the project is through VS Code and the Dev Container.
+
+### Start the development container
+
+Open the repository in VS Code and use:
+
+**Dev Containers: Reopen in Container**
+
+The container provides the ROS 2 Humble development environment and the tools required to build and check the project.
+
+### C++ development tools
+
+The project uses:
+
+- `clangd` — C++ language server
+- `clang-format` — code formatting
+- `clang-tidy` — static analysis
+
+The repository contains a shared `.clang-format` configuration.
+
+C++ files are automatically formatted on save in VS Code.
 
 ## Docker
 
@@ -50,19 +75,6 @@ In ~/stingray_core/
 ```bash
 ./docker/build.sh
 ```
-
-## Dev Container
-
-Open the repository in VS Code and run `Dev Containers: Reopen in Container`.
-The container uses the same ROS 2 Humble Dockerfile, installs `clangd` and
-`clang-tidy`, builds the workspace with `CMAKE_EXPORT_COMPILE_COMMANDS=ON`, and
-merges package databases into `compile_commands.json` for clangd.
-
-Useful VS Code tasks:
-
-- `ROS: build with compile_commands`
-- `clangd: refresh compile_commands`
-- `clang-tidy: workspace`
 
 ## Run ROV
 
