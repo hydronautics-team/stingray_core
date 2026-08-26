@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+      - develop
+
+jobs:
+  ci:
+    name: Build and check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build CI Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          tags: stingray_core:ci
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # - name: Check clang-format
+      #   run: |
+      #     docker run --rm \
+      #       -v "${{ github.workspace }}:/stingray_core" \
+      #       stingray_core:ci \
+      #       /stingray_core/scripts/ci/format.sh
+
+      - name: Build ROS workspace
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/stingray_core" \
+            stingray_core:ci \
+            /stingray_core/scripts/ci/build.sh
