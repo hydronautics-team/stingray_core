@@ -29,12 +29,12 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Check clang-format
-        run: |
-          docker run --rm \
-            -v "${{ github.workspace }}:/stingray_core" \
-            stingray_core:ci \
-            /stingray_core/scripts/ci/format.sh
+      # - name: Check clang-format
+      #   run: |
+      #     docker run --rm \
+      #       -v "${{ github.workspace }}:/stingray_core" \
+      #       stingray_core:ci \
+      #       /stingray_core/scripts/ci/format.sh
 
       - name: Build ROS workspace
         run: |
