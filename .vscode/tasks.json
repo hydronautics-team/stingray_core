@@ -1,0 +1,55 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "ROS2: Build workspace",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-lc",
+                "bash ./build.sh"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "ROS2: Test workspace",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-lc",
+                "source /opt/ros/humble/setup.bash && source install/setup.bash && colcon test && colcon test-result --verbose"
+            ],
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Clangd: Refresh compile_commands",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-lc",
+                "bash .devcontainer/update-compile-commands.sh --skip-build"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "Clang-Tidy: Workspace",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-lc",
+                "bash .devcontainer/run-clang-tidy.sh"
+            ],
+            "problemMatcher": [
+                "$gcc"
+            ]
+        }
+    ]
+}

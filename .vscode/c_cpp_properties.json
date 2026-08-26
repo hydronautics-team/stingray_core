@@ -1,30 +1,41 @@
 {
-    "configurations": [
-        {
-            "browse": {
-                "limitSymbolsToIncludedHeaders": true,
-                "path": [
-                    "/opt/ros/iron/include/**",
-                    "/usr/include/**",
-                    "/home/vladushked/hydronautics/stingray_core"
-                ]
-            },
-            "includePath": [
-                "/opt/ros/iron/include/**",
-                "/usr/include/**",
-                "${workspaceFolder}/src/stingray_core_communication/include",
-                "${workspaceFolder}/install/stingray_core_interfaces/include/stingray_core_interfaces",
-                "/opt/ros/iron/include/geometry_msgs",
-                "${workspaceFolder}/src/serial/include"
-            ],
-            "name": "ROS",
-            "intelliSenseMode": "gcc-x64",
-            "compilerPath": "/usr/bin/gcc",
-            "cStandard": "gnu11",
-            "cppStandard": "c++14",
-            "compilerPathInCppPropertiesJson": "/usr/bin/gcc",
-            "mergeConfigurations": false
-        }
-    ],
-    "version": 4
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/stingray_core/install/vectornav/include/**",
+        "/stingray_core/install/stingray_interface_bridge/include/**",
+        "/stingray_core/install/vectornav_msgs/include/**",
+        "/stingray_core/install/udp_driver/include/**",
+        "/stingray_core/install/stingray_interfaces/include/**",
+        "/stingray_core/install/servo_device/include/**",
+        "/stingray_core/install/serial_driver/include/**",
+        "/stingray_core/install/pressure_sensor/include/**",
+        "/stingray_core/install/parser/include/**",
+        "/stingray_core/install/lights_device/include/**",
+        "/stingray_core/install/io_context/include/**",
+        "/stingray_core/install/battery_sensor/include/**",
+        "/opt/ros/humble/include/**",
+        "/stingray_core/src/stingray_core_communication/io_context/include/**",
+        "/stingray_core/src/stingray_core_communication/serial_driver/include/**",
+        "/stingray_core/src/stingray_core_communication/udp_driver/include/**",
+        "/stingray_core/src/stingray_core_devices/lights_device/include/**",
+        "/stingray_core/src/stingray_core_devices/servo_device/include/**",
+        "/stingray_core/src/stingray_core_sensors/battery_sensor/include/**",
+        "/stingray_core/src/stingray_core_sensors/parser/include/**",
+        "/stingray_core/src/stingray_core_sensors/pressure_sensor/include/**",
+        "/stingray_core/src/stingray_interface_bridge/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
 }
