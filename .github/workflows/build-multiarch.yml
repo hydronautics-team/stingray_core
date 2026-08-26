@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - master
-      - test/**
 
 env:
   DOCKER_HUB_REPO: hydronautics/stingray_core
