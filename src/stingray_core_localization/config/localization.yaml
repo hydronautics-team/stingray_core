@@ -1,0 +1,13 @@
+localization:
+  ros__parameters:
+
+    imu_topic: /core/sensors/imu
+    dvl_topic: /core/sensors/dvl
+    ps_topic: /core/sensors/heave
+
+    odometry_topic: /core/state/odometry
+
+    odom_frame: odom
+    base_frame: base_link
+
+    update_rate: 50.0
