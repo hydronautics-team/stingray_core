@@ -1,33 +1,42 @@
 #include <chrono>
+#include <cmath>
 #include <functional>
 #include <memory>
 #include <string>
 
-
+#include "geometry_msgs/msg/quaternion.hpp"
+#include "geometry_msgs/msg/vector3_stamped.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "sensor_msgs/msg/imu.hpp"
+#include "tf2/LinearMath/Quaternion.h"
 
 #include "AH127Cprotocol.h"
-#include "parser/msg/data.hpp"
 
 using namespace std::chrono_literals;
 
 class AH127CPublisher : public rclcpp::Node
-
-
 {
 public:
-    AH127CPublisher()
-    : Node("ah127c_publisher")
+    AH127CPublisher() : Node("ah127c_publisher")
     {
-        publisher_ = this->create_publisher<parser::msg::Data>("imu_full_data", 10);
-        
-        protocol_ = new AH127Cprotocol("/dev/ttyUSB0", 9600); //for socat
-        timer_ = this->create_wall_timer(
-            10ms, std::bind(&AH127CPublisher::timer_callback, this));
-            
+        // === Топик 1: IMU в стандартном формате ===
+        publisher_imu_ = this->create_publisher<sensor_msgs::msg::Imu>("/imu_full_data", 10);
+
+        // === Топик 2: Углы Эйлера (Roll, Pitch, Yaw) ===
+        publisher_euler_ =
+            this->create_publisher<geometry_msgs::msg::Vector3Stamped>("/imu_euler", 10);
+
+        protocol_ = new AH127Cprotocol("/dev/ttyUSB0", 115200);
+
+        timer_ = this->create_wall_timer(10ms, std::bind(&AH127CPublisher::timer_callback, this));
+
+        RCLCPP_INFO(this->get_logger(), "AH127C Publisher started (Imu + Euler)");
     }
-    ~AH127CPublisher() {
+
+    ~AH127CPublisher()
+    {
         delete protocol_;
+        RCLCPP_INFO(this->get_logger(), "AH127C Publisher stopped");
     }
 
 private:
@@ -36,46 +45,74 @@ private:
         protocol_->readData();
         protocol_->timeoutSlot();
 
-        auto message = parser::msg::Data();
+        // =============================================
+        // 1. sensor_msgs::msg::Imu (стандартный формат)
+        // =============================================
+        auto imu_msg = sensor_msgs::msg::Imu();
 
-        message.roll  = this->protocol_->data.roll;
-        message.pitch = this->protocol_->data.pitch;
-        message.yaw   = this->protocol_->data.yaw;
+        imu_msg.header.stamp = this->now();
+        imu_msg.header.frame_id = "imu_link";
 
-        message.accel_x = this->protocol_->data.X_accel;
-        message.accel_y = this->protocol_->data.Y_accel;
-        message.accel_z = this->protocol_->data.Z_accel;
+        // Преобразование RPY → кватернион
+        double roll_rad = this->protocol_->data.roll * M_PI / 180.0;
+        double pitch_rad = this->protocol_->data.pitch * M_PI / 180.0;
+        double yaw_rad = this->protocol_->data.yaw * M_PI / 180.0;
 
-        message.rate_x = this->protocol_->data.X_rate;
-        message.rate_y = this->protocol_->data.Y_rate;
-        message.rate_z = this->protocol_->data.Z_rate;
+        tf2::Quaternion q;
+        q.setRPY(roll_rad, pitch_rad, yaw_rad);
 
-        message.mag_x = this->protocol_->data.X_magn;
-        message.mag_y = this->protocol_->data.Y_magn;
-        message.mag_z = this->protocol_->data.Z_magn;
+        imu_msg.orientation.x = q.x();
+        imu_msg.orientation.y = q.y();
+        imu_msg.orientation.z = q.z();
+        imu_msg.orientation.w = q.w();
 
-        message.q_x = this->protocol_->data.first_qvat;
-        message.q_y = this->protocol_->data.second_qvat;
-        message.q_z = this->protocol_->data.third_qvat;
-        message.q_w = this->protocol_->data.four_qvat;
+        imu_msg.angular_velocity.x = this->protocol_->data.X_rate * M_PI / 180.0;
+        imu_msg.angular_velocity.y = this->protocol_->data.Y_rate * M_PI / 180.0;
+        imu_msg.angular_velocity.z = this->protocol_->data.Z_rate * M_PI / 180.0;
 
-        RCLCPP_INFO(this->get_logger(), "IMU Data Sent: R:%.2f P:%.2f Y:%.2f", 
-                message.roll, message.pitch, message.yaw);
+        imu_msg.linear_acceleration.x = this->protocol_->data.X_accel;
+        imu_msg.linear_acceleration.y = this->protocol_->data.Y_accel;
+        imu_msg.linear_acceleration.z = this->protocol_->data.Z_accel;
 
-        publisher_->publish(message);
+        // Ковариации (пока нулевые)
+        std::fill(std::begin(imu_msg.orientation_covariance),
+                  std::end(imu_msg.orientation_covariance), 0.0);
+        std::fill(std::begin(imu_msg.angular_velocity_covariance),
+                  std::end(imu_msg.angular_velocity_covariance), 0.0);
+        std::fill(std::begin(imu_msg.linear_acceleration_covariance),
+                  std::end(imu_msg.linear_acceleration_covariance), 0.0);
+
+        publisher_imu_->publish(imu_msg);
+
+        // =============================================
+        // 2. geometry_msgs::msg::Vector3Stamped (Углы Эйлера в градусах)
+        // =============================================
+        auto euler_msg = geometry_msgs::msg::Vector3Stamped();
+        euler_msg.header.stamp = this->now();
+        euler_msg.header.frame_id = "imu_link";
+
+        euler_msg.vector.x = this->protocol_->data.roll;  // Roll (градусы)
+        euler_msg.vector.y = this->protocol_->data.pitch; // Pitch (градусы)
+        euler_msg.vector.z = this->protocol_->data.yaw;   // Yaw (градусы)
+
+        publisher_euler_->publish(euler_msg);
+
+        // Лог в терминал
+        RCLCPP_INFO(this->get_logger(), "IMU: R=%.2f° P=%.2f° Y=%.2f° | Freq=100Hz",
+                    this->protocol_->data.roll, this->protocol_->data.pitch,
+                    this->protocol_->data.yaw);
     }
 
     rclcpp::TimerBase::SharedPtr timer_;
-    rclcpp::Publisher<parser::msg::Data>::SharedPtr publisher_;
+    rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr publisher_imu_;
+    rclcpp::Publisher<geometry_msgs::msg::Vector3Stamped>::SharedPtr publisher_euler_;
     AH127Cprotocol *protocol_;
 };
 
-int main(int argc, char * argv[])
+int main(int argc, char *argv[])
 {
     rclcpp::init(argc, argv);
-    
     auto node = std::make_shared<AH127CPublisher>();
-    
     rclcpp::spin(node);
     rclcpp::shutdown();
     return 0;

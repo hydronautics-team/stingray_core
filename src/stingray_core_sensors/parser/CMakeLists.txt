@@ -11,37 +11,35 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(rosidl_default_generators REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 
 find_library(SERIAL_LIB serial REQUIRED)
 
-
-include_directories(include)
-
-rosidl_generate_interfaces(${PROJECT_NAME}
-  "msg/Data.msg"
+# Собираем всё в один исполняемый файл
+add_executable(imu_node
+  src/main.cpp
+  src/AH127Cprotocol.cpp
 )
 
-add_executable(imu_node 
-  src/main.cpp 
-  src/AH127Cprotocol.cpp
-  include/AH127Cprotocol.h
+target_include_directories(imu_node PUBLIC
+  include
+)
+
+target_link_libraries(imu_node
+  ${SERIAL_LIB}
 )
 
 ament_target_dependencies(imu_node
   rclcpp
   std_msgs
+  sensor_msgs
+  geometry_msgs
+  tf2
+  tf2_geometry_msgs
 )
-
-rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
-
-
-target_link_libraries(imu_node
-  "${SERIAL_LIB}"
-  "${cpp_typesupport_target}"
-)
-
-add_dependencies(imu_node ${PROJECT_NAME}__rosidl_typesupport_cpp)
 
 install(TARGETS
   imu_node
@@ -50,11 +48,6 @@ install(TARGETS
 
 install(DIRECTORY launch/
   DESTINATION share/${PROJECT_NAME}/launch
-)
-
-install(PROGRAMS
-  scripts/emulator.py
-  DESTINATION lib/${PROJECT_NAME}
 )
 
 if(BUILD_TESTING)
