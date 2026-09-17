@@ -81,6 +81,12 @@ public:
     {
         auto serial_msg = std_msgs::msg::UInt8MultiArray();
         serial_msg.data = createPacket(data, length);
+
+        RCLCPP_INFO(
+        this->get_logger(),
+        "SERIAL WRITE: length=%u",
+        length);
+        
         serial_pub_->publish(serial_msg);
         return static_cast<int>(length);
     }
