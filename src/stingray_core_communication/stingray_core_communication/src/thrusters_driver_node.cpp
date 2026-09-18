@@ -40,20 +40,6 @@ private:
     {
         if (!msg->data.empty())
         {
-            RCLCPP_INFO(
-                this->get_logger(),
-                "CMD: %u %u %u %u %u %u %u %u %u %u",
-                msg->data[0],
-                msg->data[1],
-                msg->data[2],
-                msg->data[3],
-                msg->data[4],
-                msg->data[5],
-                msg->data[6],
-                msg->data[7],
-                msg->data[8],
-                msg->data[9]);
-
             std::memcpy(thrusterData_.data(), msg->data.data(), 10);
             serialWrite(static_cast<const void *>(thrusterData_.data()), 0, 10);
         }
