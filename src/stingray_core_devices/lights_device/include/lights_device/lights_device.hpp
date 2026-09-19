@@ -21,7 +21,7 @@ public:
 private:
     void mode_callback(const std_msgs::msg::Int32::ConstSharedPtr &msg);
     void brightness_callback(const std_msgs::msg::Int32::ConstSharedPtr &msg);
-    void publish_cmd(uint8_t command);
+    void publish_cmd(uint16_t command);
 
     void start_blinking(int period_ms);
     void stop_blinking();
@@ -44,14 +44,14 @@ private:
 
     bool is_lights_turn_on_ = false;
 
-    uint8_t brightness_ = 255;
+    uint16_t brightness_ = 500;
     bool is_blinking_ = false;
     int lights_state_ = 0; // 0 - off, 1 - on, 2 - blink slow, 3 - blink fast, 4 - gradient
     bool blink_state_ = false;
     int blink_period_ms_ = 500;
 
     bool is_gradient_ = false;
-    uint8_t current_brightness_ = 0;
+    uint16_t current_brightness_ = 0;
     int gradient_direction_ = 1; // 1 = увеличение, -1 = уменьшение
     int gradient_step_ms_ = 10;  // шаг изменения яркости в мс
 };

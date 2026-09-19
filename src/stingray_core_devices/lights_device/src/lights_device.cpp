@@ -46,7 +46,10 @@ void LightsControl::mode_callback(const std_msgs::msg::Int32::ConstSharedPtr &ms
 
 void LightsControl::brightness_callback(const std_msgs::msg::Int32::ConstSharedPtr &msg)
 {
-    brightness_ = static_cast<uint8_t>(std::max(0, std::min(255, msg->data)));
+    brightness_ = static_cast<uint16_t>(std::max(0, std::min(500, msg->data)));
+    if (!blink_state_ && !is_gradient_) {
+        lights_on();
+    }
 }
 
 void LightsControl::start_blinking(int period_ms)
@@ -145,11 +148,23 @@ void LightsControl::gradient_timer_callback()
     publish_cmd(current_brightness_);
 }
 
-void LightsControl::publish_cmd(uint8_t command)
+void LightsControl::publish_cmd(uint16_t command)
 {
     auto command_msg = std_msgs::msg::UInt8MultiArray();
-    command_msg.data = {command, command};
-    RCLCPP_DEBUG(node_->get_logger(), "Published command lights: %u", command);
+
+    command_msg.data = {
+        static_cast<uint8_t>(command & 0xFF),
+        static_cast<uint8_t>((command >> 8) & 0xFF),
+
+        static_cast<uint8_t>(command & 0xFF),
+        static_cast<uint8_t>((command >> 8) & 0xFF)
+    };
+
+    RCLCPP_DEBUG(
+        node_->get_logger(),
+        "Published command lights: %u",
+        command);
+
     lights_pub_->publish(command_msg);
 }
 
