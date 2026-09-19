@@ -26,170 +26,183 @@ namespace drivers
 {
 namespace serial_driver
 {
+
 namespace
 {
-void set_rx_with_logging(GpioDirectionController & controller, const char * context)
+// Вспомогательная функция для безопасного возврата в режим приема при ошибках
+void set_rx_with_logging(GpioDirectionController &controller, const char *context)
 {
-  try {
-    controller.set_rx();
-  } catch (const std::exception & ex) {
-    RCLCPP_ERROR_STREAM(rclcpp::get_logger(context), ex.what());
-  }
+    try
+    {
+        controller.set_rx();
+    }
+    catch (const std::exception &ex)
+    {
+        RCLCPP_ERROR_STREAM(rclcpp::get_logger(context), ex.what());
+    }
 }
-}  // namespace
+} // namespace
 
-SerialPort::SerialPort(
-  const IoContext & ctx,
-  const std::string & device_name,
-  const SerialPortConfig serial_port_config,
-  int direction_gpio)
-: m_ctx(ctx),
-  m_device_name(device_name),
-  m_serial_port(ctx.ios()),
-  m_port_config(serial_port_config),
-  m_direction_gpio(direction_gpio),
-  m_direction_gpio_controller(direction_gpio)
+SerialPort::SerialPort(const IoContext &ctx, const std::string &device_name, const SerialPortConfig serial_port_config,
+                       int direction_gpio)
+    : m_ctx(ctx),
+      m_device_name(device_name),
+      m_serial_port(ctx.ios()),
+      m_port_config(serial_port_config),
+      m_direction_gpio(direction_gpio),
+      m_direction_gpio_controller(direction_gpio)
 {
-  m_recv_buffer.resize(m_recv_buffer_size);
+    m_recv_buffer.resize(m_recv_buffer_size);
 }
 
 SerialPort::~SerialPort()
 {
-  if (is_open()) {
-    close();
-  }
-}
-
-size_t SerialPort::send(const std::vector<uint8_t> & buff)
-{
-  m_direction_gpio_controller.set_rx();
-  try {
-    const auto sent = m_serial_port.write_some(asio::buffer(buff.data(), buff.size()));
-    m_direction_gpio_controller.delay_us(buff.size()*8*9);
-    m_direction_gpio_controller.set_tx();
-    return sent;
-  } catch (...) {
-    set_rx_with_logging(m_direction_gpio_controller, "SerialPort::send");
-    throw;
-  }
-}
-
-size_t SerialPort::receive(std::vector<uint8_t> & buff)
-{
-  return m_serial_port.read_some(asio::mutable_buffer(buff.data(), buff.size()));
-}
-
-void SerialPort::async_send(const std::vector<uint8_t> & buff)
-{
-  m_direction_gpio_controller.set_rx();
-  try {
-    m_serial_port.async_write_some(
-      asio::buffer(buff),
-      [this](std::error_code error, size_t bytes_transferred)
-      {
-        async_send_handler(error, bytes_transferred);
-      });
-  } catch (...) {
-    set_rx_with_logging(m_direction_gpio_controller, "SerialPort::async_send");
-    throw;
-  }
-}
-
-void SerialPort::async_receive(Functor func)
-{
-  m_func = std::move(func);
-  m_serial_port.async_read_some(
-    asio::buffer(m_recv_buffer),
-    [this](std::error_code error, size_t bytes_transferred)
+    if (is_open())
     {
-      async_receive_handler(error, bytes_transferred);
-    });
-}
-
-bool SerialPort::send_break()
-{
-  bool break_sent = false;
-  if (is_open()) {
-    m_serial_port.send_break();
-    break_sent = true;
-  }
-  return break_sent;
-}
-
-void SerialPort::async_send_handler(
-  const asio::error_code & error,
-  size_t bytes_transferred)
-{
-  (void)bytes_transferred;
-  if (error) {
-    RCLCPP_ERROR_STREAM(rclcpp::get_logger("SerialPort::async_send_handler"), error.message());
-    return;
-  }
-    m_direction_gpio_controller.set_tx();
-
-}
-
-void SerialPort::async_receive_handler(
-  const asio::error_code & error,
-  size_t bytes_transferred)
-{
-  if (error) {
-    RCLCPP_ERROR_STREAM(rclcpp::get_logger("SerialPort::async_receive_handler"), error.message());
-    close();
-    return;
-  }
-
-  if (bytes_transferred > 0 && m_func) {
-    m_func(m_recv_buffer, bytes_transferred);
-    m_serial_port.async_read_some(
-      asio::buffer(m_recv_buffer),
-      [this](std::error_code error, size_t bytes_transferred)
-      {
-        async_receive_handler(error, bytes_transferred);
-      });
-  }
-}
-
-std::string SerialPort::device_name() const
-{
-  return m_device_name;
-}
-
-SerialPortConfig SerialPort::serial_port_config() const
-{
-  return m_port_config;
-}
-
-int SerialPort::direction_gpio() const
-{
-  return m_direction_gpio;
+        close();
+    }
 }
 
 void SerialPort::open()
 {
-  m_direction_gpio_controller.initialize();
-  m_direction_gpio_controller.set_tx();
-  m_serial_port.open(m_device_name);
-  m_serial_port.set_option(spb::baud_rate(m_port_config.get_baud_rate_asio()));
-  m_serial_port.set_option(spb::flow_control(m_port_config.get_flow_control_asio()));
-  m_serial_port.set_option(spb::parity(m_port_config.get_parity_asio()));
-  m_serial_port.set_option(spb::stop_bits(m_port_config.get_stop_bits_asio()));
+    // 1. Инициализируем контроллер GPIO
+    m_direction_gpio_controller.initialize();
+
+    // 2. КРИТИЧЕСКИ ВАЖНО: При открытии порт всегда должен быть в режиме ПРИЕМА (уровень 0)
+    m_direction_gpio_controller.set_rx();
+
+    // 3. Открываем и настраиваем ASIO порт
+    m_serial_port.open(m_device_name);
+    m_serial_port.set_option(spb::baud_rate(m_port_config.get_baud_rate_asio()));
+    m_serial_port.set_option(spb::flow_control(m_port_config.get_flow_control_asio()));
+    m_serial_port.set_option(spb::parity(m_port_config.get_parity_asio()));
+    m_serial_port.set_option(spb::stop_bits(m_port_config.get_stop_bits_asio()));
 }
 
 void SerialPort::close()
 {
-  set_rx_with_logging(m_direction_gpio_controller, "SerialPort::close");
-  asio::error_code error;
-  m_serial_port.close(error);
-  if (error) {
-    RCLCPP_ERROR_STREAM(rclcpp::get_logger("SerialPort::close"), error.message());
-  }
+    // Перед закрытием гарантированно возвращаем шину в режим приема
+    set_rx_with_logging(m_direction_gpio_controller, "SerialPort::close");
+
+    asio::error_code error;
+    m_serial_port.close(error);
+    if (error)
+    {
+        RCLCPP_ERROR_STREAM(rclcpp::get_logger("SerialPort::close"), error.message());
+    }
 }
 
-bool SerialPort::is_open() const
+bool SerialPort::is_open() const { return m_serial_port.is_open(); }
+
+size_t SerialPort::send(const std::vector<uint8_t> &buff)
 {
-  return m_serial_port.is_open();
+    // 1. СНАЧАЛА переключаем в режим передачи (TX = 1)
+    m_direction_gpio_controller.set_tx();
+
+    try
+    {
+        const auto sent = m_serial_port.write_some(asio::buffer(buff.data(), buff.size()));
+
+        // 2. Ждем, пока байты физически уйдут из сдвигового регистра UART.
+        // Формула: (байты * 10 бит * 1000000 мкс) / бодрейт.
+        // 10 бит = 1 стартовый + 8 данных + 1 стоповый (стандарт 8N1)
+        int delay_us = (buff.size() * 10 * 1000000) / m_port_config.get_baud_rate();
+
+        // Добавляем небольшой запас (200 мкс) на задержки планировщика ОС Linux
+        m_direction_gpio_controller.delay_us(delay_us + 200);
+
+        // 3. ВОЗВРАЩАЕМ в режим приема (RX = 0)
+        m_direction_gpio_controller.set_rx();
+
+        return sent;
+    }
+    catch (...)
+    {
+        // При любой ошибке гарантированно возвращаем шину в режим приема, чтобы не "подвесить" сеть
+        set_rx_with_logging(m_direction_gpio_controller, "SerialPort::send");
+        throw;
+    }
 }
 
-}  // namespace serial_driver
-}  // namespace drivers
+size_t SerialPort::receive(std::vector<uint8_t> &buff)
+{
+    // Порт уже находится в режиме RX, просто читаем данные
+    return m_serial_port.read_some(asio::mutable_buffer(buff.data(), buff.size()));
+}
+
+void SerialPort::async_send(const std::vector<uint8_t> &buff)
+{
+    // 1. СНАЧАЛА переключаем в режим передачи
+    m_direction_gpio_controller.set_tx();
+
+    try
+    {
+        m_serial_port.async_write_some(asio::buffer(buff), [this](std::error_code error, size_t bytes_transferred)
+                                       { async_send_handler(error, bytes_transferred); });
+    }
+    catch (...)
+    {
+        set_rx_with_logging(m_direction_gpio_controller, "SerialPort::async_send");
+        throw;
+    }
+}
+
+void SerialPort::async_receive(Functor func)
+{
+    m_func = std::move(func);
+    m_serial_port.async_read_some(asio::buffer(m_recv_buffer), [this](std::error_code error, size_t bytes_transferred)
+                                  { async_receive_handler(error, bytes_transferred); });
+}
+
+bool SerialPort::send_break()
+{
+    bool break_sent = false;
+    if (is_open())
+    {
+        m_serial_port.send_break();
+        break_sent = true;
+    }
+    return break_sent;
+}
+
+void SerialPort::async_send_handler(const asio::error_code &error, size_t bytes_transferred)
+{
+    (void)bytes_transferred;
+    if (error)
+    {
+        RCLCPP_ERROR_STREAM(rclcpp::get_logger("SerialPort::async_send_handler"), error.message());
+    }
+
+    // 2. После завершения асинхронной отправки возвращаем шину в режим приема.
+    // Небольшая фиксированная задержка для гарантии ухода последнего бита
+    m_direction_gpio_controller.delay_us(500);
+    m_direction_gpio_controller.set_rx();
+}
+
+void SerialPort::async_receive_handler(const asio::error_code &error, size_t bytes_transferred)
+{
+    if (error)
+    {
+        RCLCPP_ERROR_STREAM(rclcpp::get_logger("SerialPort::async_receive_handler"), error.message());
+        close();
+        return;
+    }
+
+    if (bytes_transferred > 0 && m_func)
+    {
+        m_func(m_recv_buffer, bytes_transferred);
+
+        // Перевооружаем асинхронное чтение
+        m_serial_port.async_read_some(asio::buffer(m_recv_buffer), [this](std::error_code error, size_t bytes_transferred)
+                                      { async_receive_handler(error, bytes_transferred); });
+    }
+}
+
+std::string SerialPort::device_name() const { return m_device_name; }
+
+SerialPortConfig SerialPort::serial_port_config() const { return m_port_config; }
+
+int SerialPort::direction_gpio() const { return m_direction_gpio; }
+
+} // namespace serial_driver
+} // namespace drivers
