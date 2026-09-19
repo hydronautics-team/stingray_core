@@ -49,8 +49,8 @@ private:
     {
         if (!msg->data.empty())
         {
-            std::memcpy(thrusterData_.data() + 12, msg->data.data(), 2);
-            serialWrite(static_cast<const void *>(thrusterData_.data() + 12), 12, 2);
+            std::memcpy(thrusterData_.data() + 10, msg->data.data(), 4);
+            serialWrite(static_cast<const void *>(thrusterData_.data() + 10), 10, 4);
         }
     }
     static std::vector<uint8_t> createPacket(const void *data, unsigned length)
