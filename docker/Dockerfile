@@ -4,7 +4,7 @@ FROM ros:humble-ros-base
 RUN apt-get update && apt-get install -y \
     bash bash-completion build-essential cmake command-not-found gdb git jq less lsb-release \
     clang clangd clang-format clang-tidy clang-tools \
-    i2c-tools libasio-dev libboost-all-dev libi2c-dev libserial-dev netcat-openbsd socat \
+    i2c-tools libasio-dev libboost-all-dev libi2c-dev libserial-dev libgpiod-dev gpiod netcat-openbsd socat \
     python3-colcon-common-extensions python3-colorama python3-pip python3-pyqtgraph \
     python3-rosdep python3-smbus python3-smbus2 python3-vcstool \
     ros-humble-ament-clang-tidy \
