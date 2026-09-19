@@ -4,45 +4,47 @@ Stingray Core Control Node
 Minimal ROS2 node skeleton with 100 Hz control loop callback.
 """
 
-import rclpy
-from rclpy.node import Node
-from rclpy.qos import (
-    QoSProfile,
-    HistoryPolicy,
-    ReliabilityPolicy,
-    DurabilityPolicy,
-)
-from rclpy.parameter import Parameter
-from rcl_interfaces.msg import ParameterDescriptor
-from rcl_interfaces.msg import SetParametersResult
-
 import time
 
-from geometry_msgs.msg import Twist, Vector3
-from std_msgs.msg import Float64, UInt8, Bool, UInt8MultiArray
-from sensor_msgs.msg import Imu
-from vectornav_msgs.msg import CommonGroup
+import rclpy
 from dvl_msgs.msg import DVL
-
-from .control.thruster_mixer import ThrusterMixer
-from .control.controllers import (
-    YawController, PitchController, RollController,
-    DepthController, SurgeController, SwayController
+from geometry_msgs.msg import Twist, Vector3
+from rcl_interfaces.msg import ParameterDescriptor, SetParametersResult
+from rclpy.node import Node
+from rclpy.parameter import Parameter
+from rclpy.qos import (
+    DurabilityPolicy,
+    HistoryPolicy,
+    QoSProfile,
+    ReliabilityPolicy,
 )
-from .utils.save_params import save_params
-from .state.imu import ImuState
-from .state.control import ControlState
+from sensor_msgs.msg import Imu
+from std_msgs.msg import Bool, Float64, UInt8, UInt8MultiArray
+from vectornav_msgs.msg import CommonGroup
+
 from .control.axis_controller import (
-    AxisController,
     AngularAxisController,
+    AxisController,
     LinearAxisController,
     LinearVelocityAxisController,
 )
+from .control.controllers import (
+    DepthController,
+    PitchController,
+    RollController,
+    SurgeController,
+    SwayController,
+    YawController,
+)
+from .control.thruster_mixer import ThrusterMixer
+from .state.control import ControlState
+from .state.imu import ImuState
+from .utils.save_params import save_params
 
 
 class StingrayCoreControlNode(Node):
     def __init__(self):
-        super().__init__('stingray_core_control_node')
+        super().__init__("stingray_core_control_node")
         self._init_config()
         self._init_control_core()
         self._init_ros_interfaces()
@@ -70,13 +72,14 @@ class StingrayCoreControlNode(Node):
                     dt=self.last_dt,
                 )
             else:
-                # Для разомкнутого контура воздействие одноразовое: 1 цикл,
-                # затем сбрасывается до следующей новой команды.
-                if self.open_loop_pending[axis]:
-                    u[axis] = self.control_input[axis]
-                    self.open_loop_pending[axis] = False
-                else:
-                    u[axis] = 0.0
+                u[axis] = self.control_input[axis]
+                # # Для разомкнутого контура воздействие одноразовое: 1 цикл,
+                # # затем сбрасывается до следующей новой команды.
+                # if self.open_loop_pending[axis]:
+                #     u[axis] = self.control_input[axis]
+                #     self.open_loop_pending[axis] = False
+                # else:
+                #     u[axis] = 0.0
 
             # Оставляем последнее фактически применённое воздействие в state
             self.control.impact[axis] = u[axis]
@@ -96,48 +99,53 @@ class StingrayCoreControlNode(Node):
         self.pub_roll.publish(Float64(data=self.imu.roll))
         self.pub_depth.publish(Float64(data=self.depth))
 
-
     def _init_config(self):
-        self.declare_parameter('rate_hz', 100.0)
-        self.rate_hz = float(self.get_parameter('rate_hz').value)
+        self.declare_parameter("rate_hz", 100.0)
+        self.rate_hz = float(self.get_parameter("rate_hz").value)
 
-        self.declare_parameter('flag_setup_feedback_speed', False)
-        self.flag_setup_feedback_speed = bool(self.get_parameter('flag_setup_feedback_speed').value)
+        self.declare_parameter("flag_setup_feedback_speed", False)
+        self.flag_setup_feedback_speed = bool(
+            self.get_parameter("flag_setup_feedback_speed").value
+        )
 
-        self.declare_parameter('debug_publish', False)
+        self.declare_parameter("debug_publish", False)
 
         defaults = {
-            'topic_imu_angular': '/vectornav/raw/common',
-            'topic_imu_linear_accel': '/vectornav/imu',
-            'topic_imu_angular_rate': '/vectornav/imu',
-            'topic_dvl_data': '/dvl/data',
-            'topic_loop_flags': '/control/loop_flags',
-            'topic_pressure_sensor': '/stingray_core/pressure_sensor/depth',
-            'topic_control_data': '/control/data',
-            'topic_zero_yaw': '/imu/zero_yaw',
+            "topic_imu_angular": "/vectornav/raw/common",
+            "topic_imu_linear_accel": "/vectornav/imu",
+            "topic_imu_angular_rate": "/vectornav/imu",
+            "topic_dvl_data": "/dvl/data",
+            "topic_loop_flags": "/control/loop_flags",
+            "topic_pressure_sensor": "/stingray_core/pressure_sensor/depth",
+            "topic_control_data": "/control/data",
+            "topic_zero_yaw": "/imu/zero_yaw",
         }
 
         for name, default in defaults.items():
             self.declare_parameter(name, default)
             setattr(self, name, self.get_parameter(name).value)
 
-        self.declare_parameter('axes', ["surge", "sway", "heave", "roll", "pitch", "yaw"])
-        self.axes = list(self.get_parameter('axes').value)
+        self.declare_parameter(
+            "axes", ["surge", "sway", "heave", "roll", "pitch", "yaw"]
+        )
+        self.axes = list(self.get_parameter("axes").value)
 
-        self.declare_parameter('use_dvl_velocity', False)
-        self.use_dvl_velocity = bool(self.get_parameter('use_dvl_velocity').value)
+        self.declare_parameter("use_dvl_velocity", False)
+        self.use_dvl_velocity = bool(self.get_parameter("use_dvl_velocity").value)
 
-        self.declare_parameter('use_distance_measurement', False)
-        self.use_distance_measurement = bool(self.get_parameter('use_distance_measurement').value)
+        self.declare_parameter("use_distance_measurement", False)
+        self.use_distance_measurement = bool(
+            self.get_parameter("use_distance_measurement").value
+        )
 
-        self.declare_parameter('dvl_velocity_alpha', 0.2)
-        self.dvl_velocity_alpha = float(self.get_parameter('dvl_velocity_alpha').value)
+        self.declare_parameter("dvl_velocity_alpha", 0.2)
+        self.dvl_velocity_alpha = float(self.get_parameter("dvl_velocity_alpha").value)
 
-        self.declare_parameter('dvl_timeout_sec', 0.5)
-        self.dvl_timeout_sec = float(self.get_parameter('dvl_timeout_sec').value)
+        self.declare_parameter("dvl_timeout_sec", 0.5)
+        self.dvl_timeout_sec = float(self.get_parameter("dvl_timeout_sec").value)
 
-        self.declare_parameter('thrusters', Parameter.Type.STRING_ARRAY)
-        self.thrusters = list(self.get_parameter('thrusters').value)
+        self.declare_parameter("thrusters", Parameter.Type.STRING_ARRAY)
+        self.thrusters = list(self.get_parameter("thrusters").value)
 
     def _init_control_core(self):
         coeffs = {}
@@ -157,16 +165,26 @@ class StingrayCoreControlNode(Node):
         self.mixer = ThrusterMixer(self.thrusters, self.axes, coeffs)
 
         axis_class_map = {
-            'yaw': YawController,
-            'pitch': PitchController,
-            'roll': RollController,
-            'heave': DepthController,
-            'surge': SurgeController,
-            'sway': SwayController,
+            "yaw": YawController,
+            "pitch": PitchController,
+            "roll": RollController,
+            "heave": DepthController,
+            "surge": SurgeController,
+            "sway": SwayController,
         }
 
         self.controllers = {}
-        self.param_keys = ["K_p", "K_1", "K_2", "K_i", "I_min", "I_max", "out_sat", "ap_K", "ap_T"]
+        self.param_keys = [
+            "K_p",
+            "K_1",
+            "K_2",
+            "K_i",
+            "I_min",
+            "I_max",
+            "out_sat",
+            "ap_K",
+            "ap_T",
+        ]
         for axis in self.axes:
             params = {}
             for key in self.param_keys:
@@ -265,7 +283,6 @@ class StingrayCoreControlNode(Node):
         #     if axis not in self.axis_ctrl:
         #         self.axis_ctrl[axis] = PassthroughAxisController()
 
-
     def _init_ros_interfaces(self):
         self._init_subscriptions()
         self._init_publishers()
@@ -291,14 +308,22 @@ class StingrayCoreControlNode(Node):
         self.sway_velocity_imu += self.imu.accel_y * dt
         self.heave_velocity_imu += self.imu.accel_z * dt
 
-        use_dvl_now = self.use_dvl_velocity and self.dvl_velocity_valid and self._is_dvl_fresh()
+        use_dvl_now = (
+            self.use_dvl_velocity and self.dvl_velocity_valid and self._is_dvl_fresh()
+        )
         alpha = max(0.0, min(1.0, self.dvl_velocity_alpha))
 
         if use_dvl_now:
             # IMU + DVL: blended correction для снижения дрейфа IMU
-            self.surge_velocity_est = alpha * self.surge_velocity_imu + (1.0 - alpha) * self.dvl_velocity_x
-            self.sway_velocity_est = alpha * self.sway_velocity_imu + (1.0 - alpha) * self.dvl_velocity_y
-            self.heave_velocity_est = alpha * self.heave_velocity_imu + (1.0 - alpha) * self.dvl_velocity_z
+            self.surge_velocity_est = (
+                alpha * self.surge_velocity_imu + (1.0 - alpha) * self.dvl_velocity_x
+            )
+            self.sway_velocity_est = (
+                alpha * self.sway_velocity_imu + (1.0 - alpha) * self.dvl_velocity_y
+            )
+            self.heave_velocity_est = (
+                alpha * self.heave_velocity_imu + (1.0 - alpha) * self.dvl_velocity_z
+            )
         else:
             # IMU-only
             self.surge_velocity_est = self.surge_velocity_imu
@@ -338,43 +363,38 @@ class StingrayCoreControlNode(Node):
         )
 
         self.sub_imu_angular = self.create_subscription(
-            CommonGroup, self.topic_imu_angular,
-            self.imu_angular_callback, qos_sensor
+            CommonGroup, self.topic_imu_angular, self.imu_angular_callback, qos_sensor
         )
 
         self.sub_imu_linear_accel = self.create_subscription(
-            Imu, self.topic_imu_linear_accel,
-            self.imu_linear_accel_callback, qos_sensor
+            Imu, self.topic_imu_linear_accel, self.imu_linear_accel_callback, qos_sensor
         )
 
         self.sub_imu_angular_rate = self.create_subscription(
-            Imu, self.topic_imu_angular_rate,
-            self.imu_angular_rate_callback, qos_sensor
+            Imu, self.topic_imu_angular_rate, self.imu_angular_rate_callback, qos_sensor
         )
 
         self.sub_dvl_data = self.create_subscription(
-            DVL, self.topic_dvl_data,
-            self.dvl_data_callback, qos_sensor
+            DVL, self.topic_dvl_data, self.dvl_data_callback, qos_sensor
         )
 
         self.sub_control_mode_flags = self.create_subscription(
-            UInt8, self.topic_loop_flags,
-            self.control_mode_flags_callback, qos_command
+            UInt8, self.topic_loop_flags, self.control_mode_flags_callback, qos_command
         )
 
         self.sub_pressure_sensor = self.create_subscription(
-            Float64, self.topic_pressure_sensor,
-            self.pressure_sensor_callback, qos_sensor
+            Float64,
+            self.topic_pressure_sensor,
+            self.pressure_sensor_callback,
+            qos_sensor,
         )
 
         self.sub_control_data = self.create_subscription(
-            Twist, self.topic_control_data,
-            self.control_data_callback, qos_command
+            Twist, self.topic_control_data, self.control_data_callback, qos_command
         )
 
         self.sub_zero_yaw = self.create_subscription(
-            Bool, self.topic_zero_yaw,
-            self.zero_yaw_callback, qos_event
+            Bool, self.topic_zero_yaw, self.zero_yaw_callback, qos_event
         )
 
     def _init_publishers(self):
@@ -400,21 +420,36 @@ class StingrayCoreControlNode(Node):
         )
 
         self.pub_thruster_cmd = self.create_publisher(
-            UInt8MultiArray, '/thruster/cmd', qos_actuation
+            UInt8MultiArray, "/thruster/cmd", qos_actuation
         )
 
-        self.pub_yaw = self.create_publisher(Float64, '~/orientation/yaw', qos_telemetry)
-        self.pub_pitch = self.create_publisher(Float64, '~/orientation/pitch', qos_telemetry)
-        self.pub_roll = self.create_publisher(Float64, '~/orientation/roll', qos_telemetry)
-        self.pub_depth = self.create_publisher(Float64, '~/orientation/depth', qos_telemetry)
-        
+        self.pub_yaw = self.create_publisher(
+            Float64, "~/orientation/yaw", qos_telemetry
+        )
+        self.pub_pitch = self.create_publisher(
+            Float64, "~/orientation/pitch", qos_telemetry
+        )
+        self.pub_roll = self.create_publisher(
+            Float64, "~/orientation/roll", qos_telemetry
+        )
+        self.pub_depth = self.create_publisher(
+            Float64, "~/orientation/depth", qos_telemetry
+        )
 
-        self.pub_err_position = self.create_publisher(Float64, "~/debug/err_position", qos_debug)
-        self.pub_output_pi = self.create_publisher(Float64, "~/debug/output_pi", qos_debug)
-        self.pub_feedback_speed = self.create_publisher(Float64, "~/debug/feedback_speed", qos_debug)
-        self.pub_measurement_rate = self.create_publisher(Float64, "~/debug/measurement_rate", qos_debug)
+        self.pub_err_position = self.create_publisher(
+            Float64, "~/debug/err_position", qos_debug
+        )
+        self.pub_output_pi = self.create_publisher(
+            Float64, "~/debug/output_pi", qos_debug
+        )
+        self.pub_feedback_speed = self.create_publisher(
+            Float64, "~/debug/feedback_speed", qos_debug
+        )
+        self.pub_measurement_rate = self.create_publisher(
+            Float64, "~/debug/measurement_rate", qos_debug
+        )
         self.pub_out = self.create_publisher(Float64, "~/debug/out", qos_debug)
-    
+
     # --- Колбэки ---
     def imu_angular_callback(self, msg: CommonGroup):
         try:
@@ -423,15 +458,13 @@ class StingrayCoreControlNode(Node):
             self.imu_yaw_raw = float(ypr.x)
 
             self.imu.yaw = self.normalize_angle_deg(
-            self.imu_yaw_raw - self.yaw_zero_offset
+                self.imu_yaw_raw - self.yaw_zero_offset
             )
             self.imu.pitch = float(ypr.y)
             self.imu.roll = float(ypr.z)
 
         except Exception as e:
-            self.get_logger().warning(
-                f"Error parsing CommonGroup yawpitchroll: {e}"
-            )
+            self.get_logger().warning(f"Error parsing CommonGroup yawpitchroll: {e}")
 
     def imu_angular_rate_callback(self, msg: Imu):
         try:
@@ -465,14 +498,13 @@ class StingrayCoreControlNode(Node):
                 self.distance_to_bottom = float(msg.altitude)
         except Exception as e:
             self.get_logger().warning(f"Error parsing DVL msg: {e}")
-    
+
     def zero_yaw_callback(self, msg: Bool):
         if not msg.data:
             return
 
         self.yaw_zero_offset = self.imu_yaw_raw
-        self.get_logger().info(
-            f"Yaw zeroed at {self.yaw_zero_offset:.2f} deg")
+        self.get_logger().info(f"Yaw zeroed at {self.yaw_zero_offset:.2f} deg")
 
     def pressure_sensor_callback(self, msg: Float64):
         try:
@@ -504,11 +536,11 @@ class StingrayCoreControlNode(Node):
         flags = int(msg.data)
         new_enabled = {
             "surge": bool(flags & (1 << 0)),
-            "sway":  bool(flags & (1 << 1)),
+            "sway": bool(flags & (1 << 1)),
             "heave": bool(flags & (1 << 2)),
-            "yaw":   bool(flags & (1 << 3)),
+            "yaw": bool(flags & (1 << 3)),
             "pitch": bool(flags & (1 << 4)),
-            "roll":  bool(flags & (1 << 5)),
+            "roll": bool(flags & (1 << 5)),
         }
 
         changed = []
@@ -553,21 +585,15 @@ class StingrayCoreControlNode(Node):
                 ctrl = self.controllers.get(axis)
                 if ctrl and hasattr(ctrl, key):
                     setattr(ctrl, key, p.value)
-                    self.get_logger().info(
-                        f"Controller '{axis}': {key} = {p.value}"
-                    )
+                    self.get_logger().info(f"Controller '{axis}': {key} = {p.value}")
                 else:
-                    self.get_logger().warning(
-                        f"Ignored controller param: {p.name}"
-                    )
+                    self.get_logger().warning(f"Ignored controller param: {p.name}")
 
             # --- 3. Применяем node params ---
             for p in node_params:
                 if hasattr(self, p.name):
                     setattr(self, p.name, p.value)
-                    self.get_logger().info(
-                        f"Node param updated: {p.name} = {p.value}"
-                    )
+                    self.get_logger().info(f"Node param updated: {p.name} = {p.value}")
 
             # --- 4. Сохраняем параметры ---
             if thruster_params:
@@ -608,19 +634,17 @@ class StingrayCoreControlNode(Node):
 
         if coeffs_update:
             self.mixer.update_coeffs(coeffs_update)
-            self.get_logger().info(
-                f"Updated thruster coeffs: {coeffs_update}"
-            )
+            self.get_logger().info(f"Updated thruster coeffs: {coeffs_update}")
 
     def _is_thruster_param(self, name: str) -> bool:
         return any(
-            name.startswith(f"{thr}_") and name[len(thr)+1:] in self.axes
+            name.startswith(f"{thr}_") and name[len(thr) + 1 :] in self.axes
             for thr in self.thrusters
         )
 
     def _is_controller_param(self, name: str) -> bool:
         return name.startswith("controllers.")
-        
+
     def debug_cb(self, data: dict):
         if not self.get_parameter("debug_publish").value:
             return
@@ -644,5 +668,5 @@ def main(args=None):
         rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

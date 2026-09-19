@@ -80,7 +80,7 @@ public:
     int write(const void *data, unsigned length)
     {
         auto serial_msg = std_msgs::msg::UInt8MultiArray();
-        serial_msg.data = createPacket(data, length);
+        serial_msg.data = createPacket(data, length);      
         serial_pub_->publish(serial_msg);
         return static_cast<int>(length);
     }
