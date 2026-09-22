@@ -3,66 +3,154 @@
 #include <vector>
 #include <algorithm>
 #include <iostream>
+#include <chrono>
+#include <iomanip>
 
 #define LOG_INFO(msg) std::cout << "[INFO]: " << msg << std::endl
 #define LOG_ERR(msg) std::cerr << "[ERROR]: " << msg << std::endl
+#define LOG_WARN(msg) std::cerr << "[WARN]: " << msg << std::endl
 
+// Протокол BEWIS (LC-AH127C)
+// Скорость: 115200 бод
+// Команды:
+// 0x04 - запрос трех углов (ответ 14 байт)
+// 0x59 - запрос полного кадра (ответ 57 байт)
+// 0x1F - запрос адреса (ответ 6 байт)
+// 0x56 - включить автовыдачу (параметр 0x05 = все данные)
+// 0x0C - установить частоту (0=0Гц, 1=5Гц, 2=10Гц, 3=20Гц, 4=25Гц, 5=50Гц)
+// 0x0A - сохранить настройки
+
+// Формат кадра: 0x77 LEN ADDR CMD DATA... CHK
+// LEN = длина от ADDR до CHK включительно
+// CHK = сумма всех байт от LEN до последнего байта данных & 0xFF
 
 AH127Cprotocol::AH127Cprotocol(std::string portName, int baudRate)
-
 {
-    m_port.Open(portName);
-    m_port.SetBaudRate(LibSerial::BaudRate::BAUD_9600);
+    try {
+        m_port.Open(portName);
+        m_port.SetBaudRate(LibSerial::BaudRate::BAUD_115200);  // ВАЖНО: 115200!
+        m_port.SetCharacterSize(LibSerial::CharacterSize::CHAR_SIZE_8);
+        m_port.SetStopBits(LibSerial::StopBits::STOP_BITS_1);
+        m_port.SetParity(LibSerial::Parity::PARITY_NONE);
 
+        LOG_INFO("Порт " + portName + " открыт, скорость 115200");
 
-    char cmd_1[6]; //задание формата посылки и частоты выдачи данных, 2.15 и 2.17
-    cmd_1[0] = 0x77;
-    cmd_1[1] = 0x05;
-    cmd_1[2] = 0x00;
-    cmd_1[3] = 0x56;
-    cmd_1[4] = 0x05;
-    cmd_1[5] = 0x60;
+        // Инициализация структур для калибровки
+        calibr_start.identif = 0x77;
+        calibr_start.lenght = 0x05;
+        calibr_start.adress = 0x00;
+        calibr_start.command = 0x91;
+        calibr_start.datafield = 0x00;
+        calibr_start.checksum = 0x96;
 
-    std::vector<uint8_t> v_cmd1(cmd_1, cmd_1 + 6);
-    m_port.Write(v_cmd1);
-    std::cout << "cmd_1 отправлена успешно (0x56 0x05)" << std::endl;
+        calibr_end.identif = 0x77;
+        calibr_end.lenght = 0x05;
+        calibr_end.adress = 0x00;
+        calibr_end.command = 0x92;
+        calibr_end.datafield = 0x00;
+        calibr_end.checksum = 0x97;
 
-    char cmd_2[6];
-    cmd_2[0] = 0x77;
-    cmd_2[1] = 0x05;
-    cmd_2[2] = 0x00;
-    cmd_2[3] = 0x0C;
-    cmd_2[4] = 0x05;
-    cmd_2[5] = 0x16;
-    std::vector<uint8_t> v_cmd2(cmd_2, cmd_2 + 6);
-    m_port.Write(v_cmd2);
-    std::cout << "cmd_2 отправлена успешно (0x0C 0x05)" << std::endl;
+        // ========================================================
+        // НАСТРОЙКА ДАТЧИКА НА МАКСИМАЛЬНУЮ ЧАСТОТУ 50 Гц
+        // ========================================================
+
+        // 1. Включить автовыдачу (0x56) с параметром 0x05 - все данные
+        // Кадр: 77 05 00 56 05 60 (сумма 05+00+56+05=60)
+        uint8_t cmd_auto[6] = {0x77, 0x05, 0x00, 0x56, 0x05, 0x60};
+        std::vector<uint8_t> v_cmd_auto(cmd_auto, cmd_auto + 6);
+        m_port.Write(v_cmd_auto);
+        LOG_INFO("Автовыдача включена (0x56 0x05)");
+
+        // 2. Частота 50 Гц (0x0C) - код 5 = 50 Гц (МАКСИМУМ!)
+        // Кадр: 77 05 00 0C 05 16 (сумма 05+00+0C+05=16)
+        uint8_t cmd_freq[6] = {0x77, 0x05, 0x00, 0x0C, 0x05, 0x16};
+        std::vector<uint8_t> v_cmd_freq(cmd_freq, cmd_freq + 6);
+        m_port.Write(v_cmd_freq);
+        LOG_INFO("Частота 50 Гц установлена (0x0C 0x05) - МАКСИМУМ!");
+
+        // 3. Сохранить настройки (0x0A) - без данных
+        // Кадр: 77 03 00 0A (сумма 03+00+0A=0D)
+        uint8_t cmd_save[4] = {0x77, 0x03, 0x00, 0x0A};
+        std::vector<uint8_t> v_cmd_save(cmd_save, cmd_save + 4);
+        m_port.Write(v_cmd_save);
+        LOG_INFO("Настройки сохранены (0x0A)");
+
+        last_receive_time = std::chrono::steady_clock::now();
+
+    } catch (const std::exception& e) {
+        LOG_ERR("Ошибка открытия порта: " + std::string(e.what()));
+        throw;
+    }
 }
 
 uint8_t AH127Cprotocol::calculateCRC(const uint8_t data[], uint32_t length) {
-     unsigned int i;
-     unsigned short crc = 0;
-     for(i=0; i<length; i++){
-         crc += data[i];
-     }
+    unsigned short crc = 0;
+    for (uint32_t i = 0; i < length; i++) {
+        crc += data[i];
+    }
     return crc & 0xFF;
 }
 
 bool AH127Cprotocol::correctChecksum(const std::vector<uint8_t> &ba) {
-    if (ba.size() < 56) return false;
-    if (calculateCRC((unsigned char*)ba.data(), 55) == ba[55]) {
-        return true;
-    }
-    return false;
+    if (ba.size() < 4) return false;
+    // Сумма всех байт от LEN до последнего байта данных == последнему байту
+    return calculateCRC(ba.data() + 1, ba.size() - 2) == ba[ba.size() - 1];
+}
+
+// Функции преобразования BCD (из диагностического скрипта)
+float BCDToFloat(const uint8_t* buf) {
+    float result = 0.0;
+    result += int(buf[0] & 0x0F) * 100;
+    result += int((buf[1] & 0xF0) >> 4) * 10;
+    result += int(buf[1] & 0x0F);
+    result += int((buf[2] & 0xF0) >> 4) * 0.1;
+    result += int(buf[2] & 0x0F) * 0.01;
+    if (buf[0] & 0xF0) result = -result;
+    return result;
+}
+
+float BCDToFloatAccel(const uint8_t* buf) {
+    float result = 0.0;
+    result += int(buf[0] & 0x0F);
+    result += int((buf[1] & 0xF0) >> 4) * 0.1;
+    result += int(buf[1] & 0x0F) * 0.01;
+    result += int((buf[2] & 0xF0) >> 4) * 0.001;
+    result += int(buf[2] & 0x0F) * 0.0001;
+    if (buf[0] & 0xF0) result = -result;
+    return result * 9.81;  // g -> м/с²
+}
+
+float BCDToFloatMagn(const uint8_t* buf) {
+    float result = 0.0;
+    result += int(buf[0] & 0x0F) * 0.1;
+    result += int((buf[1] & 0xF0) >> 4) * 0.01;
+    result += int(buf[1] & 0x0F) * 0.001;
+    result += int((buf[2] & 0xF0) >> 4) * 0.0001;
+    result += int(buf[2] & 0x0F) * 0.00001;
+    if (buf[0] & 0xF0) result = -result;
+    return result;
 }
 
 void AH127Cprotocol::readData() {
     if (m_port.IsDataAvailable()) {
         uint8_t byte;
-        while(m_port.IsDataAvailable()){
-            m_port.ReadByte(byte); 
+        int count = 0;
+        while (m_port.IsDataAvailable()) {
+            m_port.ReadByte(byte);
             m_buffer.push_back(byte);
+            count++;
         }
+
+        if (count > 0) {
+            if (m_buffer.size() >= 16) {
+                std::cout << "[DEBUG] Last 16 bytes: ";
+                for (size_t i = m_buffer.size() - 16; i < m_buffer.size(); i++) {
+                    printf("%02X ", m_buffer[i]);
+                }
+                std::cout << std::endl;
+            }
+        }
+
         readyReadForTimer();
         parseBuffer();
     }
@@ -72,190 +160,85 @@ void AH127Cprotocol::readyReadForTimer() {
     last_receive_time = std::chrono::steady_clock::now();
 }
 
-void AH127Cprotocol::timeoutSlot(){
-auto now = std::chrono::steady_clock::now();
-auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_receive_time).count();
- double deltaTMax = 2000;
-    if (elapsed>deltaTMax) {
-        uint8_t cmd_1[6]; //задание формата посылки, 2.15
-        cmd_1[0] = 0x77;
-        cmd_1[1] = 0x05;
-        cmd_1[2] = 0x00;
-        cmd_1[3] = 0x0C;
-        cmd_1[4] = 0x05;
-        cmd_1[5] = 0x16;
-        std::vector<uint8_t> v_cmd1(cmd_1, cmd_1 + 6);
-        m_port.Write(v_cmd1);
-        
+void AH127Cprotocol::timeoutSlot() {
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_receive_time).count();
 
-        uint8_t cmd_2[6]; //задание частоты выдачи данных, 2.17
-        cmd_2[0] = 0x77;
-        cmd_2[1] = 0x05;
-        cmd_2[2] = 0x00;
-        cmd_2[3] = 0x56;
-        cmd_2[4] = 0x05;
-        cmd_2[5] = 0x60;
-        std::vector<uint8_t> v_cmd2(cmd_2, cmd_2 + 6);
-        m_port.Write(v_cmd2);
+    if (elapsed > 3000) {
+        LOG_WARN("Таймаут приема данных, переотправка команд");
+
+        // Переотправка команд (50 Гц)
+        uint8_t cmd_auto[6] = {0x77, 0x05, 0x00, 0x56, 0x05, 0x60};
+        std::vector<uint8_t> v_cmd_auto(cmd_auto, cmd_auto + 6);
+        m_port.Write(v_cmd_auto);
+
+        // Частота 50 Гц (МАКСИМУМ!)
+        uint8_t cmd_freq[6] = {0x77, 0x05, 0x00, 0x0C, 0x05, 0x16};
+        std::vector<uint8_t> v_cmd_freq(cmd_freq, cmd_freq + 6);
+        m_port.Write(v_cmd_freq);
 
         readyReadForTimer();
     }
 }
 
-float ThreeBytesToFloat(const uint8_t* buf) {
-    float result = 0.0f;
-    result += int(buf[0] & 0x0F) * 100;
-    result += int((buf[1] & 0xF0) >> 4) * 10;
-    result += int(buf[1] & 0x0F);
-    result += int((buf[2] & 0xF0) >> 4) * 0.1;
-    result += int(buf[2] & 0x0F) * 0.01;
-    result *= (buf[0] & 0xF0) ? (-1) : (1);
-    return result;
-}
-
-float ThreeBytesToFloatAccel(const uint8_t* buf) {
-    float result = 0.0;
-    result += int(buf[0] & 0x0F);
-    result += int((buf[1] & 0xF0) >> 4) * 0.1;
-    result += int(buf[1] & 0x0F)*0.01;
-    result += int((buf[2] & 0xF0) >> 4) * 0.001;
-    result += int(buf[2] & 0x0F) * 0.0001;
-    result *= (buf[0] & 0xF0) ? (-1) : (1);
-    return result*9.81;
-}
-
-float ThreeBytesToFloatMagn(const uint8_t* buf) {
-    float result = 0.0;
-    result += int(buf[0] & 0x0F)*0.1;
-    result += int((buf[1] & 0xF0) >> 4) * 0.01;
-    result += int(buf[1] & 0x0F)*0.001;
-    result += int((buf[2] & 0xF0) >> 4) * 0.0001;
-    result += int(buf[2] & 0x0F) * 0.00001;
-    result *= (buf[0] & 0xF0) ? (-1) : (1);
-    return result;
-}
-
-float FourBytesToFloatQvat(const uint8_t* buf) {
-    float result = 0.0;
-    result += int(buf[0] & 0x0F);
-    result += int((buf[1] & 0xF0) >> 4) * 0.1;
-    result += int(buf[1] & 0x0F)*0.01;
-    result += int((buf[2] & 0xF0) >> 4) * 0.001;
-    result += int(buf[2] & 0x0F) * 0.0001;
-    result += int(buf[3] & 0x0F) * 0.00001;
-    result += int(buf[3] & 0x0F) * 0.000001;
-    result *= (buf[0] & 0xF0) ? (-1) : (1);
-    return result;
-}
-
-void PrintMsg(DataFromAH127C const& msg) {
-    std::cout << "yaw: " << msg.yaw << std::endl;
-    std::cout << "pitch: " << msg.pitch << std::endl;
-    std::cout << "roll: " << msg.roll << std::endl;
-    std::cout << "X_accel: " << msg.X_accel << std::endl;
-    std::cout << "Y_accel: " << msg.Y_accel << std::endl;
-    std::cout << "Z_accel: " << msg.Z_accel << std::endl;
-    std::cout << "X_rate: " << msg.X_rate << std::endl;
-    std::cout << "Y_rate: " << msg.Y_rate << std::endl;
-    std::cout << "Z_rate: " << msg.Z_rate << std::endl;
-    std::cout << "X_magn: " << msg.X_magn << std::endl;
-    std::cout << "Y_magn: " << msg.Y_magn << std::endl;
-    std::cout << "Z_magn: " << msg.Z_magn << std::endl;
-    std::cout << "first_qvat " << msg.first_qvat << std::endl;
-    std::cout << "second_qvat " << msg.second_qvat << std::endl;
-    std::cout << "third_qvat " << msg.third_qvat << std::endl;
-    std::cout << "four_qvat " << msg.four_qvat << std::endl;
-}
-
 void AH127Cprotocol::parseBuffer() {
-    if (m_buffer.size() <= 4 ) {
-        return;
-    }
+    if (m_buffer.size() <= 4) return;
 
-    uint8_t* cal_start_ptr = reinterpret_cast<uint8_t*>(&calibr_start);
+    // Ищем кадр: 0x77 LEN ADDR CMD ... CHK
+    size_t i = 0;
+    while (i + 4 < m_buffer.size()) {
+        if (m_buffer[i] == 0x77) {
+            uint8_t len = m_buffer[i + 1];
+            // len = количество байт от ADDR до CHK включительно
+            // общая длина кадра = 1 (0x77) + len
+            if (i + len + 1 <= m_buffer.size()) {
+                std::vector<uint8_t> frame(m_buffer.begin() + i, m_buffer.begin() + i + len + 1);
+                if (correctChecksum(frame)) {
+                    // Нашли корректный кадр!
+                    uint8_t cmd = frame[3];
 
-    if (flag_start_cal == 1) {
-        auto it = std::search(m_buffer.begin(), m_buffer.end(), 
-                              cal_start_ptr, cal_start_ptr + sizeof(Header_AH_calibration_start));
+                    // Полный кадр 0x59 (57 байт: 0x77 + 56 байт данных)
+                    if (cmd == 0x59 && len == 56) {
+                        const uint8_t* ptr = frame.data();
 
-        if (it == m_buffer.end()) {
-            std::cout << "команда начала калибровки не распознана" << std::endl;
-            return; 
-        } else {
-            flag_calibration_start = 1;
-            flag_calibration_end = 0;
-            std::cout << "команда калибровки дошла до датчика, можно начинать калибровку" << std::endl;
+                        data.pitch = BCDToFloat(ptr + 4);
+                        data.roll = BCDToFloat(ptr + 7);
+                        data.yaw = BCDToFloat(ptr + 10);
+                        data.X_accel = -BCDToFloatAccel(ptr + 13);
+                        data.Y_accel = BCDToFloatAccel(ptr + 16);
+                        data.Z_accel = BCDToFloatAccel(ptr + 19);
+                        data.X_rate = BCDToFloat(ptr + 25);
+                        data.Y_rate = BCDToFloat(ptr + 22);
+                        data.Z_rate = -BCDToFloat(ptr + 28);
+                        data.X_magn = BCDToFloatMagn(ptr + 31);
+                        data.Y_magn = BCDToFloatMagn(ptr + 34);
+                        data.Z_magn = BCDToFloatMagn(ptr + 37);
+                        // Кватернионы пока не парсим
+                        data.first_qvat = 0;
+                        data.second_qvat = 0;
+                        data.third_qvat = 0;
+                        data.four_qvat = 0;
+
+                        m_buffer.erase(m_buffer.begin() + i, m_buffer.begin() + i + len + 1);
+                        return;
+                    }
+                    // Три угла 0x84 (14 байт: 0x77 + 13 байт данных)
+                    else if (cmd == 0x84 && len == 13) {
+                        const uint8_t* ptr = frame.data();
+                        data.pitch = BCDToFloat(ptr + 4);
+                        data.roll = BCDToFloat(ptr + 7);
+                        data.yaw = BCDToFloat(ptr + 10);
+                        m_buffer.erase(m_buffer.begin() + i, m_buffer.begin() + i + len + 1);
+                        return;
+                    }
+                }
+            }
         }
-        flag_start_cal = 0;
+        i++;
     }
 
-    if (flag_finish_cal == 1) {
-        uint8_t* cal_end_ptr = reinterpret_cast<uint8_t*>(&calibr_end);
-        auto it_cal_end = std::search(m_buffer.begin(), m_buffer.end(), 
-                                     cal_end_ptr, cal_end_ptr + sizeof(Header_AH_calibration_end));
-
-        if (it_cal_end == m_buffer.end()) {
-            std::cout << "команда окончания калибровки не распознана" << std::endl;
-            return;
-        } else {
-            flag_calibration_start = 0;
-            flag_calibration_end = 1;
-            std::cout << "команда окончания калибровки дошла до датчика, результат калибровки записан" << std::endl;
-
-            uint8_t cmd_1[6] = {0x77, 0x05, 0x00, 0x0C, 0x05, 0x16};
-            std::vector<uint8_t> v_cmd1(cmd_1, cmd_1 + 6);
-            m_port.Write(v_cmd1);
-
-            uint8_t cmd_2[6] = {0x77, 0x05, 0x00, 0x56, 0x05, 0x60};
-            std::vector<uint8_t> v_cmd2(cmd_2, cmd_2 + 6);
-            m_port.Write(v_cmd2);
-        }
-        flag_finish_cal = 0;
-    }
-
-    uint8_t* h_ptr = reinterpret_cast<uint8_t*>(&data.header);
-    auto it_header = std::search(m_buffer.begin(), m_buffer.end(), 
-                                 h_ptr, h_ptr + sizeof(Header_AH));
-
-    if (it_header == m_buffer.end()) {
-        std::cout << "no message" << std::endl;
-        return;
-    }
-
-    if (it_header != m_buffer.begin()) {
-        m_buffer.erase(m_buffer.begin(), it_header);
-    }
-
-    if (m_buffer.size() < 57) {
-        return;
-    }
-
-    std::vector<uint8_t> packetData(m_buffer.begin() + 1, m_buffer.begin() + 57);
-
-    if (correctChecksum(packetData)) {
-        DataFromAH127C msg;
-        const uint8_t* ptr = m_buffer.data();
-
-        msg.pitch   = ThreeBytesToFloat(ptr + 4);
-        msg.roll    = ThreeBytesToFloat(ptr + 7);
-        msg.yaw     = ThreeBytesToFloat(ptr + 10);
-        msg.X_accel = -ThreeBytesToFloatAccel(ptr + 13);
-        msg.Y_accel = ThreeBytesToFloatAccel(ptr + 16);
-        msg.Z_accel = ThreeBytesToFloatAccel(ptr + 19);
-        msg.X_rate  = ThreeBytesToFloat(ptr + 25);
-        msg.Y_rate  = ThreeBytesToFloat(ptr + 22);
-        msg.Z_rate  = -ThreeBytesToFloat(ptr + 28);
-        msg.X_magn  = ThreeBytesToFloatMagn(ptr + 31);
-        msg.Y_magn  = ThreeBytesToFloatMagn(ptr + 34);
-        msg.Z_magn  = ThreeBytesToFloatMagn(ptr + 37);
-        msg.first_qvat  = FourBytesToFloatQvat(ptr + 40);
-        msg.second_qvat = FourBytesToFloatQvat(ptr + 44);
-        msg.third_qvat  = FourBytesToFloatQvat(ptr + 48);
-        msg.four_qvat   = FourBytesToFloatQvat(ptr + 52);
-        
-        data = msg;
-        m_buffer.erase(m_buffer.begin(), m_buffer.begin() + 57);
-    } else {
-        m_buffer.erase(m_buffer.begin());
+    // Если буфер слишком большой - очищаем
+    if (m_buffer.size() > 1024) {
+        m_buffer.clear();
     }
 }
