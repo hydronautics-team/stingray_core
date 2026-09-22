@@ -44,7 +44,7 @@ private:
 
     bool is_lights_turn_on_ = false;
 
-    uint16_t brightness_ = 500;
+    uint16_t brightness_ = 50;
     bool is_blinking_ = false;
     int lights_state_ = 0; // 0 - off, 1 - on, 2 - blink slow, 3 - blink fast, 4 - gradient
     bool blink_state_ = false;
