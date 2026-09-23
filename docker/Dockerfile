@@ -30,6 +30,7 @@ RUN apt-get update && apt-get install -y \
     ros-humble-std-srvs \
     ros-humble-tf2-geometry-msgs \
     ros-humble-udp-msgs \
+    ros-humble-diagnostic-updater \
     && rm -rf /var/lib/apt/lists/*
 
 # Настройка цветного вывода и подсветки
