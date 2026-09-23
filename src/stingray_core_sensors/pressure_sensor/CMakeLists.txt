@@ -8,6 +8,8 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(diagnostic_msgs REQUIRED)
+find_package(diagnostic_updater REQUIRED)
 
 include_directories(include)
 
@@ -19,6 +21,8 @@ add_executable(${PROJECT_NAME}
 ament_target_dependencies(${PROJECT_NAME} 
   rclcpp
   std_msgs
+  diagnostic_msgs
+  diagnostic_updater
 )
 
 install(TARGETS ${PROJECT_NAME}
