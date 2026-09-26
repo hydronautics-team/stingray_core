@@ -64,9 +64,9 @@ void PressureSensor::update_diagnostics(diagnostic_updater::DiagnosticStatusWrap
     else
         stat.summary(diagnostic_msgs::msg::DiagnosticStatus::OK, "Sensor OK");
 
-    stat.add("Current depth", current_depth);
-    stat.add("Errors count", error_msgs_count);
     if (has_received_msg_)
         stat.add("Time since last message", (node_->now() - last_msg_time_).seconds());
+    stat.add("Errors count", error_msgs_count);
+    stat.add("Current depth", current_depth);
 }
 } // namespace stingray_core::pressure_sensor
