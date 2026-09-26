@@ -1,0 +1,6 @@
+manipulator_device_node:
+  ros__parameters:
+    port: "/dev/ttyUSB0"
+    baud_rate: 115200
+    min_pwm: 0
+    max_pwm: 99

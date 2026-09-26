@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y \
     clang clangd clang-format clang-tidy clang-tools \
     i2c-tools libasio-dev libboost-all-dev libi2c-dev libserial-dev libgpiod-dev gpiod netcat-openbsd socat \
     python3-colcon-common-extensions python3-colorama python3-pip python3-pyqtgraph \
-    python3-rosdep python3-smbus python3-smbus2 python3-vcstool \
+    python3-rosdep python3-smbus python3-smbus2 python3-vcstool python3-serial \
     ros-humble-ament-clang-tidy \
     ros-humble-ament-cmake-gtest \
     ros-humble-ament-lint-auto \
