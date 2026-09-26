@@ -1,6 +1,12 @@
 manipulator_device_node:
   ros__parameters:
-    port: "/dev/ttyUSB0"
+    port_path: "/dev/ttyAMA2"
     baud_rate: 115200
+
+    rs485_gpio_chip: "gpiochip0"
+    rs485_gpio: 6
+
     min_pwm: 0
     max_pwm: 99
+
+    tx_delay: 0.001
