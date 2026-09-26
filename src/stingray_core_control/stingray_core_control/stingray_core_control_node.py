@@ -67,6 +67,10 @@ class StingrayCoreControlNode(Node):
 
         for axis in self.axes:
             if axis in self.axis_ctrl and self.control.enabled[axis]:
+                self.control_setpoint[axis] += (
+                    self.control_input[axis] * self.last_dt
+                )
+
                 u[axis] = self.axis_ctrl[axis].compute(
                     target=self.control_setpoint[axis],
                     dt=self.last_dt,
@@ -525,12 +529,12 @@ class StingrayCoreControlNode(Node):
         for axis, value in incoming.items():
             self.control_input[axis] = value
 
-            if self.control.enabled.get(axis, False):
-                # Замкнутый контур: держим setpoint до новой команды.
-                self.control_setpoint[axis] = value
-            else:
-                # Разомкнутый контур: дать команду только на один цикл.
-                self.open_loop_pending[axis] = True
+            # if self.control.enabled.get(axis, False):
+            #     # Замкнутый контур: держим setpoint до новой команды.
+            #     self.control_setpoint[axis] = value
+            # else:
+            #     # Разомкнутый контур: дать команду только на один цикл.
+            #     self.open_loop_pending[axis] = True
 
     def control_mode_flags_callback(self, msg: UInt8):
         flags = int(msg.data)
@@ -549,9 +553,18 @@ class StingrayCoreControlNode(Node):
             if old_value != new_value:
                 changed.append(f"{axis}: {old_value} -> {new_value}")
 
+                # if new_value:
+                #     # При включении контура берём последнюю принятую команду как цель.
+                #     self.control_setpoint[axis] = self.control_input[axis]
                 if new_value:
-                    # При включении контура берём последнюю принятую команду как цель.
-                    self.control_setpoint[axis] = self.control_input[axis]
+                    if axis == "heave":
+                        self.control_setpoint[axis] = self.depth
+                    elif axis == "yaw":
+                        self.control_setpoint[axis] = self.imu.yaw
+                    elif axis == "pitch":
+                        self.control_setpoint[axis] = self.imu.pitch
+                    elif axis == "roll":
+                        self.control_setpoint[axis] = self.imu.roll
                 else:
                     # При выключении контура не повторяем старую команду.
                     self.open_loop_pending[axis] = False
