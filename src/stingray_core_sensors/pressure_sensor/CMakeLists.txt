@@ -24,7 +24,6 @@ ament_target_dependencies(${PROJECT_NAME}
   std_msgs
   diagnostic_msgs
   diagnostic_updater
-  pressure_sensor
   geometry_msgs
 )
 
