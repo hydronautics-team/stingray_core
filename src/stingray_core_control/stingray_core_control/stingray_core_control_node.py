@@ -8,7 +8,7 @@ import time
 
 import rclpy
 from dvl_msgs.msg import DVL
-from geometry_msgs.msg import Twist, Vector3
+from geometry_msgs.msg import PointStamped, Twist, Vector3
 from rcl_interfaces.msg import ParameterDescriptor, SetParametersResult
 from rclpy.node import Node
 from rclpy.parameter import Parameter
@@ -387,7 +387,7 @@ class StingrayCoreControlNode(Node):
         )
 
         self.sub_pressure_sensor = self.create_subscription(
-            Float64,
+            PointStamped,
             self.topic_pressure_sensor,
             self.pressure_sensor_callback,
             qos_sensor,
@@ -510,11 +510,11 @@ class StingrayCoreControlNode(Node):
         self.yaw_zero_offset = self.imu_yaw_raw
         self.get_logger().info(f"Yaw zeroed at {self.yaw_zero_offset:.2f} deg")
 
-    def pressure_sensor_callback(self, msg: Float64):
-        try:
-            self.depth = float(msg.data)
-        except Exception as e:
-            self.get_logger().warning(f"Error parsing depth msg: {e}")
+    def pressure_sensor_callback(self, msg: PointStamped):
+    try:
+        self.depth = float(msg.point.z)
+    except Exception as e:
+        self.get_logger().warning(f"Error parsing depth msg: {e}")
 
     def control_data_callback(self, msg: Twist):
         incoming = {
