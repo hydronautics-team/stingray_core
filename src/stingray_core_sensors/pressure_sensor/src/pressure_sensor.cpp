@@ -58,15 +58,22 @@ void PressureSensor::publish_depth(double depth)
 void PressureSensor::update_diagnostics(diagnostic_updater::DiagnosticStatusWrapper &stat)
 {
     if (!has_received_msg_)
+    {
         stat.summary(diagnostic_msgs::msg::DiagnosticStatus::WARN, "Waiting for first message");
+    }
     else if ((node_->now() - last_msg_time_).seconds() > 1.0)
+    {
         stat.summary(diagnostic_msgs::msg::DiagnosticStatus::ERROR, "Sensor timeout");
+    }
     else
+    {
         stat.summary(diagnostic_msgs::msg::DiagnosticStatus::OK, "Sensor OK");
-
+    }
     stat.add("Current depth", current_depth);
     stat.add("Errors count", error_msgs_count);
     if (has_received_msg_)
+    {
         stat.add("Time since last message", (node_->now() - last_msg_time_).seconds());
+    }
 }
 } // namespace stingray_core::pressure_sensor

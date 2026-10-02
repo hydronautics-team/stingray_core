@@ -123,5 +123,6 @@
         "charconv": "cpp",
         "climits": "cpp",
         "format": "cpp"
-    }
+    },
+    "ROS2.distro": "humble"
 }
