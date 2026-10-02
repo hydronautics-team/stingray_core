@@ -9,6 +9,8 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(diagnostic_msgs REQUIRED)
+find_package(diagnostic_updater REQUIRED)
 
 include_directories(include)
 
@@ -16,12 +18,14 @@ add_executable(${PROJECT_NAME}
   src/pressure_sensor.cpp
   src/main.cpp
 )
-
-ament_target_dependencies(
-    pressure_sensor
-    rclcpp
-    std_msgs
-    geometry_msgs
+    
+ament_target_dependencies(${PROJECT_NAME} 
+  rclcpp
+  std_msgs
+  diagnostic_msgs
+  diagnostic_updater
+  pressure_sensor
+  geometry_msgs
 )
 
 install(TARGETS ${PROJECT_NAME}

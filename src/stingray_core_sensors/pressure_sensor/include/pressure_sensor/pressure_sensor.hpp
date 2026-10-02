@@ -1,6 +1,7 @@
 #pragma once
 
 #include <geometry_msgs/msg/point_stamped.hpp>
+#include <diagnostic_updater/diagnostic_updater.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float64.hpp>
 
@@ -54,12 +55,21 @@ private:
     void publish_depth(
         double depth,
         const rclcpp::Time& stamp);
+  
+    void update_diagnostics(diagnostic_updater::DiagnosticStatusWrapper &stat);
 
     rclcpp::Node::SharedPtr node_;
     PressureSensorConfig config_;
 
     rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr depth_pub_;
     rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr data_raw_sub_;
+
+
+    diagnostic_updater::Updater diagnostic_updater_;
+    rclcpp::Time last_msg_time_ = rclcpp::Time(0, 0, RCL_ROS_TIME);
+    double current_depth = 0.0;
+    uint32_t error_msgs_count = 0;
+    bool has_received_msg_ = false;
 };
 
 }  // namespace stingray_core::sensors
