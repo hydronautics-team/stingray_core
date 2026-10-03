@@ -12,6 +12,14 @@
         "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
         "editor.formatOnSave": true
     },
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.fixAll.ruff": "always",
+            "source.organizeImports.ruff": "always"
+        }
+    },
     "clangd.path": "/usr/bin/clangd",
     "clangd.arguments": [
         "--background-index",
@@ -34,6 +42,8 @@
         "${workspaceFolder}/install/stingray_interfaces/lib/python3.10/site-packages",
         "${workspaceFolder}/install/stingray_core_control/lib/python3.10/site-packages"
     ],
+    "ruff.nativeServer": "on",
+    "ruff.configuration": "${workspaceFolder}/pyproject.toml",
     "files.associations": {
         "*.hpp": "cpp",
         "*.cpp": "cpp",

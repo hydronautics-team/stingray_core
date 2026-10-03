@@ -33,7 +33,8 @@
                 "ms-python.vscode-pylance",
                 "ms-vscode.cmake-tools",
                 "ms-vscode.cpptools",
-                "twxs.cmake"
+                "twxs.cmake",
+                "charliermarsh.ruff"
             ]
         }
     }
