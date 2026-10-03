@@ -1,5 +1,5 @@
 import os
-from base import BaseCheck
+from stingray_core_doctor.checks.base import BaseCheck
 from stingray_core_doctor.types import CheckResult, CheckStatus
 from typing import List
 
@@ -50,7 +50,7 @@ class EnvironmentCheck(BaseCheck):
                 name="Workspace",
                 status=CheckStatus.FAIL,
                 message="No custom ROS 2 packages found in AMENT_PREFIX_PATH.",
-                hint="Ensure that your workspace is built and sourced correctly.",
+                hint="Ensure that your workspace is built and sourced correctly, use: 'source install/setup.bash'",
             ))
         
 

@@ -23,10 +23,7 @@ class Reporter:
 
     def print_header(self):
         
-        if self.use_colors:
-            print(f"{self.BOLD}Stingray Core Doctor{self.RESET}")    
-        else:
-            print("Stingray Core Doctor")
+        print(f"{self.BOLD}Stingray Core Doctor{self.RESET}")    
         print("="*15)
 
     def print_category(self, category_name: str, results: List[CheckResult]):
@@ -62,7 +59,7 @@ class Reporter:
     def print_summary(self) -> int:
 
         exit_code = self.calculate_exit_code()
-        
+
         if exit_code == int(CheckStatus.FAIL):
             print(f"\nResults: {self.RED}FAIL{self.RESET}")
         elif exit_code == int(CheckStatus.WARN):
