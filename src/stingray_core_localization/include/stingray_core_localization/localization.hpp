@@ -1,70 +1,129 @@
 #pragma once
 
-#include "rclcpp/rclcpp.hpp"
+#include <memory>
+#include <string>
 
-#include "chrono"
-#include "nav_msgs/msg/odometry.hpp"
-#include "sensor_msgs/msg/imu.hpp"
+#include <dvl_msgs/msg/dvl.hpp>
+#include <geometry_msgs/msg/vector3.hpp>
+#include <nav_msgs/msg/odometry.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/imu.hpp>
+#include <std_msgs/msg/bool.hpp>
+#include <std_msgs/msg/float64.hpp>
+#include <tf2/LinearMath/Quaternion.h>
+#include <vectornav_msgs/msg/common_group.hpp>
 
 namespace stingray_core::localization
 {
 
 struct LocalizationConfig
 {
-    LocalizationConfig(const rclcpp::Node::SharedPtr &node)
-        : imu_topic(node->declare_parameter<std::string>("imu_topic", "/core/sensors/imu")),
-          dvl_topic(node->declare_parameter<std::string>("dvl_topic", "/core/sensors/dvl")),
-          ps_topic(node->declare_parameter<std::string>("ps_topic", "/core/sensors/heave")),
-          odometry_topic(
-              node->declare_parameter<std::string>("odometry_topic", "/core/state/odometry")),
-          odom_frame(node->declare_parameter<std::string>("odom_frame", "odom")),
-          base_frame(node->declare_parameter<std::string>("base_frame", "base_link")),
-          update_rate(node->declare_parameter<double>("update_rate", 50.0))
-    {
-    }
+    explicit LocalizationConfig(rclcpp::Node *node);
+
+    std::string imu_orientation_topic;
     std::string imu_topic;
     std::string dvl_topic;
-    std::string ps_topic;
+    std::string pressure_topic;
+    std::string zero_yaw_topic;
+
     std::string odometry_topic;
+    std::string acceleration_topic;
+    std::string orientation_topic;
+
     std::string odom_frame;
     std::string base_frame;
+
     double update_rate;
+    bool use_dvl_velocity;
+    double dvl_velocity_alpha;
+    double dvl_timeout_sec;
 };
 
-class Localization
+class Localization final : public rclcpp::Node
 {
 public:
     explicit Localization(const rclcpp::NodeOptions &options = rclcpp::NodeOptions());
-    void spin() { rclcpp::spin(node_); }
 
 private:
     void setup_subscribers();
     void setup_publishers();
     void setup_timer();
 
+    void imu_orientation_callback(const vectornav_msgs::msg::CommonGroup::ConstSharedPtr &msg);
+
     void imu_callback(const sensor_msgs::msg::Imu::ConstSharedPtr &msg);
-    void dvl_callback(const nav_msgs::msg::Odometry::ConstSharedPtr &msg);
-    void ps_callback();
+
+    void dvl_callback(const dvl_msgs::msg::DVL::ConstSharedPtr &msg);
+
+    void pressure_callback(const std_msgs::msg::Float64::ConstSharedPtr &msg);
+
+    void zero_yaw_callback(const std_msgs::msg::Bool::ConstSharedPtr &msg);
 
     void update_estimate();
-
     void publish_odometry();
+    void publish_acceleration();
+    void publish_orientation();
 
-    rclcpp::Logger get_logger() const { return node_->get_logger(); }
+    [[nodiscard]] bool is_dvl_fresh() const;
+    [[nodiscard]] static double normalize_angle_deg(double angle_deg);
 
-    rclcpp::Node::SharedPtr node_;
+    LocalizationConfig config_;
 
-    // Subscribers
+    rclcpp::Subscription<vectornav_msgs::msg::CommonGroup>::SharedPtr imu_orientation_sub_;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
-    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr dvl_sub_;
+    rclcpp::Subscription<dvl_msgs::msg::DVL>::SharedPtr dvl_sub_;
+    rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr pressure_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr zero_yaw_sub_;
 
-    // Publishers
-    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odometry_pub_;
+    rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr acceleration_pub_;
+    rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr orientation_pub_;
 
-    // Timer
     rclcpp::TimerBase::SharedPtr timer_;
 
-    // Configuration
-    LocalizationConfig config_;
+    rclcpp::Time last_update_time_;
+    rclcpp::Time dvl_last_time_{0LL, RCL_ROS_TIME};
+    bool first_update_{true};
+
+    // Position/depth state.
+    double x_{0.0};
+    double y_{0.0};
+    double z_{0.0};
+    double depth_{0.0};
+
+    // Orientation in degrees, matching the existing control node.
+    double roll_{0.0};
+    double pitch_{0.0};
+    double yaw_{0.0};
+
+    double imu_yaw_raw_{0.0};
+    double yaw_zero_offset_{0.0};
+
+    // IMU angular velocity.
+    double angular_velocity_x_{0.0};
+    double angular_velocity_y_{0.0};
+    double angular_velocity_z_{0.0};
+
+    // IMU linear acceleration.
+    double acceleration_x_{0.0};
+    double acceleration_y_{0.0};
+    double acceleration_z_{0.0};
+
+    // Velocity estimated by integrating IMU acceleration.
+    double velocity_imu_x_{0.0};
+    double velocity_imu_y_{0.0};
+    double velocity_imu_z_{0.0};
+
+    // DVL velocity.
+    double dvl_velocity_x_{0.0};
+    double dvl_velocity_y_{0.0};
+    double dvl_velocity_z_{0.0};
+    bool dvl_velocity_valid_{false};
+
+    // Final velocity estimate published in odometry.
+    double velocity_x_{0.0};
+    double velocity_y_{0.0};
+    double velocity_z_{0.0};
 };
+
 } // namespace stingray_core::localization

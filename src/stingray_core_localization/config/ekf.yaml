@@ -1,0 +1,72 @@
+ekf_filter_node:
+  ros__parameters:
+
+    frequency: 50.0
+    sensor_timeout: 0.2
+
+    two_d_mode: false
+
+    publish_tf: true
+    publish_acceleration: false
+    print_diagnostics: true
+
+    map_frame: map
+    odom_frame: odom
+    base_link_frame: base_link
+    world_frame: odom
+
+    # ==================================================
+    # VectorNav
+    # ==================================================
+
+    imu0: /core/sensors/imu
+
+    imu0_config: [
+      false, false, false,
+      true,  true,  true,
+      false, false, false,
+      true,  true,  true,
+      true,  true,  true
+    ]
+
+    imu0_differential: false
+    imu0_relative: false
+    imu0_queue_size: 20
+
+    imu0_remove_gravitational_acceleration: false
+
+    # ==================================================
+    # DVL
+    # ==================================================
+
+    odom0: /stingray_core/sensors/dvl/odometry
+
+    odom0_config: [
+      false, false, false,
+      false, false, false,
+      true,  true,  true,
+      false, false, false,
+      false, false, false
+    ]
+
+    odom0_differential: false
+    odom0_relative: false
+    odom0_queue_size: 10
+
+    # ==================================================
+    # Pressure
+    # ==================================================
+
+    pose0: /stingray_core/sensors/depth
+
+    pose0_config: [
+      false, false, true,
+      false, false, false,
+      false, false, false,
+      false, false, false,
+      false, false, false
+    ]
+
+    pose0_differential: false
+    pose0_relative: false
+    pose0_queue_size: 10
