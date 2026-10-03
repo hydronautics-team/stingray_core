@@ -5,7 +5,6 @@ package_name = 'stingray_core_doctor'
 setup(
     name=package_name,
     version='0.0.0',
-    # packages=find_packages(exclude=['test']),
     packages=[
         package_name,
         package_name + '.checks',

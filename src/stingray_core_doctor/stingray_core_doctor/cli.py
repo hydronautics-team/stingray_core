@@ -2,6 +2,7 @@ import sys
 from stingray_core_doctor.config import DoctorConfig
 from stingray_core_doctor.report import Reporter
 from stingray_core_doctor.checks.environment import EnvironmentCheck
+from stingray_core_doctor.checks.ros import RosCheck
 
 def main():
 
@@ -12,6 +13,7 @@ def main():
 
     checks = [
         EnvironmentCheck(config),
+        RosCheck(config),
         ]
 
     for check in checks:

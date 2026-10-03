@@ -1,12 +1,14 @@
 import os
 import yaml
-from typing import List, Optional
-
+from typing import Optional
+import ast
 
 
 class DoctorConfig:
 
-    def __init__(self, yaml_path: Optional[str] = None):
+    def __init__(self):
+
+        self.launch_path = None # Необходимо указать путь к run_rov.launch.py для определения небходимых пакетов
 
         self.expected_ros_distro = "humble"
         self.domain_id = 1
@@ -16,28 +18,38 @@ class DoctorConfig:
         self.required_packages = [
             "stingray_core_communication",
             "stingray_core_control",
-            "stingray_core_sensors",
-            "stingray_core_devices",
+            "pressure_sensor",
+            "lights_device",
+            "dvl_a50",
+            "vectornav"
         ]
 
-        if yaml_path is not None:
-            self.load_from_yaml(yaml_path)
+        if self.launch_path is not None:
+            extracted = self.extract_packages_from_launch(self.launch_path)
+            if extracted:
+                self.required_packages = extracted
 
-    def load_from_yaml(self, yaml_path: str):
 
-        if not os.path.exists(yaml_path):
-            raise FileNotFoundError(f"YAML file not found: {yaml_path}")
+    def extract_packages_from_launch(self, launch_file_path: str) -> list[str]:
+        if not os.path.exists(launch_file_path):
+            return []
 
-        with open(yaml_path, "r", encoding="utf-8") as file:
-            data = yaml.safe_load(file)
+        with open(launch_file_path, "r", encoding="utf-8") as f:
+            content = f.read()
 
-        if "expected_ros_distro" in data:
-            self.expected_ros_distro = data["expected_ros_distro"]
-        if "dvl_ip" in data:
-            self.dvl_ip = data["dvl_ip"]
-        if "cm5_ip" in data:
-            self.cm5_ip = data["cm5_ip"]
-        if "vectornav_port" in data:
-            self.vectornav_port = data["vectornav_port"]
+        tree = ast.parse(content)
+        packages = []
 
-        
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                func_name = ""
+                if isinstance(node.func, ast.Name):
+                    func_name = node.func.id
+
+                if func_name == "get_package_share_directory" and node.args:
+                    first_arg = node.args[0]
+                    if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, str):
+                        if first_arg.value not in packages and not first_arg.value.startswith("welt_bringup"):
+                            packages.append(first_arg.value)
+
+        return packages

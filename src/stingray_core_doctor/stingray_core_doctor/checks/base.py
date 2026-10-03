@@ -1,4 +1,3 @@
-from typing import List
 from stingray_core_doctor.types import CheckResult
 
 
@@ -7,5 +6,5 @@ class BaseCheck:
         self.config = config
         self.category_name = "Not_defined"
 
-    def run(self) -> List[CheckResult]:
+    def run(self) -> list[CheckResult]:
         raise NotImplementedError("It must implement the run method")

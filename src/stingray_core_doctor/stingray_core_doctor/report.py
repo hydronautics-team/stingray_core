@@ -1,4 +1,3 @@
-from typing import List
 from stingray_core_doctor.types import CheckResult, CheckStatus
 
 
@@ -10,7 +9,7 @@ class Reporter:
     RED = "\033[31m"
 
     def __init__(self):
-        self._all_results: List[CheckResult] = []
+        self._all_results: list[CheckResult] = []
 
     def format_status(self, status: CheckStatus) -> str:   
 
@@ -26,7 +25,7 @@ class Reporter:
         print(f"{self.BOLD}Stingray Core Doctor{self.RESET}")    
         print("="*15)
 
-    def print_category(self, category_name: str, results: List[CheckResult]):
+    def print_category(self, category_name: str, results: list[CheckResult]):
 
         self._all_results.extend(results)
 
