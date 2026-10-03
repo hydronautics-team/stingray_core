@@ -1,16 +1,15 @@
 import os
 from stingray_core_doctor.checks.base import BaseCheck
 from stingray_core_doctor.types import CheckResult, CheckStatus
-from typing import List
 
 class EnvironmentCheck(BaseCheck):
     def __init__(self, config):
         super().__init__(config)
         self.category_name = "Environment"
 
-    def run(self) -> List[CheckResult]:
+    def run(self) -> list[CheckResult]:
 
-        results: List[CheckResult] = []
+        results: list[CheckResult] = []
 
         ros_distro = os.environ.get("ROS_DISTRO")
         expected_ros_distro = self.config.expected_ros_distro
@@ -75,6 +74,19 @@ class EnvironmentCheck(BaseCheck):
                 status=CheckStatus.FAIL,
                 message=f"Found ROS_DOMAIN_ID='{domain_id}', expected '{expected_domain_id}'",
                 hint=f"Set the ROS_DOMAIN_ID: 'export ROS_DOMAIN_ID={expected_domain_id}'"
+            ))
+
+        if os.path.exists("/.dockerenv"):
+            results.append(CheckResult(
+                name="Docker",
+                status=CheckStatus.OK,
+            ))
+        else:
+            results.append(CheckResult(
+                name="Docker",
+                status=CheckStatus.FAIL,
+                message="Not running inside a Docker container.",
+                hint="Run the Stingray Core Doctor inside a Docker container.",
             ))
 
         return results
