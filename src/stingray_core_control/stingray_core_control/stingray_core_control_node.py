@@ -62,30 +62,47 @@ class StingrayCoreControlNode(Node):
 
         self._update_motion_estimation(self.last_dt)
 
-        # === 1. Определяем управляющие воздействия ===
-        u: dict[str, float] = {}
+        # === Watchdog управляющего сигнала ===
+        control_signal_fresh = (
+            self.control_last_time > 0.0
+            and (now - self.control_last_time) <= self.control_timeout_sec
+        )
 
+        if not control_signal_fresh:
+            if not self.control_signal_lost:
+                self.get_logger().warning(
+                    f"Control signal lost: no /control/data for "
+                    f"{self.control_timeout_sec:.2f} s. "
+                    "Stopping thrusters."
+                )
+                self.control_signal_lost = True
+
+            # Безусловно обнуляем управление
+            u = {axis: 0.0 for axis in self.axes}
+
+        else:
+            if self.control_signal_lost:
+                self.get_logger().info("Control signal restored.")
+                self.control_signal_lost = False
+
+            # === 1. Определяем управляющие воздействия ===
+            u: dict[str, float] = {}
+
+            for axis in self.axes:
+                if axis in self.axis_ctrl and self.control.enabled[axis]:
+                    self.control_setpoint[axis] += (
+                        self.control_input[axis] * self.last_dt
+                    )
+
+                    u[axis] = self.axis_ctrl[axis].compute(
+                        target=self.control_setpoint[axis],
+                        dt=self.last_dt,
+                    )
+                else:
+                    u[axis] = self.control_input[axis]
+
+        # Оставляем последнее фактически применённое воздействие в state
         for axis in self.axes:
-            if axis in self.axis_ctrl and self.control.enabled[axis]:
-                self.control_setpoint[axis] += (
-                    self.control_input[axis] * self.last_dt
-                )
-
-                u[axis] = self.axis_ctrl[axis].compute(
-                    target=self.control_setpoint[axis],
-                    dt=self.last_dt,
-                )
-            else:
-                u[axis] = self.control_input[axis]
-                # # Для разомкнутого контура воздействие одноразовое: 1 цикл,
-                # # затем сбрасывается до следующей новой команды.
-                # if self.open_loop_pending[axis]:
-                #     u[axis] = self.control_input[axis]
-                #     self.open_loop_pending[axis] = False
-                # else:
-                #     u[axis] = 0.0
-
-            # Оставляем последнее фактически применённое воздействие в state
             self.control.impact[axis] = u[axis]
 
         # === 2. Преобразуем в команды thrusters ===
@@ -147,6 +164,11 @@ class StingrayCoreControlNode(Node):
 
         self.declare_parameter("dvl_timeout_sec", 0.5)
         self.dvl_timeout_sec = float(self.get_parameter("dvl_timeout_sec").value)
+
+        self.declare_parameter("control_timeout_sec", 0.5)
+        self.control_timeout_sec = float(
+            self.get_parameter("control_timeout_sec").value
+        )
 
         self.declare_parameter("thrusters", Parameter.Type.STRING_ARRAY)
         self.thrusters = list(self.get_parameter("thrusters").value)
@@ -220,6 +242,8 @@ class StingrayCoreControlNode(Node):
 
         # Последняя полученная команда из /control/data
         self.control_input: dict[str, float] = {axis: 0.0 for axis in self.axes}
+        self.control_last_time = 0.0
+        self.control_signal_lost = False
         # Удерживаемые цели для замкнутых контуров
         self.control_setpoint: dict[str, float] = {axis: 0.0 for axis in self.axes}
         # Флаг одноразовой подачи для разомкнутых контуров
@@ -528,6 +552,8 @@ class StingrayCoreControlNode(Node):
 
         for axis, value in incoming.items():
             self.control_input[axis] = value
+
+        self.control_last_time = time.time()
 
             # if self.control.enabled.get(axis, False):
             #     # Замкнутый контур: держим setpoint до новой команды.
