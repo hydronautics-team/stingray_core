@@ -33,6 +33,9 @@ RUN apt-get update && apt-get install -y \
     ros-humble-diagnostic-updater \
     && rm -rf /var/lib/apt/lists/*
 
+# Python development tools
+RUN pip3 install --no-cache-dir ruff
+
 # Настройка цветного вывода и подсветки
 RUN echo 'export TERM=xterm-256color' >> ~/.bashrc && \
     echo 'export SHELL=/bin/bash' >> ~/.bashrc && \
