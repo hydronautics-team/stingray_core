@@ -98,9 +98,9 @@ private:
         publisher_euler_->publish(euler_msg);
 
         // Лог в терминал
-        RCLCPP_INFO(this->get_logger(), "IMU: R=%.2f° P=%.2f° Y=%.2f° | Freq=100Hz",
-                    this->protocol_->data.roll, this->protocol_->data.pitch,
-                    this->protocol_->data.yaw);
+        // RCLCPP_INFO(this->get_logger(), "IMU: R=%.2f° P=%.2f° Y=%.2f° | Freq=100Hz",
+        //             this->protocol_->data.roll, this->protocol_->data.pitch,
+        //             this->protocol_->data.yaw);
     }
 
     rclcpp::TimerBase::SharedPtr timer_;
