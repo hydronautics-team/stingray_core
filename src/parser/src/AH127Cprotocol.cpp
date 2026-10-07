@@ -143,11 +143,11 @@ void AH127Cprotocol::readData() {
 
         if (count > 0) {
             if (m_buffer.size() >= 16) {
-                std::cout << "[DEBUG] Last 16 bytes: ";
-                for (size_t i = m_buffer.size() - 16; i < m_buffer.size(); i++) {
-                    printf("%02X ", m_buffer[i]);
-                }
-                std::cout << std::endl;
+                // std::cout << "[DEBUG] Last 16 bytes: ";
+                // for (size_t i = m_buffer.size() - 16; i < m_buffer.size(); i++) {
+                //     printf("%02X ", m_buffer[i]);
+                // }
+                // std::cout << std::endl;
             }
         }
 
