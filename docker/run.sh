@@ -31,4 +31,5 @@ docker run -it --rm \
   -v /dev:/dev \
   -e DISPLAY="$DISPLAY" \
   -e ROS_DOMAIN_ID=$ROS_DOMAIN_ID \
+  -e STINGRAY_CONFIG_DIR=/stingray_core/src/welt_config/control \
   "$IMAGE_NAME"
