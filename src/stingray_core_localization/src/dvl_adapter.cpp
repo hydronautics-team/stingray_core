@@ -66,6 +66,22 @@ void DvlAdapter::dvlCallback(const dvl_msgs::msg::DVL::ConstSharedPtr &msg)
     {
         std::copy(msg->covariance.begin(), msg->covariance.end(), odom.twist.covariance.begin());
     }
+    else if (msg->covariance.size() == 9)
+    {
+        // The driver reports a 3x3 XYZ velocity covariance. Embed it in the
+        // linear-velocity block of the 6x6 Twist covariance.
+        for (size_t row = 0; row < 3; ++row)
+        {
+            for (size_t column = 0; column < 3; ++column)
+            {
+                odom.twist.covariance[row * 6 + column] = msg->covariance[row * 3 + column];
+            }
+        }
+
+        odom.twist.covariance[21] = INVALID_POSE_VARIANCE;
+        odom.twist.covariance[28] = INVALID_POSE_VARIANCE;
+        odom.twist.covariance[35] = INVALID_POSE_VARIANCE;
+    }
     else
     {
         // Conservative fallback if driver did not provide covariance.

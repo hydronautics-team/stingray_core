@@ -6,6 +6,7 @@ namespace stingray_core::localization
 PressureAdapter::PressureAdapter() : Node("pressure_adapter")
 {
     depth_variance_ = declare_parameter<double>("depth_variance", 0.01);
+    output_frame_ = declare_parameter<std::string>("output_frame", "odom");
 
     pressure_sub_ = create_subscription<geometry_msgs::msg::PointStamped>(
         "/stingray_core/pressure_sensor/depth", rclcpp::SensorDataQoS(),
@@ -21,11 +22,13 @@ void PressureAdapter::pressureCallback(const geometry_msgs::msg::PointStamped::C
 {
     geometry_msgs::msg::PoseWithCovarianceStamped measurement;
 
-    measurement.header = msg->header;
+    measurement.header.stamp = msg->header.stamp;
+    measurement.header.frame_id = output_frame_;
 
     measurement.pose.pose.position.x = 0.0;
     measurement.pose.pose.position.y = 0.0;
-    measurement.pose.pose.position.z = msg->point.z;
+    // Depth is positive down, while REP-103 odom Z is positive up.
+    measurement.pose.pose.position.z = -msg->point.z;
 
     measurement.pose.pose.orientation.x = 0.0;
     measurement.pose.pose.orientation.y = 0.0;

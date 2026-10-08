@@ -62,14 +62,31 @@ class StingrayCoreControlNode(Node):
 
         self._update_motion_estimation(self.last_dt)
 
+        command_is_stale = (
+            self.last_command_time > 0.0
+            and time.monotonic() - self.last_command_time > self.command_timeout_sec
+        )
+        if command_is_stale:
+            for axis in self.axes:
+                self.control_input[axis] = 0.0
+            if not self.command_timed_out:
+                self.get_logger().warning("Control command timeout; stopping motion")
+                self.command_timed_out = True
+
         # === 1. Определяем управляющие воздействия ===
         u: dict[str, float] = {}
 
         for axis in self.axes:
             if axis in self.axis_ctrl and self.control.enabled[axis]:
-                self.control_setpoint[axis] += (
-                    self.control_input[axis] * self.last_dt
-                )
+                if axis in ("surge", "sway"):
+                    # These controllers regulate velocity directly.
+                    self.control_setpoint[axis] = self.control_input[axis]
+                else:
+                    # Heave and angular inputs are rates integrated into
+                    # depth/attitude setpoints.
+                    self.control_setpoint[axis] += (
+                        self.control_input[axis] * self.last_dt
+                    )
 
                 u[axis] = self.axis_ctrl[axis].compute(
                     target=self.control_setpoint[axis],
@@ -147,6 +164,11 @@ class StingrayCoreControlNode(Node):
 
         self.declare_parameter("dvl_timeout_sec", 0.5)
         self.dvl_timeout_sec = float(self.get_parameter("dvl_timeout_sec").value)
+
+        self.declare_parameter("command_timeout_sec", 0.5)
+        self.command_timeout_sec = float(
+            self.get_parameter("command_timeout_sec").value
+        )
 
         self.declare_parameter("thrusters", Parameter.Type.STRING_ARRAY)
         self.thrusters = list(self.get_parameter("thrusters").value)
@@ -240,6 +262,8 @@ class StingrayCoreControlNode(Node):
         self.dvl_velocity_z = 0.0
         self.dvl_velocity_valid = False
         self.dvl_last_time = 0.0
+        self.last_command_time = 0.0
+        self.command_timed_out = False
 
         self.yaw_zero_offset = 0.0
         self.imu_yaw_raw = 0.0
@@ -511,12 +535,14 @@ class StingrayCoreControlNode(Node):
         self.get_logger().info(f"Yaw zeroed at {self.yaw_zero_offset:.2f} deg")
 
     def pressure_sensor_callback(self, msg: PointStamped):
-    try:
-        self.depth = float(msg.point.z)
-    except Exception as e:
-        self.get_logger().warning(f"Error parsing depth msg: {e}")
+        try:
+            self.depth = float(msg.point.z)
+        except Exception as e:
+            self.get_logger().warning(f"Error parsing depth msg: {e}")
 
     def control_data_callback(self, msg: Twist):
+        self.last_command_time = time.monotonic()
+        self.command_timed_out = False
         incoming = {
             "surge": float(msg.linear.x),
             "sway": float(msg.linear.y),

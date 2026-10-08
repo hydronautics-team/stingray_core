@@ -21,6 +21,7 @@ private:
     rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr measurement_pub_;
 
     double depth_variance_;
+    std::string output_frame_;
 };
 
 } // namespace stingray_core::localization

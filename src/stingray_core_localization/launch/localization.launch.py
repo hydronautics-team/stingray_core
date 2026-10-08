@@ -46,6 +46,7 @@ def generate_launch_description():
             output='screen',
             parameters=[{
                 'depth_variance': 0.01,
+                'output_frame': 'odom',
             }],
         ),
 
