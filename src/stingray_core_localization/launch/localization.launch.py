@@ -35,7 +35,7 @@ def generate_launch_description():
             name='dvl_adapter',
             output='screen',
             parameters=[{
-                'frame_id': 'dvl_link',
+                'output_frame': 'dvl_link',
             }],
         ),
 

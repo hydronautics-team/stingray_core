@@ -32,12 +32,10 @@ void DvlAdapter::dvlCallback(const dvl_msgs::msg::DVL::ConstSharedPtr &msg)
 
     nav_msgs::msg::Odometry odom;
 
-    odom.header = msg->header;
-
-    if (odom.header.frame_id.empty())
-    {
-        odom.header.frame_id = output_frame_;
-    }
+    odom.header.stamp = msg->header.stamp;
+    // The A50 driver uses its own frame name. The vehicle configuration
+    // declares that its firmware output is already aligned with dvl_link.
+    odom.header.frame_id = output_frame_;
 
     odom.child_frame_id = "base_link";
 
