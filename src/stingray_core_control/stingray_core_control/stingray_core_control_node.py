@@ -62,16 +62,22 @@ class StingrayCoreControlNode(Node):
 
         self._update_motion_estimation(self.last_dt)
 
-        command_is_stale = (
-            self.last_command_time > 0.0
-            and time.monotonic() - self.last_command_time > self.command_timeout_sec
-        )
-        if command_is_stale:
-            for axis in self.axes:
+        monotonic_now = time.monotonic()
+        timed_out_axes = []
+        for axis in self.axes:
+            last_axis_command = self.last_control_input_time[axis]
+            if (
+                last_axis_command > 0.0
+                and monotonic_now - last_axis_command > self.command_timeout_sec
+                and self.control_input[axis] != 0.0
+            ):
                 self.control_input[axis] = 0.0
-            if not self.command_timed_out:
-                self.get_logger().warning("Control command timeout; stopping motion")
-                self.command_timed_out = True
+                timed_out_axes.append(axis)
+        if timed_out_axes:
+            self.get_logger().warning(
+                "Control command timeout; stopping axes: "
+                + ", ".join(timed_out_axes)
+            )
 
         # === 1. Определяем управляющие воздействия ===
         u: dict[str, float] = {}
@@ -81,9 +87,12 @@ class StingrayCoreControlNode(Node):
                 if axis in ("surge", "sway"):
                     # These controllers regulate velocity directly.
                     self.control_setpoint[axis] = self.control_input[axis]
+                elif axis == "heave":
+                    # The command callback stores an absolute depth setpoint.
+                    pass
                 else:
-                    # Heave and angular inputs are rates integrated into
-                    # depth/attitude setpoints.
+                    # Angular inputs are rates integrated into attitude
+                    # setpoints.
                     self.control_setpoint[axis] += (
                         self.control_input[axis] * self.last_dt
                     )
@@ -262,8 +271,9 @@ class StingrayCoreControlNode(Node):
         self.dvl_velocity_z = 0.0
         self.dvl_velocity_valid = False
         self.dvl_last_time = 0.0
-        self.last_command_time = 0.0
-        self.command_timed_out = False
+        self.last_control_input_time: dict[str, float] = {
+            axis: 0.0 for axis in self.axes
+        }
 
         self.yaw_zero_offset = 0.0
         self.imu_yaw_raw = 0.0
@@ -541,8 +551,7 @@ class StingrayCoreControlNode(Node):
             self.get_logger().warning(f"Error parsing depth msg: {e}")
 
     def control_data_callback(self, msg: Twist):
-        self.last_command_time = time.monotonic()
-        self.command_timed_out = False
+        command_time = time.monotonic()
         incoming = {
             "surge": float(msg.linear.x),
             "sway": float(msg.linear.y),
@@ -553,14 +562,14 @@ class StingrayCoreControlNode(Node):
         }
 
         for axis, value in incoming.items():
-            self.control_input[axis] = value
-
-            # if self.control.enabled.get(axis, False):
-            #     # Замкнутый контур: держим setpoint до новой команды.
-            #     self.control_setpoint[axis] = value
-            # else:
-            #     # Разомкнутый контур: дать команду только на один цикл.
-            #     self.open_loop_pending[axis] = True
+            if axis == "heave" and self.control.enabled.get("heave", False):
+                # Closed loop: linear.z is an absolute positive-down depth.
+                self.control_setpoint[axis] = value
+            else:
+                # Open-loop heave remains a direct pilot impact. Other axes
+                # retain their existing command semantics.
+                self.control_input[axis] = value
+                self.last_control_input_time[axis] = command_time
 
     def control_mode_flags_callback(self, msg: UInt8):
         flags = int(msg.data)
@@ -584,7 +593,10 @@ class StingrayCoreControlNode(Node):
                 #     self.control_setpoint[axis] = self.control_input[axis]
                 if new_value:
                     if axis == "heave":
+                        self.control_input[axis] = 0.0
                         self.control_setpoint[axis] = self.depth
+                        self.controllers["heave"].reset()
+                        self.controllers["heave"].prev_depth = self.depth
                     elif axis == "yaw":
                         self.control_setpoint[axis] = self.imu.yaw
                     elif axis == "pitch":
@@ -593,6 +605,7 @@ class StingrayCoreControlNode(Node):
                         self.control_setpoint[axis] = self.imu.roll
                 else:
                     # При выключении контура не повторяем старую команду.
+                    self.control_input[axis] = 0.0
                     self.open_loop_pending[axis] = False
 
             self.control.enabled[axis] = new_value
