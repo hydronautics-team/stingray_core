@@ -73,6 +73,17 @@ class StingrayCoreControlNode(Node):
             ):
                 self.control_input[axis] = 0.0
                 timed_out_axes.append(axis)
+        for axis in ("surge", "sway"):
+            if (
+                self.control.enabled[axis]
+                and self.horizontal_control_mode[axis] == "velocity"
+                and self.horizontal_setpoint_time[axis] > 0.0
+                and monotonic_now - self.horizontal_setpoint_time[axis]
+                > self.command_timeout_sec
+                and self.control_setpoint[axis] != 0.0
+            ):
+                self.control_setpoint[axis] = 0.0
+                timed_out_axes.append(f"{axis} velocity")
         if timed_out_axes:
             self.get_logger().warning(
                 "Control command timeout; stopping axes: "
@@ -90,7 +101,7 @@ class StingrayCoreControlNode(Node):
                         or not self._is_dvl_fresh()
                         or not self.dvl_velocity_valid
                         or (
-                            not self.flag_setup_feedback_speed
+                            self.horizontal_control_mode[axis] == "position"
                             and not self._is_dvl_position_fresh()
                         )
                     ):
@@ -151,6 +162,11 @@ class StingrayCoreControlNode(Node):
         )
 
         self.declare_parameter("debug_publish", False)
+
+        self.declare_parameter("use_separate_horizontal_setpoints", False)
+        self.use_separate_horizontal_setpoints = bool(
+            self.get_parameter("use_separate_horizontal_setpoints").value
+        )
 
         defaults = {
             "topic_imu_angular": "/vectornav/raw/common",
@@ -261,8 +277,10 @@ class StingrayCoreControlNode(Node):
 
             self.controllers[axis] = axis_class_map[axis](**params)
 
-        for ctrl in self.controllers.values():
-            ctrl.set_debug_hook(self.debug_cb)
+        for axis, ctrl in self.controllers.items():
+            ctrl.set_debug_hook(
+                lambda data, axis=axis: self.debug_cb(axis, data)
+            )
 
         self.imu = ImuState()
         self.control = ControlState.from_axes(self.axes)
@@ -294,6 +312,14 @@ class StingrayCoreControlNode(Node):
         self.dvl_position_valid = False
         self.dvl_position_last_time = 0.0
         self.position_target_initialized = {"surge": False, "sway": False}
+        initial_horizontal_mode = (
+            "velocity" if self.flag_setup_feedback_speed else "position"
+        )
+        self.horizontal_control_mode = {
+            "surge": initial_horizontal_mode,
+            "sway": initial_horizontal_mode,
+        }
+        self.horizontal_setpoint_time = {"surge": 0.0, "sway": 0.0}
         self.last_control_input_time: dict[str, float] = {
             axis: 0.0 for axis in self.axes
         }
@@ -306,13 +332,17 @@ class StingrayCoreControlNode(Node):
                 controller=self.controllers["yaw"],
                 angle_fn=lambda: self.imu.yaw,
                 rate_fn=lambda: self.imu.rate_z,
-                feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
+                feedback_flag_fn=lambda: (
+                    self.horizontal_control_mode["surge"] == "velocity"
+                ),
             ),
             "pitch": AngularAxisController(
                 controller=self.controllers["pitch"],
                 angle_fn=lambda: self.imu.pitch,
                 rate_fn=lambda: self.imu.rate_y,
-                feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
+                feedback_flag_fn=lambda: (
+                    self.horizontal_control_mode["sway"] == "velocity"
+                ),
             ),
             "roll": AngularAxisController(
                 controller=self.controllers["roll"],
@@ -474,6 +504,20 @@ class StingrayCoreControlNode(Node):
             Bool, self.topic_zero_yaw, self.zero_yaw_callback, qos_event
         )
 
+        self.sub_horizontal_setpoints = {}
+        for axis in ("surge", "sway"):
+            for mode in ("position", "velocity"):
+                self.sub_horizontal_setpoints[(axis, mode)] = (
+                    self.create_subscription(
+                        Float64,
+                        f"~/setpoint/{axis}/{mode}",
+                        lambda msg, axis=axis, mode=mode: (
+                            self.horizontal_setpoint_callback(axis, mode, msg)
+                        ),
+                        qos_command,
+                    )
+                )
+
     def _init_publishers(self):
         qos_actuation = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
@@ -526,6 +570,25 @@ class StingrayCoreControlNode(Node):
             Float64, "~/debug/measurement_rate", qos_debug
         )
         self.pub_out = self.create_publisher(Float64, "~/debug/out", qos_debug)
+
+        self.pub_axis_debug = {}
+        debug_fields = (
+            "setpoint",
+            "position",
+            "velocity",
+            "err_position",
+            "output_pi",
+            "feedback_speed",
+            "measurement_rate",
+            "out",
+        )
+        for axis in self.axes:
+            self.pub_axis_debug[axis] = {
+                field: self.create_publisher(
+                    Float64, f"~/debug/{axis}/{field}", qos_debug
+                )
+                for field in debug_fields
+            }
 
     # --- Колбэки ---
     def imu_angular_callback(self, msg: CommonGroup):
@@ -589,7 +652,7 @@ class StingrayCoreControlNode(Node):
             for axis in ("surge", "sway"):
                 if (
                     self.control.enabled.get(axis, False)
-                    and not self.flag_setup_feedback_speed
+                    and self.horizontal_control_mode[axis] == "position"
                     and not self.position_target_initialized[axis]
                 ):
                     self.control_setpoint[axis] = current_position[axis]
@@ -628,15 +691,29 @@ class StingrayCoreControlNode(Node):
             elif axis in ("surge", "sway") and self.control.enabled.get(
                 axis, False
             ):
-                # Normally this is an absolute DVL position [m]. In feedback
-                # setup mode it is a direct velocity setpoint [m/s].
-                self.control_setpoint[axis] = value
-                self.position_target_initialized[axis] = True
+                if not self.use_separate_horizontal_setpoints:
+                    # Backward-compatible Twist commands use position mode.
+                    self._set_horizontal_setpoint(axis, "position", value)
             else:
                 # Open-loop heave remains a direct pilot impact. Other axes
                 # retain their existing command semantics.
                 self.control_input[axis] = value
                 self.last_control_input_time[axis] = command_time
+
+    def horizontal_setpoint_callback(
+        self, axis: str, mode: str, msg: Float64
+    ):
+        self._set_horizontal_setpoint(axis, mode, float(msg.data))
+
+    def _set_horizontal_setpoint(
+        self, axis: str, mode: str, value: float
+    ):
+        if self.horizontal_control_mode[axis] != mode:
+            self.controllers[axis].reset()
+        self.horizontal_control_mode[axis] = mode
+        self.control_setpoint[axis] = value
+        self.position_target_initialized[axis] = True
+        self.horizontal_setpoint_time[axis] = time.monotonic()
 
     def control_mode_flags_callback(self, msg: UInt8):
         flags = int(msg.data)
@@ -672,7 +749,7 @@ class StingrayCoreControlNode(Node):
                         self.control_setpoint[axis] = self.imu.roll
                     elif axis == "surge":
                         self.control_input[axis] = 0.0
-                        if self.flag_setup_feedback_speed:
+                        if self.horizontal_control_mode[axis] == "velocity":
                             self.control_setpoint[axis] = 0.0
                             self.position_target_initialized[axis] = True
                         elif self._is_dvl_position_fresh():
@@ -683,7 +760,7 @@ class StingrayCoreControlNode(Node):
                         self.controllers[axis].reset()
                     elif axis == "sway":
                         self.control_input[axis] = 0.0
-                        if self.flag_setup_feedback_speed:
+                        if self.horizontal_control_mode[axis] == "velocity":
                             self.control_setpoint[axis] = 0.0
                             self.position_target_initialized[axis] = True
                         elif self._is_dvl_position_fresh():
@@ -788,7 +865,7 @@ class StingrayCoreControlNode(Node):
     def _is_controller_param(self, name: str) -> bool:
         return name.startswith("controllers.")
 
-    def debug_cb(self, data: dict):
+    def debug_cb(self, axis: str, data: dict):
         if not self.get_parameter("debug_publish").value:
             return
 
@@ -797,6 +874,32 @@ class StingrayCoreControlNode(Node):
         self.pub_feedback_speed.publish(Float64(data=data["feedback_speed"]))
         self.pub_measurement_rate.publish(Float64(data=data["measurement_rate"]))
         self.pub_out.publish(Float64(data=data["out"]))
+
+        publishers = self.pub_axis_debug[axis]
+        measurements = {
+            "surge": self.dvl_position_x,
+            "sway": self.dvl_position_y,
+            "heave": self.depth,
+            "roll": self.imu.roll,
+            "pitch": self.imu.pitch,
+            "yaw": self.imu.yaw,
+        }
+        velocities = {
+            "surge": self.surge_velocity_est,
+            "sway": self.sway_velocity_est,
+            "heave": self.heave_velocity_est,
+            "roll": self.imu.rate_x * 57.3,
+            "pitch": self.imu.rate_y * 57.3,
+            "yaw": self.imu.rate_z * 57.3,
+        }
+        axis_data = {
+            "setpoint": self.control_setpoint[axis],
+            "position": measurements[axis],
+            "velocity": velocities[axis],
+            **data,
+        }
+        for field, publisher in publishers.items():
+            publisher.publish(Float64(data=axis_data[field]))
 
 
 def main(args=None):
