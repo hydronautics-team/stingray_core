@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 
 RAD_TO_DEG = 57.3
 
+
 class AxisController(ABC):
     """
     Абстрактный контроллер одной оси.
@@ -70,4 +71,23 @@ class LinearVelocityAxisController(AxisController):
             self.vel(),
             self.accel(),
             dt,
+        )
+
+
+class LinearPositionAxisController(AxisController):
+    """Position controller with velocity feedback for a linear axis."""
+
+    def __init__(self, controller, pos_fn, vel_fn, feedback_flag_fn):
+        self.controller = controller
+        self.pos = pos_fn
+        self.vel = vel_fn
+        self.feedback_flag = feedback_flag_fn
+
+    def compute(self, target, dt):
+        return self.controller.update(
+            target,
+            self.pos(),
+            self.vel(),
+            dt,
+            self.feedback_flag(),
         )

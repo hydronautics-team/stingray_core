@@ -24,6 +24,7 @@ def generate_launch_description():
     topic_imu_linear_accel = LaunchConfiguration('topic_imu_linear_accel')
     topic_imu_angular_rate = LaunchConfiguration('topic_imu_angular_rate')
     topic_dvl_data = LaunchConfiguration('topic_dvl_data')
+    topic_dvl_position = LaunchConfiguration('topic_dvl_position')
     topic_loop_flags = LaunchConfiguration('topic_loop_flags')
     topic_pressure_sensor = LaunchConfiguration('topic_pressure_sensor')
     topic_control_data = LaunchConfiguration('topic_control_data')
@@ -73,6 +74,12 @@ def generate_launch_description():
         ),
 
         DeclareLaunchArgument(
+            'topic_dvl_position',
+            default_value='/dvl/position',
+            description='Topic for DVL position (dvl_msgs/DVLDR)'
+        ),
+
+        DeclareLaunchArgument(
             'topic_loop_flags',
             default_value='/control/loop_flags',
             description='Topic for control loop flags (UInt8)'
@@ -109,6 +116,7 @@ def generate_launch_description():
                     'topic_imu_linear_accel': topic_imu_linear_accel,
                     # 'topic_imu_angular_rate': topic_imu_angular_rate,
                     'topic_dvl_data': topic_dvl_data,
+                    'topic_dvl_position': topic_dvl_position,
                     'topic_loop_flags': topic_loop_flags,
                     'topic_pressure_sensor': topic_pressure_sensor,
                     'topic_control_data': topic_control_data,

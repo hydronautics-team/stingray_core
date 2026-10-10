@@ -413,24 +413,55 @@ class DepthController(BaseController):
         return out
 
 class SurgeController(BaseController):
-    """Controller for surge-like channel. Simpler: optionally only P or PI."""
-    def update(self, setpoint: float, measurement: float, measurement_rate: float, dt: float) -> float:
-        err = setpoint - measurement
-        # simple PD/PI depending on gains: use K_1 as stage multiplier
-        stage = err * self.K_1
-        res_p = stage * self.K_p
-        res_i = self.trapezoidal_integrate(stage * self.K_i, dt)
-        output_pi = res_p + res_i
-        # optional aperiodic (often not used for surge)
+    """Surge position controller with DVL velocity feedback."""
+
+    def update(
+        self,
+        setpoint: float,
+        measurement: float,
+        measurement_rate: float,
+        dt: float,
+        flag_setup_feedback_speed: bool,
+    ) -> float:
+        return self._update_linear_position(
+            setpoint,
+            measurement,
+            measurement_rate,
+            dt,
+            flag_setup_feedback_speed,
+        )
+
+    def _update_linear_position(
+        self,
+        setpoint: float,
+        measurement: float,
+        measurement_rate: float,
+        dt: float,
+        flag_setup_feedback_speed: bool,
+    ) -> float:
+        if flag_setup_feedback_speed:
+            err_position = 0.0
+            output_pi = 0.0
+            set_speed = setpoint
+        else:
+            err_position = setpoint - measurement
+            stage = err_position * self.K_1
+            res_p = stage * self.K_p
+            res_i = self.trapezoidal_integrate(stage * self.K_i, dt)
+            output_pi = res_p + res_i
+            set_speed = 0.0
+
         ap = self.aperiodic_step(measurement_rate, dt)
         feedback_speed = ap * self.K_2
-        out = output_pi - feedback_speed
+        error_speed = output_pi + set_speed - feedback_speed
         if self.out_sat is not None:
-            out = saturation(out, self.out_sat, -self.out_sat)
+            out = saturation(error_speed, self.out_sat, -self.out_sat)
+        else:
+            out = error_speed
 
         if self.debug_hook is not None:
             self.debug_hook({
-                "err_position": err,
+                "err_position": err_position,
                 "output_pi": output_pi,
                 "feedback_speed": feedback_speed,
                 "measurement_rate": measurement_rate,
@@ -439,30 +470,9 @@ class SurgeController(BaseController):
 
         return out
 
-class SwayController(BaseController):
-    """Controller for sway-like channel. Mirror of Ux."""
-    def update(self, setpoint: float, measurement: float, measurement_rate: float, dt: float) -> float:
-        err = setpoint - measurement
-        stage = err * self.K_1
-        res_p = stage * self.K_p
-        res_i = self.trapezoidal_integrate(stage * self.K_i, dt)
-        output_pi = res_p + res_i
-        ap = self.aperiodic_step(measurement_rate, dt)
-        feedback_speed = ap * self.K_2
-        out = output_pi - feedback_speed
-        if self.out_sat is not None:
-            out = saturation(out, self.out_sat, -self.out_sat)
 
-        if self.debug_hook is not None:
-            self.debug_hook({
-                "err_position": err,
-                "output_pi": output_pi,
-                "feedback_speed": feedback_speed,
-                "measurement_rate": measurement_rate,
-                "out": out,
-            })
-
-        return out
+class SwayController(SurgeController):
+    """Sway position controller with DVL velocity feedback."""
 
 # -----------------------
 # End of file

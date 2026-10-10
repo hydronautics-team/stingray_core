@@ -7,7 +7,7 @@ Minimal ROS2 node skeleton with 100 Hz control loop callback.
 import time
 
 import rclpy
-from dvl_msgs.msg import DVL
+from dvl_msgs.msg import DVL, DVLDR
 from geometry_msgs.msg import PointStamped, Twist, Vector3
 from rcl_interfaces.msg import ParameterDescriptor, SetParametersResult
 from rclpy.node import Node
@@ -26,7 +26,7 @@ from .control.axis_controller import (
     AngularAxisController,
     AxisController,
     LinearAxisController,
-    LinearVelocityAxisController,
+    LinearPositionAxisController,
 )
 from .control.controllers import (
     DepthController,
@@ -85,8 +85,20 @@ class StingrayCoreControlNode(Node):
         for axis in self.axes:
             if axis in self.axis_ctrl and self.control.enabled[axis]:
                 if axis in ("surge", "sway"):
-                    # These controllers regulate velocity directly.
-                    self.control_setpoint[axis] = self.control_input[axis]
+                    if (
+                        not self.position_target_initialized[axis]
+                        or not self._is_dvl_fresh()
+                        or not self.dvl_velocity_valid
+                        or (
+                            not self.flag_setup_feedback_speed
+                            and not self._is_dvl_position_fresh()
+                        )
+                    ):
+                        # Both DVL position and velocity are mandatory for the
+                        # horizontal position loops.
+                        u[axis] = 0.0
+                        self.control.impact[axis] = u[axis]
+                        continue
                 elif axis == "heave":
                     # The command callback stores an absolute depth setpoint.
                     pass
@@ -145,6 +157,7 @@ class StingrayCoreControlNode(Node):
             "topic_imu_linear_accel": "/vectornav/imu",
             "topic_imu_angular_rate": "/vectornav/imu",
             "topic_dvl_data": "/dvl/data",
+            "topic_dvl_position": "/dvl/position",
             "topic_loop_flags": "/control/loop_flags",
             "topic_pressure_sensor": "/stingray_core/pressure_sensor/depth",
             "topic_control_data": "/control/data",
@@ -173,6 +186,11 @@ class StingrayCoreControlNode(Node):
 
         self.declare_parameter("dvl_timeout_sec", 0.5)
         self.dvl_timeout_sec = float(self.get_parameter("dvl_timeout_sec").value)
+
+        self.declare_parameter("dvl_position_timeout_sec", 0.5)
+        self.dvl_position_timeout_sec = float(
+            self.get_parameter("dvl_position_timeout_sec").value
+        )
 
         self.declare_parameter("command_timeout_sec", 0.5)
         self.command_timeout_sec = float(
@@ -271,6 +289,11 @@ class StingrayCoreControlNode(Node):
         self.dvl_velocity_z = 0.0
         self.dvl_velocity_valid = False
         self.dvl_last_time = 0.0
+        self.dvl_position_x = 0.0
+        self.dvl_position_y = 0.0
+        self.dvl_position_valid = False
+        self.dvl_position_last_time = 0.0
+        self.position_target_initialized = {"surge": False, "sway": False}
         self.last_control_input_time: dict[str, float] = {
             axis: 0.0 for axis in self.axes
         }
@@ -304,15 +327,17 @@ class StingrayCoreControlNode(Node):
                 accel_fn=lambda: self.imu.accel_z,
                 feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
             ),
-            "surge": LinearVelocityAxisController(
+            "surge": LinearPositionAxisController(
                 controller=self.controllers["surge"],
+                pos_fn=lambda: self.dvl_position_x,
                 vel_fn=self._get_surge_velocity_measurement,
-                accel_fn=lambda: self.imu.accel_x,
+                feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
             ),
-            "sway": LinearVelocityAxisController(
+            "sway": LinearPositionAxisController(
                 controller=self.controllers["sway"],
+                pos_fn=lambda: self.dvl_position_y,
                 vel_fn=self._get_sway_velocity_measurement,
-                accel_fn=lambda: self.imu.accel_y,
+                feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
             ),
         }
 
@@ -339,6 +364,13 @@ class StingrayCoreControlNode(Node):
         if self.dvl_last_time <= 0.0:
             return False
         return (time.time() - self.dvl_last_time) <= self.dvl_timeout_sec
+
+    def _is_dvl_position_fresh(self) -> bool:
+        if not self.dvl_position_valid or self.dvl_position_last_time <= 0.0:
+            return False
+        return (
+            time.time() - self.dvl_position_last_time
+        ) <= self.dvl_position_timeout_sec
 
     def _update_motion_estimation(self, dt: float):
         # IMU-only оценка скоростей интегрированием ускорений
@@ -414,6 +446,13 @@ class StingrayCoreControlNode(Node):
 
         self.sub_dvl_data = self.create_subscription(
             DVL, self.topic_dvl_data, self.dvl_data_callback, qos_sensor
+        )
+
+        self.sub_dvl_position = self.create_subscription(
+            DVLDR,
+            self.topic_dvl_position,
+            self.dvl_position_callback,
+            qos_sensor,
         )
 
         self.sub_control_mode_flags = self.create_subscription(
@@ -537,6 +576,27 @@ class StingrayCoreControlNode(Node):
         except Exception as e:
             self.get_logger().warning(f"Error parsing DVL msg: {e}")
 
+    def dvl_position_callback(self, msg: DVLDR):
+        try:
+            self.dvl_position_x = float(msg.position.x)
+            self.dvl_position_y = float(msg.position.y)
+            self.dvl_position_valid = True
+            self.dvl_position_last_time = time.time()
+            current_position = {
+                "surge": self.dvl_position_x,
+                "sway": self.dvl_position_y,
+            }
+            for axis in ("surge", "sway"):
+                if (
+                    self.control.enabled.get(axis, False)
+                    and not self.flag_setup_feedback_speed
+                    and not self.position_target_initialized[axis]
+                ):
+                    self.control_setpoint[axis] = current_position[axis]
+                    self.position_target_initialized[axis] = True
+        except Exception as e:
+            self.get_logger().warning(f"Error parsing DVL position msg: {e}")
+
     def zero_yaw_callback(self, msg: Bool):
         if not msg.data:
             return
@@ -565,6 +625,13 @@ class StingrayCoreControlNode(Node):
             if axis == "heave" and self.control.enabled.get("heave", False):
                 # Closed loop: linear.z is an absolute positive-down depth.
                 self.control_setpoint[axis] = value
+            elif axis in ("surge", "sway") and self.control.enabled.get(
+                axis, False
+            ):
+                # Normally this is an absolute DVL position [m]. In feedback
+                # setup mode it is a direct velocity setpoint [m/s].
+                self.control_setpoint[axis] = value
+                self.position_target_initialized[axis] = True
             else:
                 # Open-loop heave remains a direct pilot impact. Other axes
                 # retain their existing command semantics.
@@ -603,10 +670,34 @@ class StingrayCoreControlNode(Node):
                         self.control_setpoint[axis] = self.imu.pitch
                     elif axis == "roll":
                         self.control_setpoint[axis] = self.imu.roll
+                    elif axis == "surge":
+                        self.control_input[axis] = 0.0
+                        if self.flag_setup_feedback_speed:
+                            self.control_setpoint[axis] = 0.0
+                            self.position_target_initialized[axis] = True
+                        elif self._is_dvl_position_fresh():
+                            self.control_setpoint[axis] = self.dvl_position_x
+                            self.position_target_initialized[axis] = True
+                        else:
+                            self.position_target_initialized[axis] = False
+                        self.controllers[axis].reset()
+                    elif axis == "sway":
+                        self.control_input[axis] = 0.0
+                        if self.flag_setup_feedback_speed:
+                            self.control_setpoint[axis] = 0.0
+                            self.position_target_initialized[axis] = True
+                        elif self._is_dvl_position_fresh():
+                            self.control_setpoint[axis] = self.dvl_position_y
+                            self.position_target_initialized[axis] = True
+                        else:
+                            self.position_target_initialized[axis] = False
+                        self.controllers[axis].reset()
                 else:
                     # При выключении контура не повторяем старую команду.
                     self.control_input[axis] = 0.0
                     self.open_loop_pending[axis] = False
+                    if axis in self.position_target_initialized:
+                        self.position_target_initialized[axis] = False
 
             self.control.enabled[axis] = new_value
 
