@@ -427,6 +427,16 @@ class SurgeController(BaseController):
         out = output_pi - feedback_speed
         if self.out_sat is not None:
             out = saturation(out, self.out_sat, -self.out_sat)
+
+        if self.debug_hook is not None:
+            self.debug_hook({
+                "err_position": err,
+                "output_pi": output_pi,
+                "feedback_speed": feedback_speed,
+                "measurement_rate": measurement_rate,
+                "out": out,
+            })
+
         return out
 
 class SwayController(BaseController):
@@ -442,6 +452,16 @@ class SwayController(BaseController):
         out = output_pi - feedback_speed
         if self.out_sat is not None:
             out = saturation(out, self.out_sat, -self.out_sat)
+
+        if self.debug_hook is not None:
+            self.debug_hook({
+                "err_position": err,
+                "output_pi": output_pi,
+                "feedback_speed": feedback_speed,
+                "measurement_rate": measurement_rate,
+                "out": out,
+            })
+
         return out
 
 # -----------------------
