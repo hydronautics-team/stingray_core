@@ -10,11 +10,9 @@ class DoctorConfig:
 
         self.launch_path = None # Необходимо указать путь к run_rov.launch.py для определения небходимых пакетов
 
+        #environment and ros checks configs
         self.expected_ros_distro = "humble"
         self.domain_id = 1
-        self.dvl_ip = "192.168.194.95"
-        self.cm5_ip = "10.42.0.111"
-        self.vectornav_port = "/dev/ttyUSB0"
         self.required_packages = [
             "stingray_core_communication",
             "stingray_core_control",
@@ -23,6 +21,16 @@ class DoctorConfig:
             "dvl_a50",
             "vectornav"
         ]
+
+        #hardware check config
+        self.vectornav_launch = "vectornav.launch.py"
+        self.vectornav_topic = "/vectornav/raw/imu"
+        self.pressure_launch = "pressure_sensor.launch.py"
+        self.pressure_topic = "/stingray_core/pressure_sensor/depth"
+        self.dvl_launch = "dvl_a50.launch.py"
+        self.dvl_topic = "/dvl/data"
+        self.dvl_ip = "192.168.194.95"
+        self.timeout = 3.0
 
         if self.launch_path is not None:
             extracted = self.extract_packages_from_launch(self.launch_path)
@@ -53,3 +61,4 @@ class DoctorConfig:
                             packages.append(first_arg.value)
 
         return packages
+
