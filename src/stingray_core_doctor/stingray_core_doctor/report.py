@@ -20,23 +20,26 @@ class Reporter:
         else:
             return f"{self.RED} [FAIL] {self.RESET}"
 
-    def print_header(self):
+    def print_header(self, mode: str):
         
-        print(f"{self.BOLD}Stingray Core Doctor{self.RESET}")    
-        print("="*15)
+        print(
+            f"{self.BOLD}Stingray Core Doctor ({mode}){self.RESET}",
+            flush=True,
+        )
+        print("=" * 15, flush=True)
 
     def print_category(self, category_name: str, results: list[CheckResult]):
 
         self._all_results.extend(results)
 
-        print(f"\n{category_name}")
+        print(f"\n{category_name}", flush=True)
         for r in results:
             status = self.format_status(r.status)
-            print(f"{status}{r.name}")
+            print(f"{status}{r.name}", flush=True)
             if r.message:
-                print(f"        Reason: {r.message}")
+                print(f"        Reason: {r.message}", flush=True)
             if r.hint:
-                print(f"        Hint:   {r.hint}")
+                print(f"        Hint:   {r.hint}", flush=True)
 
     def calculate_exit_code(self) -> int:
         
@@ -60,10 +63,10 @@ class Reporter:
         exit_code = self.calculate_exit_code()
 
         if exit_code == int(CheckStatus.FAIL):
-            print(f"\nResults: {self.RED}FAIL{self.RESET}")
+            print(f"\nResults: {self.RED}FAIL{self.RESET}", flush=True)
         elif exit_code == int(CheckStatus.WARN):
-            print(f"\nResults: {self.YELLOW}WARN{self.RESET}")
+            print(f"\nResults: {self.YELLOW}WARN{self.RESET}", flush=True)
         else:
-            print(f"\nResults: {self.GREEN}OK{self.RESET}")
+            print(f"\nResults: {self.GREEN}OK{self.RESET}", flush=True)
         
         return exit_code

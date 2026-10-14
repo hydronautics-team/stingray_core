@@ -1,10 +1,18 @@
+"""Check interface."""
+
+from abc import ABC, abstractmethod
+
 from stingray_core_doctor.types import CheckResult
 
 
-class BaseCheck:
+class BaseCheck(ABC):
+    """A read-only group of related observations."""
+
+    category_name = "Uncategorised"
+
     def __init__(self, config):
         self.config = config
-        self.category_name = "Not_defined"
 
+    @abstractmethod
     def run(self) -> list[CheckResult]:
-        raise NotImplementedError("It must implement the run method")
+        """Run observations without changing external system state."""

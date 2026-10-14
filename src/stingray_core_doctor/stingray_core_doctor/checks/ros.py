@@ -10,7 +10,10 @@ class RosCheck(BaseCheck):
         results = []
 
         try:
-            from ament_index_python.packages import get_package_share_directory, PackageNotFoundError
+            from ament_index_python.packages import (
+                PackageNotFoundError,
+                get_package_share_directory,
+            )
         except ImportError:
             results.append(CheckResult(
                 name="Ament package index",

@@ -1,14 +1,24 @@
+"""Shared, side-effect-free result types for doctor checks."""
+
+from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Optional
+from typing import Any, Optional
+
 
 class CheckStatus(IntEnum):
+    """Severity returned by a single doctor check."""
+
     OK = 0
     WARN = 1
     FAIL = 2
 
+
+@dataclass(frozen=True)
 class CheckResult:
-    def __init__(self, name: str, status: CheckStatus, message: str = "", hint: Optional[str] = None):
-        self.name = name
-        self.status = status
-        self.message = message
-        self.hint = hint
+    """Result of one observation made by the doctor."""
+
+    name: str
+    status: CheckStatus
+    message: str = ""
+    hint: Optional[str] = None
+    metrics: dict[str, Any] = field(default_factory=dict)

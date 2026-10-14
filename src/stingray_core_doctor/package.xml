@@ -2,10 +2,17 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>stingray_core_doctor</name>
-  <version>0.0.0</version>
+  <version>0.1.0</version>
   <description>Pre-flight diagnostic tool for Stingray Core</description>
-  <maintainer email="kirillch030309@gmail.com">root</maintainer>
+  <maintainer email="kirillch030309@gmail.com">Hydronautics Team</maintainer>
   <license>Apache-2.0</license>
+
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>vectornav_msgs</exec_depend>
+  <exec_depend>dvl_msgs</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

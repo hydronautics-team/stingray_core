@@ -19,14 +19,20 @@ class EnvironmentCheck(BaseCheck):
                 name=f"ROS 2 {expected_ros_distro}",
                 status=CheckStatus.FAIL,
                 message="ROS 2 environment is not sourced.",
-                hint=f"Source the correct ROS 2 environment, if you are sure that ROS 2 is installed: 'source /opt/ros/{expected_ros_distro}/setup.bash'",
+                hint=(
+                    "Source the correct ROS 2 environment: "
+                    f"'source /opt/ros/{expected_ros_distro}/setup.bash'"
+                ),
             ))
         elif ros_distro != expected_ros_distro:
             results.append(CheckResult(
                 name=f"ROS 2 {expected_ros_distro}",
                 status=CheckStatus.FAIL,
                 message=f"Found ROS_DISTRO='{ros_distro}', expected '{expected_ros_distro}'",
-                hint=f"Source the correct ROS 2 environment: 'source /opt/ros/{expected_ros_distro}/setup.bash'",
+                hint=(
+                    "Source the correct ROS 2 environment: "
+                    f"'source /opt/ros/{expected_ros_distro}/setup.bash'"
+                ),
             ))
         else:
             results.append(CheckResult(
@@ -49,7 +55,10 @@ class EnvironmentCheck(BaseCheck):
                 name="Workspace",
                 status=CheckStatus.FAIL,
                 message="No custom ROS 2 packages found in AMENT_PREFIX_PATH.",
-                hint="Ensure that your workspace is built and sourced correctly, use: 'source install/setup.bash'",
+                hint=(
+                    "Ensure that your workspace is built and sourced: "
+                    "'source install/setup.bash'"
+                ),
             ))
         
 
@@ -76,7 +85,13 @@ class EnvironmentCheck(BaseCheck):
                 hint=f"Set the ROS_DOMAIN_ID: 'export ROS_DOMAIN_ID={expected_domain_id}'"
             ))
 
-        if os.path.exists("/.dockerenv"):
+        if not self.config.require_docker:
+            results.append(CheckResult(
+                name="Docker",
+                status=CheckStatus.OK,
+                message="Docker is not required by this deployment.",
+            ))
+        elif os.path.exists("/.dockerenv"):
             results.append(CheckResult(
                 name="Docker",
                 status=CheckStatus.OK,

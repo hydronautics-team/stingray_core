@@ -1,29 +1,54 @@
+"""Command-line interface for read-only pre-flight observations."""
+
+import argparse
 import sys
-from stingray_core_doctor.config import DoctorConfig
-from stingray_core_doctor.report import Reporter
+
 from stingray_core_doctor.checks.environment import EnvironmentCheck
 from stingray_core_doctor.checks.ros import RosCheck
-from stingray_core_doctor.checks.hardware import HardwareCheck
+from stingray_core_doctor.config import DoctorConfig
+from stingray_core_doctor.report import Reporter
+from stingray_core_doctor.runner import CheckRunner
 
-def main():
 
+def parse_args(argv=None):
+    """Parse the mode without importing optional online dependencies."""
+    parser = argparse.ArgumentParser(
+        description="Read-only pre-flight checks for Stingray Core"
+    )
+    parser.add_argument(
+        "mode",
+        nargs="?",
+        default="preflight",
+        choices=("preflight", "online"),
+        help="preflight checks the host; online also observes a running stack",
+    )
+    return parser.parse_args(argv)
+
+
+def build_checks(mode, config):
+    """Build checks for the selected responsibility boundary."""
+    checks = [EnvironmentCheck(config), RosCheck(config)]
+    if mode == "online":
+        # Keep ROS message dependencies out of host-only preflight mode.
+        from stingray_core_doctor.checks.online import OnlineSensorCheck
+
+        checks.append(OnlineSensorCheck(config))
+    return checks
+
+
+def main(argv=None):
+    """Run independent observations and return a stable process status."""
+    args = parse_args(argv)
     config = DoctorConfig()
-    
     reporter = Reporter()
-    reporter.print_header()
+    reporter.print_header(args.mode)
 
-    checks = [
-        EnvironmentCheck(config),
-        RosCheck(config),
-        HardwareCheck(config),
-        ]
+    categories = CheckRunner().iter_run(build_checks(args.mode, config))
+    for category in categories:
+        reporter.print_category(category.name, category.results)
 
-    for check in checks:
-        results = check.run()
-        reporter.print_category(check.category_name, results)
+    return reporter.print_summary()
 
-    exit_code = reporter.print_summary()
-    sys.exit(exit_code)
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
