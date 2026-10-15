@@ -2,11 +2,13 @@ vectornav:
   ros__parameters:
     port: "/dev/ttyAMA4"
     baud: 921600
+    adjust_ros_timestamp: true
     reconnect_ms: 500
     # Reference vnproglib-1.2.0.0 headers for enum definitions
     # Async Output Type (ASCII)
     AsyncDataOutputType: 0           # VNOFF
-    # Async output Frequency (Hz)
+    # ASCII output is disabled above. Binary output frequency is controlled by
+    # BO1.rateDivisor, not by this parameter.
     AsyncDataOutputFrequency: 100
     # Sync control
     syncInMode: 3                    # SYNCINMODE_COUNT
@@ -27,8 +29,12 @@ vectornav:
     # Binary output register 1
     BO1:
       asyncMode: 3                   # ASYNCMODE_BOTH
-      rateDivisor: 8                # 20 Hz
-      commonField: 0x003A
+      # The bundled VN-100 high-rate profile uses an 800 Hz base: 800 / 8 = 100 Hz.
+      # Verify the actual rate with `ros2 topic hz` after connecting the target firmware.
+      rateDivisor: 8
+      # TimeStartup | YawPitchRoll | Quaternion | AngularRate | Accel.
+      # Accel is the calibrated accelerometer measurement in the body frame.
+      commonField: 0x0139
       timeField: 0x0000              # TIMEGROUP_NONE
       imuField: 0x0000               # IMUGROUP_NONE
       # set gpsField directly in source to enforce or condition
