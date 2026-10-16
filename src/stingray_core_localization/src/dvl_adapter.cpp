@@ -10,16 +10,23 @@ namespace stingray_core::localization
 DvlAdapter::DvlAdapter() : Node("dvl_adapter")
 {
     output_frame_ = declare_parameter<std::string>("output_frame", "dvl_link");
+    input_topic_ = declare_parameter<std::string>("input_topic", "/dvl/data");
+    odometry_topic_ = declare_parameter<std::string>(
+        "odometry_topic", "/stingray_core/sensors/dvl/odometry");
+    altitude_topic_ = declare_parameter<std::string>(
+        "altitude_topic", "/stingray_core/sensors/dvl/altitude");
 
     dvl_sub_ = create_subscription<dvl_msgs::msg::DVL>(
-        "/dvl/data", rclcpp::SensorDataQoS(),
+        input_topic_, rclcpp::SensorDataQoS(),
         std::bind(&DvlAdapter::dvlCallback, this, std::placeholders::_1));
 
-    dvl_odom_pub_ = create_publisher<nav_msgs::msg::Odometry>("/stingray_core/sensors/dvl/odometry",
-                                                              rclcpp::SensorDataQoS());
+    dvl_odom_pub_ =
+        create_publisher<nav_msgs::msg::Odometry>(odometry_topic_, rclcpp::SensorDataQoS());
+    altitude_pub_ =
+        create_publisher<std_msgs::msg::Float32>(altitude_topic_, rclcpp::SensorDataQoS());
 
-    RCLCPP_INFO(get_logger(),
-                "DVL adapter started: /dvl/data -> /stingray_core/sensors/dvl/odometry");
+    RCLCPP_INFO(get_logger(), "DVL adapter started: %s -> %s, %s", input_topic_.c_str(),
+                odometry_topic_.c_str(), altitude_topic_.c_str());
 }
 
 void DvlAdapter::dvlCallback(const dvl_msgs::msg::DVL::ConstSharedPtr &msg)
@@ -28,6 +35,18 @@ void DvlAdapter::dvlCallback(const dvl_msgs::msg::DVL::ConstSharedPtr &msg)
     {
         RCLCPP_DEBUG(get_logger(), "DVL velocity is invalid, skipping measurement");
         return;
+    }
+
+    if (std::isfinite(msg->altitude) && msg->altitude >= 0.0)
+    {
+        std_msgs::msg::Float32 altitude;
+        altitude.data = static_cast<float>(msg->altitude);
+        altitude_pub_->publish(altitude);
+    }
+    else
+    {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+                             "DVL altitude is invalid, skipping altitude measurement");
     }
 
     nav_msgs::msg::Odometry odom;

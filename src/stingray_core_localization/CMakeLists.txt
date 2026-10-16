@@ -40,6 +40,7 @@ ament_target_dependencies(dvl_adapter
   rclcpp
   dvl_msgs
   nav_msgs
+  std_msgs
 )
 
 # ============================================================
