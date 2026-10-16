@@ -36,6 +36,10 @@ private:
     const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
     std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
+  void handle_health_ping(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+
   void handle_imu_angular(const vectornav_msgs::msg::CommonGroup::SharedPtr msg);
   void handle_imu_linear_accel(const geometry_msgs::msg::Vector3::SharedPtr msg);
   void handle_depth(const std_msgs::msg::Float32::SharedPtr msg);
@@ -53,6 +57,7 @@ private:
   rclcpp::Service<stingray_interfaces::srv::SetTwist>::SharedPtr set_twist_service_;
   rclcpp::Service<stingray_interfaces::srv::SetStabilization>::SharedPtr set_stabilization_service_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr reset_imu_service_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr health_ping_service_;
 
   rclcpp::Subscription<vectornav_msgs::msg::CommonGroup>::SharedPtr imu_angular_sub_;
   rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr imu_linear_accel_sub_;
@@ -75,6 +80,7 @@ private:
   std::string loop_flags_topic_;
   std::string uv_state_topic_;
   std::string reset_imu_service_name_;
+  std::string health_ping_service_name_;
   std::string imu_zero_yaw_topic_;
   std::string imu_angular_topic_;
   std::string imu_linear_accel_topic_;
