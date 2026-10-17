@@ -118,7 +118,7 @@ class BarNode(Node):
         # TODO me
         ajust_depth = 0.1 # meter
 
-        self.msg_depth.data = round(depth_data - ajust_depth - self.init_fresh, 3)
+        self.msg_depth.data = round(depth_data - ajust_depth - self.init_fresh, 3) * 1000
         depth_data_mm = round(self.msg_depth.data*1000, 3)
 
         self.msg_odom.header.stamp = self.get_clock().now().to_msg()

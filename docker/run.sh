@@ -26,10 +26,10 @@ pkill -f gst-launch-1.0 || true
 echo "🚀 Запуск видеострима GStreamer в фоновом режиме на хосте..."
 
 # 2. Запускаем GStreamer на хосте в фоне (&) с перенаправлением логов в файл
-gst-launch-1.0 -v v4l2src device=/dev/video0 ! \
-    image/jpeg,width=640,height=480,framerate=30/1 ! \
-    rtpjpegpay ! \
-    udpsink host=10.42.0.2 port=5000 sync=false > /tmp/gstreamer.log 2>&1 &
+# gst-launch-1.0 -v v4l2src device=/dev/video0 ! \
+#     image/jpeg,width=640,height=480,framerate=30/1 ! \
+#     rtpjpegpay ! \
+#     udpsink host=10.42.0.77 port=5000 sync=false > /tmp/gstreamer.log 2>&1 &
 
 echo "🐳 Запускаем Docker-контейнер..."
 

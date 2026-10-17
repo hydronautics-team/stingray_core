@@ -7,7 +7,7 @@ import serial
 class ManipulatorSubscriber(Node):
     def __init__(self):
         super().__init__('manipulator_subscriber')
-        self.port_path = '/dev/ttyUSB0'
+        self.port_path = '/dev/ttyUSB1'
         self.baud_rate = 115200
         
         try:

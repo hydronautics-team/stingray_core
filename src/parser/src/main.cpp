@@ -556,7 +556,7 @@ private:
             euler_msg.vector.y = d.pitch;
 
             // Новый Yaw по гироскопу.
-            euler_msg.vector.z = corrected_yaw;
+            euler_msg.vector.z = -corrected_yaw;
 
             publisher_euler_->publish(euler_msg);
 
