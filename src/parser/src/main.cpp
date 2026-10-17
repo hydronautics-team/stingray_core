@@ -54,7 +54,7 @@ class AH127CPublisher : public rclcpp::Node {
 public:
     AH127CPublisher() : Node("ah127c_publisher") {
         port_     = declare_parameter<std::string>("port", "/dev/ttyUSB0");
-        baud_     = declare_parameter<int>("baud", 9600);
+        baud_     = declare_parameter<int>("baud", 115200);
         rate_hz_  = declare_parameter<int>("rate_hz", 10);        // 0,5,10,20,25,50
         save_     = declare_parameter<bool>("save_settings", false);
         frame_id_ = declare_parameter<std::string>("frame_id", "imu_link");

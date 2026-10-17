@@ -7,7 +7,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('port', default_value='/dev/ttyUSB0'),
-        DeclareLaunchArgument('baud', default_value='9600'),
+        DeclareLaunchArgument('baud', default_value='115200'),
         DeclareLaunchArgument('rate_hz', default_value='10'),          # 0,5,10,20,25,50
         DeclareLaunchArgument('axis_map', default_value='x,y,z'),      # напр. 'y,x,-z'
         DeclareLaunchArgument('save_settings', default_value='false'),

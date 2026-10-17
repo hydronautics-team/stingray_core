@@ -29,17 +29,32 @@ if(NOT SERIAL_FOUND)
 endif()
 message(STATUS "libserial: ${SERIAL_LIBRARIES}")
 
+# --- Библиотека протокола ---
 add_library(ah127c_protocol src/AH127Cprotocol.cpp)
 target_include_directories(ah127c_protocol PUBLIC include ${SERIAL_INCLUDE_DIRS})
 target_link_libraries(ah127c_protocol ${SERIAL_LIBRARIES})
 
+# --- Исполняемый файл ноды ---
 add_executable(imu_node src/main.cpp)
 target_include_directories(imu_node PUBLIC include ${SERIAL_INCLUDE_DIRS})
 target_link_libraries(imu_node ah127c_protocol ${SERIAL_LIBRARIES})
 ament_target_dependencies(imu_node rclcpp std_msgs sensor_msgs)
 
-install(TARGETS imu_node DESTINATION lib/${PROJECT_NAME})
+# --- Установка (ТУТ ИСПРАВЛЕНИЕ: добавляем ah127c_protocol) ---
+install(TARGETS 
+  imu_node 
+  ah127c_protocol 
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# Установка launch файлов
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
-install(PROGRAMS scripts/emulator.py scripts/ah127c_diag.py DESTINATION lib/${PROJECT_NAME})
+
+# Установка скриптов
+install(PROGRAMS 
+  scripts/emulator.py 
+  #scripts/ah127c_diag.py 
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 ament_package()
