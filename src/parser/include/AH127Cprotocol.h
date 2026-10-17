@@ -1,96 +1,124 @@
 #ifndef AH127CPROTOCOL_H
 #define AH127CPROTOCOL_H
 
-#include <stdint.h>
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
-#include <chrono>
+
 #include <libserial/SerialPort.h>
 
-#pragma pack(push,1)
+struct DataFromAH127C
+{
+    double yaw = 0.0;
+    double pitch = 0.0;
+    double roll = 0.0;
 
-struct Header_AH {
-    uint8_t identif = 0x77;
-    uint8_t lenght = 0x38;
-    uint8_t adress = 0x00;
-    uint8_t command = 0x59;
+    // Линейное ускорение, м/с²
+    double X_accel = 0.0;
+    double Y_accel = 0.0;
+    double Z_accel = 0.0;
+
+    // Угловая скорость, град/с
+    double X_rate = 0.0;
+    double Y_rate = 0.0;
+    double Z_rate = 0.0;
+
+    // Магнитометр: единицы исходного протокола
+    double X_magn = 0.0;
+    double Y_magn = 0.0;
+    double Z_magn = 0.0;
 };
 
-struct DataFromAH127C {
-    Header_AH header;
-    float yaw = 0.0;
-    float pitch = 0.0;
-    float roll = 0.0;
-    float X_accel = 0.0;
-    float Y_accel = 0.0;
-    float Z_accel = 0.0;
-    float X_rate = 0.0;
-    float Y_rate = 0.0;
-    float Z_rate = 0.0;
-    float X_magn = 0.0;
-    float Y_magn = 0.0;
-    float Z_magn = 0.0;
-    float first_qvat = 0.0;
-    float second_qvat = 0.0;
-    float third_qvat = 0.0;
-    float four_qvat = 0.0;
-    float crc = 0.0;
-};
-
-struct Header_AH_calibration_start {
-    uint8_t identif = 0x77;
-    uint8_t lenght = 0x05;
-    uint8_t adress = 0x00;
-    uint8_t command = 0x91;
-    uint8_t datafield = 0x00;
-    uint8_t checksum = 0x96;
-};
-
-struct Header_AH_calibration_end {
-    uint8_t identif = 0x77;
-    uint8_t lenght = 0x05;
-    uint8_t adress = 0x00;
-    uint8_t command = 0x92;
-    uint8_t datafield = 0x00;
-    uint8_t checksum = 0x97;
-};
-
-#pragma pack(pop)
-
-class AH127Cprotocol {
+class AH127Cprotocol
+{
 public:
-    AH127Cprotocol(std::string portName, int baudRate);
-    ~AH127Cprotocol() { if (m_port.IsOpen()) m_port.Close(); }
+    AH127Cprotocol(
+        const std::string &portName,
+        int baudRate
+    );
 
-    DataFromAH127C data;
-    Header_AH_calibration_start calibr_start;
-    Header_AH_calibration_end calibr_end;
+    ~AH127Cprotocol();
 
-    bool flag_calibration_start = false;
-    bool flag_calibration_end = false;
-    int flag_start_cal = 0;
-    int flag_finish_cal = 0;
+    AH127Cprotocol(const AH127Cprotocol &) = delete;
+    AH127Cprotocol &operator=(const AH127Cprotocol &) = delete;
 
-    bool correctChecksum(const std::vector<uint8_t> &ba);
-    void readData();
+    // Возвращает true, если появился новый полный кадр.
+    bool readData();
+
+    // Контроль отсутствия новых измерений.
     void timeoutSlot();
-    void readyReadForTimer();
 
-protected:
-    uint8_t calculateCRC(const uint8_t data[], uint32_t length);
-    void parseBuffer();
+    // Последнее корректное полное измерение.
+    DataFromAH127C data;
 
-    std::vector<uint8_t> m_buffer;
-    int baudRate = 115200;  // Изменено на 115200
-    std::chrono::steady_clock::time_point last_receive_time;
+    // Статистика.
+    uint64_t valid_frames = 0;
+    uint64_t checksum_errors = 0;
+    uint64_t bcd_errors = 0;
+    uint64_t discarded_bytes = 0;
 
-public:
-    LibSerial::SerialPort m_port;
+    // Время получения последнего полного кадра.
+    std::chrono::steady_clock::time_point
+        last_sample_time() const
+    {
+        return last_sample_time_;
+    }
+
+private:
+    void configureSensor();
+    void sendCommand(
+        uint8_t command,
+        const std::vector<uint8_t> &payload = {}
+    );
+
+    bool parseBuffer();
+
+    bool parseFullFrame(
+        const uint8_t *frame,
+        std::size_t size,
+        DataFromAH127C &result
+    );
+
+    static uint8_t calculateChecksum(
+        const uint8_t *data,
+        std::size_t length
+    );
+
+    static bool decodeAngle(
+        const uint8_t *buf,
+        double &value
+    );
+
+    static bool decodeAcceleration(
+        const uint8_t *buf,
+        double &value
+    );
+
+    static bool decodeMagnetometer(
+        const uint8_t *buf,
+        double &value
+    );
+
+private:
+    LibSerial::SerialPort m_port_;
+    std::vector<uint8_t> m_buffer_;
+
+    std::chrono::steady_clock::time_point
+        last_sample_time_;
+
+    std::chrono::steady_clock::time_point
+        last_reconfigure_time_;
+
+    bool have_sample_ = false;
+
+    static constexpr std::size_t MAX_BUFFER_SIZE = 4096;
+
+    // Настройка по твоему исходному протоколу:
+    // LEN=56, полная длина=57 байт.
+    static constexpr uint8_t FULL_FRAME_LENGTH = 56;
+    static constexpr std::size_t FULL_FRAME_SIZE = 57;
 };
 
-// Прототипы функций преобразования BCD
-float BCDToFloat(const uint8_t* buf);
-float BCDToFloatAccel(const uint8_t* buf);
-float BCDToFloatMagn(const uint8_t* buf);
-
-#endif // AH127CPROTOCOL_H
+#endif

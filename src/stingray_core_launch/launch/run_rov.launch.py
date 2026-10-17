@@ -34,4 +34,5 @@ def generate_launch_description():
     power = IncludeLaunchDescription(PythonLaunchDescriptionSource(power_launch))
     ah127c = IncludeLaunchDescription(PythonLaunchDescriptionSource(ah127c_launch))
 
-    return LaunchDescription([thruster_link, core_control, ms5837, power, ah127c])
+    # thruster_link, core_control, ms5837, power,
+    return LaunchDescription([ah127c])
