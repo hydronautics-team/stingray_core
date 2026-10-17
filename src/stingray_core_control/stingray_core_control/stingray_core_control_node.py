@@ -569,6 +569,7 @@ class StingrayCoreControlNode(Node):
             self.dvl_velocity_y = float(msg.velocity.y)
             self.dvl_velocity_z = float(msg.velocity.z)
             self.dvl_velocity_valid = bool(msg.velocity_valid)
+
             self.dvl_last_time = time.time()
 
             if self.use_distance_measurement:
@@ -580,6 +581,11 @@ class StingrayCoreControlNode(Node):
         try:
             self.dvl_position_x = float(msg.position.x)
             self.dvl_position_y = float(msg.position.y)
+            self.get_logger().info(
+                f"DVL | "
+                f"X: {self.dvl_position_x:+.3f} | "
+                f"Y: {self.dvl_position_y:+.3f} | "
+            )
             self.dvl_position_valid = True
             self.dvl_position_last_time = time.time()
             current_position = {

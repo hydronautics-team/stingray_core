@@ -461,6 +461,7 @@ class SurgeController(BaseController):
 
         if self.debug_hook is not None:
             self.debug_hook({
+                "position": setpoint,
                 "err_position": err_position,
                 "output_pi": output_pi,
                 "feedback_speed": feedback_speed,
