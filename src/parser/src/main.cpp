@@ -8,7 +8,6 @@
 #include "rclcpp/rclcpp.hpp"
 
 #include "sensor_msgs/msg/imu.hpp"
-
 #include "geometry_msgs/msg/vector3_stamped.hpp"
 
 #include "tf2/LinearMath/Quaternion.h"
@@ -17,25 +16,33 @@
 
 using namespace std::chrono_literals;
 
+
+// ============================================================
+// AH127C ROS2 PUBLISHER
+// ============================================================
+
 class AH127CPublisher : public rclcpp::Node
 {
 public:
+
     AH127CPublisher()
         : Node("ah127c_publisher")
     {
-        // =====================================================
-        // ROS2 PARAMETERS
-        // =====================================================
+        // ====================================================
+        // PARAMETERS
+        // ====================================================
 
-        port_name_ = this->declare_parameter<std::string>(
-            "port",
-            "/dev/ttyUSB0"
-        );
+        port_name_ =
+            this->declare_parameter<std::string>(
+                "port",
+                "/dev/ttyUSB0"
+            );
 
-        frame_id_ = this->declare_parameter<std::string>(
-            "frame_id",
-            "imu_link"
-        );
+        frame_id_ =
+            this->declare_parameter<std::string>(
+                "frame_id",
+                "imu_link"
+            );
 
         enable_diagnostics_ =
             this->declare_parameter<bool>(
@@ -43,9 +50,9 @@ public:
                 true
             );
 
-        // =====================================================
+        // ====================================================
         // PUBLISHERS
-        // =====================================================
+        // ====================================================
 
         publisher_imu_ =
             this->create_publisher<
@@ -63,7 +70,6 @@ public:
                 10
             );
 
-        // Диагностический интеграл гироскопа.
         publisher_gyro_integrated_ =
             this->create_publisher<
                 geometry_msgs::msg::Vector3Stamped
@@ -72,7 +78,6 @@ public:
                 10
             );
 
-        // Магнитометр: значения в исходных единицах.
         publisher_magnetic_ =
             this->create_publisher<
                 geometry_msgs::msg::Vector3Stamped
@@ -81,24 +86,26 @@ public:
                 10
             );
 
-        // =====================================================
+        // ====================================================
         // PROTOCOL
-        // =====================================================
+        // ====================================================
 
-        protocol_ = std::make_unique<AH127Cprotocol>(
-            port_name_,
-            115200
-        );
+        protocol_ =
+            std::make_unique<AH127Cprotocol>(
+                port_name_,
+                115200
+            );
 
-        // Таймер опроса порта.
+        // ====================================================
+        // TIMER
+        // ====================================================
         //
-        // Частота таймера: 200 Гц.
-        // Частота публикации определяется датчиком:
-        // новое сообщение появляется только при новом
-        // корректном полном кадре.
+        // Проверяем наличие новых данных каждые 5 мс.
         //
-        // Это НЕ означает увеличение частоты AH127C
-        // до 200 Гц.
+        // Датчик выдаёт данные с частотой 50 Гц.
+        //
+        // Сообщения публикуются только при появлении
+        // новых корректных полных кадров.
 
         timer_ = this->create_wall_timer(
             5ms,
@@ -124,7 +131,13 @@ public:
             "Frame: %s",
             frame_id_.c_str()
         );
+
+        RCLCPP_INFO(
+            this->get_logger(),
+            "Yaw source: integrated gyroscope Z"
+        );
     }
+
 
     ~AH127CPublisher() override
     {
@@ -134,22 +147,23 @@ public:
         );
     }
 
+
 private:
 
-    // =========================================================
+    // ========================================================
     // CONSTANTS
-    // =========================================================
+    // ========================================================
 
     static constexpr double PI =
         3.14159265358979323846;
 
-    static constexpr double DEG_TO_RAD = PI / 180.0;
+    static constexpr double DEG_TO_RAD =
+        PI / 180.0;
 
-    static constexpr double RAD_TO_DEG = 180.0 / PI;
 
-    // =========================================================
-    // HELPERS
-    // =========================================================
+    // ========================================================
+    // NORMALIZE ANGLE
+    // ========================================================
 
     static double normalizeAngle(double angle)
     {
@@ -166,33 +180,269 @@ private:
         return angle;
     }
 
-    // =========================================================
-    // TIMER
-    // =========================================================
+
+    // ========================================================
+    // GYROSCOPE INTEGRATION
+    // ========================================================
+    //
+    // Рассчитываем курс по угловой скорости Z.
+    //
+    // ВАЖНО:
+    //
+    // Это тот же алгоритм, который ранее выдавал
+    // правильный курс в:
+    //
+    // /imu_gyro_integrated/vector/y
+    //
+    // Теперь этот угол используется как основной Yaw.
+    //
+    // Метод рассчитан на движение преимущественно
+    // вокруг оси Z при небольших Roll и Pitch.
+
+    void updateGyroIntegration(
+        const DataFromAH127C &d
+    )
+    {
+        const auto sample_time =
+            protocol_->last_sample_time();
+
+        // ====================================================
+        // FIRST SAMPLE
+        // ====================================================
+
+        if (!gyro_initialized_)
+        {
+            // Начальный курс берём из AH127C.
+            //
+            // Это сохраняет исходное направление.
+            //
+            // Далее готовый Yaw AH127C больше
+            // не влияет на интегрирование.
+
+            integrated_yaw_deg_ =
+                normalizeAngle(d.yaw);
+
+            previous_gyro_rate_ =
+                d.Z_rate;
+
+            last_gyro_time_ =
+                sample_time;
+
+            gyro_initialized_ = true;
+
+            return;
+        }
+
+        // ====================================================
+        // DELTA TIME
+        // ====================================================
+
+        const double dt =
+            std::chrono::duration<double>(
+                sample_time - last_gyro_time_
+            ).count();
+
+        // ====================================================
+        // VALIDATION
+        // ====================================================
+
+        if (dt <= 0.0)
+        {
+            return;
+        }
+
+        // После длительной паузы не интегрируем
+        // неизвестный промежуток движения.
+        //
+        // При этом сохраняем предыдущий курс.
+        //
+        // НЕ сбрасываем его на d.yaw.
+
+        if (dt > 0.1)
+        {
+            previous_gyro_rate_ =
+                d.Z_rate;
+
+            last_gyro_time_ =
+                sample_time;
+
+            RCLCPP_WARN_THROTTLE(
+                this->get_logger(),
+                *this->get_clock(),
+                1000,
+
+                "Gyro integration gap: %.3f s",
+                dt
+            );
+
+            return;
+        }
+
+        // ====================================================
+        // TRAPEZOIDAL INTEGRATION
+        // ====================================================
+        //
+        // Угловые скорости в град/с.
+        // Время в секундах.
+        //
+        // Формула:
+        //
+        // Yaw += (omega_prev + omega_now) / 2 * dt
+
+        const double average_rate =
+            0.5 * (
+                previous_gyro_rate_ +
+                d.Z_rate
+            );
+
+        integrated_yaw_deg_ +=
+            average_rate * dt;
+
+        // ====================================================
+        // NORMALIZATION
+        // ====================================================
+
+        integrated_yaw_deg_ =
+            normalizeAngle(
+                integrated_yaw_deg_
+            );
+
+        // ====================================================
+        // SAVE PREVIOUS DATA
+        // ====================================================
+
+        previous_gyro_rate_ =
+            d.Z_rate;
+
+        last_gyro_time_ =
+            sample_time;
+    }
+
+
+    // ========================================================
+    // PUBLISH GYRO DIAGNOSTICS
+    // ========================================================
+
+    void publishGyroDiagnostics(
+        const DataFromAH127C &d,
+        const rclcpp::Time &stamp
+    )
+    {
+        if (!enable_diagnostics_)
+        {
+            return;
+        }
+
+        // Сырой курс AH127C.
+        const double ahrs_yaw =
+            normalizeAngle(d.yaw);
+
+        // Курс по гироскопу.
+        const double gyro_yaw =
+            normalizeAngle(
+                integrated_yaw_deg_
+            );
+
+        // Разница.
+        const double error =
+            normalizeAngle(
+                ahrs_yaw - gyro_yaw
+            );
+
+        geometry_msgs::msg::Vector3Stamped msg;
+
+        msg.header.stamp = stamp;
+        msg.header.frame_id = frame_id_;
+
+        // X = старый курс AH127C.
+        msg.vector.x = ahrs_yaw;
+
+        // Y = новый правильный курс по гироскопу.
+        msg.vector.y = gyro_yaw;
+
+        // Z = разница.
+        msg.vector.z = error;
+
+        publisher_gyro_integrated_->publish(msg);
+
+        if (std::abs(error) > 15.0)
+        {
+            RCLCPP_WARN_THROTTLE(
+                this->get_logger(),
+                *this->get_clock(),
+                1000,
+
+                "AHRS/GYRO mismatch: "
+                "AHRS=%.2f Gyro=%.2f Error=%.2f deg",
+
+                ahrs_yaw,
+                gyro_yaw,
+                error
+            );
+        }
+    }
+
+
+    // ========================================================
+    // MAIN TIMER CALLBACK
+    // ========================================================
 
     void timer_callback()
     {
         try
         {
+            // =================================================
+            // READ DATA
+            // =================================================
+
             const bool new_data =
                 protocol_->readData();
 
             protocol_->timeoutSlot();
-
-            // Ничего не публикуем без нового полного кадра.
 
             if (!new_data)
             {
                 return;
             }
 
-            const auto stamp = this->now();
+            // =================================================
+            // TIME
+            // =================================================
+
+            const auto stamp =
+                this->now();
+
+            // =================================================
+            // SENSOR DATA
+            // =================================================
 
             const DataFromAH127C &d =
                 protocol_->data;
 
             // =================================================
-            // 1. IMU
+            // CALCULATE CORRECTED YAW
+            // =================================================
+            //
+            // Интегрирование выполняется ДО публикации.
+            //
+            // Это гарантирует, что все топики содержат
+            // новый курс текущего измерения.
+
+            updateGyroIntegration(d);
+
+            // =================================================
+            // MAIN YAW
+            // =================================================
+            //
+            // Главная переменная!
+            //
+            // Вместо d.yaw используем угол гироскопа.
+
+            const double corrected_yaw =
+                integrated_yaw_deg_;
+
+            // =================================================
+            // 1. SENSOR_MSGS / IMU
             // =================================================
 
             sensor_msgs::msg::Imu imu_msg;
@@ -200,9 +450,9 @@ private:
             imu_msg.header.stamp = stamp;
             imu_msg.header.frame_id = frame_id_;
 
-            // -------------------------------------------------
+            // =================================================
             // EULER -> QUATERNION
-            // -------------------------------------------------
+            // =================================================
 
             const double roll_rad =
                 d.roll * DEG_TO_RAD;
@@ -210,8 +460,9 @@ private:
             const double pitch_rad =
                 d.pitch * DEG_TO_RAD;
 
+            // Используем новый курс.
             const double yaw_rad =
-                d.yaw * DEG_TO_RAD;
+                corrected_yaw * DEG_TO_RAD;
 
             tf2::Quaternion q;
 
@@ -228,9 +479,9 @@ private:
             imu_msg.orientation.z = q.z();
             imu_msg.orientation.w = q.w();
 
-            // -------------------------------------------------
+            // =================================================
             // ANGULAR VELOCITY
-            // -------------------------------------------------
+            // =================================================
 
             imu_msg.angular_velocity.x =
                 d.X_rate * DEG_TO_RAD;
@@ -241,9 +492,9 @@ private:
             imu_msg.angular_velocity.z =
                 d.Z_rate * DEG_TO_RAD;
 
-            // -------------------------------------------------
+            // =================================================
             // LINEAR ACCELERATION
-            // -------------------------------------------------
+            // =================================================
 
             imu_msg.linear_acceleration.x =
                 d.X_accel;
@@ -254,18 +505,16 @@ private:
             imu_msg.linear_acceleration.z =
                 d.Z_accel;
 
-            // -------------------------------------------------
+            // =================================================
             // COVARIANCE
-            // -------------------------------------------------
+            // =================================================
             //
-            // Ковариации измерений пока неизвестны.
+            // Оставляем ковариации нулевыми,
+            // поскольку реальные значения неизвестны.
             //
-            // Нулевые матрицы здесь означают
-            // "ковариация неизвестна", а не
-            // "измерение абсолютно точное".
-            //
-            // Для EKF лучше задать реальные
-            // ковариации после испытаний.
+            // Для использования в EKF их необходимо
+            // определить по характеристикам датчика
+            // и результатам испытаний.
 
             std::fill(
                 imu_msg.orientation_covariance.begin(),
@@ -285,6 +534,10 @@ private:
                 0.0
             );
 
+            // =================================================
+            // PUBLISH IMU
+            // =================================================
+
             publisher_imu_->publish(imu_msg);
 
             // =================================================
@@ -296,21 +549,20 @@ private:
             euler_msg.header.stamp = stamp;
             euler_msg.header.frame_id = frame_id_;
 
+            // Roll от AH127C.
             euler_msg.vector.x = d.roll;
+
+            // Pitch от AH127C.
             euler_msg.vector.y = d.pitch;
-            euler_msg.vector.z = d.yaw;
+
+            // Новый Yaw по гироскопу.
+            euler_msg.vector.z = corrected_yaw;
 
             publisher_euler_->publish(euler_msg);
 
             // =================================================
             // 3. MAGNETOMETER
             // =================================================
-            //
-            // Используем Vector3Stamped, поскольку
-            // физические единицы исходных BCD-полей
-            // пока не подтверждены.
-            //
-            // НЕ выдаём эти данные за Tesla.
 
             geometry_msgs::msg::Vector3Stamped magn_msg;
 
@@ -324,19 +576,16 @@ private:
             publisher_magnetic_->publish(magn_msg);
 
             // =================================================
-            // 4. GYROSCOPE INTEGRATION
+            // 4. GYRO DIAGNOSTICS
             // =================================================
 
-            if (enable_diagnostics_)
-            {
-                updateGyroIntegration(
-                    d,
-                    stamp
-                );
-            }
+            publishGyroDiagnostics(
+                d,
+                stamp
+            );
 
             // =================================================
-            // 5. DEBUG
+            // 5. LOG
             // =================================================
 
             RCLCPP_INFO_THROTTLE(
@@ -344,15 +593,15 @@ private:
                 *this->get_clock(),
                 200,
 
-                "AHRS: R=%7.2f P=%7.2f Y=%7.2f | "
-                "GyroZ=%8.2f deg/s | "
-                "IntegratedZ=%8.2f",
+                "IMU: Roll=%7.2f Pitch=%7.2f "
+                "Yaw_Gyro=%7.2f Yaw_AH127C=%7.2f "
+                "GyroZ=%7.2f deg/s",
 
                 d.roll,
                 d.pitch,
+                corrected_yaw,
                 d.yaw,
-                d.Z_rate,
-                integrated_yaw_deg_
+                d.Z_rate
             );
 
             // =================================================
@@ -397,167 +646,33 @@ private:
         }
     }
 
-    // =========================================================
-    // GYRO INTEGRATION
-    // =========================================================
-
-    void updateGyroIntegration(
-        const DataFromAH127C &d,
-        const rclcpp::Time &stamp
-    )
-    {
-        const auto sample_time =
-            protocol_->last_sample_time();
-
-        if (!gyro_initialized_)
-        {
-            // Первое значение курса AHRS принимаем
-            // за начальное положение.
-            //
-            // Далее сравниваем изменение курса
-            // и изменение угла по гироскопу.
-
-            integrated_yaw_deg_ =
-                normalizeAngle(d.yaw);
-
-            previous_gyro_rate_ = d.Z_rate;
-
-            last_gyro_time_ = sample_time;
-
-            gyro_initialized_ = true;
-        }
-        else
-        {
-            // Время между измерениями.
-            //
-            // Используем steady_clock вместо ROS-времени
-            // для расчёта dt.
-
-            const double dt =
-                std::chrono::duration<double>(
-                    sample_time - last_gyro_time_
-                ).count();
-
-            // Защита от больших пауз.
-            //
-            // После потери связи интегрирование
-            // возобновляется с текущего курса,
-            // чтобы диагностический угол
-            // не получал произвольного скачка.
-
-            if (dt > 0.0 && dt <= 0.1)
-            {
-                // Трапецеидальное интегрирование.
-                //
-                // Угловая скорость: град/с.
-                // Время: секунды.
-                // Результат: градусы.
-
-                const double average_rate =
-                    0.5 * (
-                        previous_gyro_rate_ +
-                        d.Z_rate
-                    );
-
-                integrated_yaw_deg_ +=
-                    average_rate * dt;
-
-                integrated_yaw_deg_ =
-                    normalizeAngle(
-                        integrated_yaw_deg_
-                    );
-            }
-            else if (dt > 0.1)
-            {
-                integrated_yaw_deg_ =
-                    normalizeAngle(d.yaw);
-            }
-
-            previous_gyro_rate_ = d.Z_rate;
-            last_gyro_time_ = sample_time;
-        }
-
-        // =====================================================
-        // СРАВНЕНИЕ AHRS И ГИРОСКОПА
-        // =====================================================
-
-        const double ahrs_yaw =
-            normalizeAngle(d.yaw);
-
-        const double gyro_yaw =
-            normalizeAngle(
-                integrated_yaw_deg_
-            );
-
-        const double error =
-            normalizeAngle(
-                ahrs_yaw - gyro_yaw
-            );
-
-        // =====================================================
-        // PUBLISH DEBUG TOPIC
-        // =====================================================
-        //
-        // vector.x = Yaw AHRS
-        // vector.y = Yaw integrated from Gyro Z
-        // vector.z = difference AHRS - Gyro
-        //
-        // Все значения в градусах.
-
-        geometry_msgs::msg::Vector3Stamped msg;
-
-        msg.header.stamp = stamp;
-        msg.header.frame_id = frame_id_;
-
-        msg.vector.x = ahrs_yaw;
-        msg.vector.y = gyro_yaw;
-        msg.vector.z = error;
-
-        publisher_gyro_integrated_->publish(msg);
-
-        // =====================================================
-        // WARNING
-        // =====================================================
-
-        if (std::abs(error) > 15.0)
-        {
-            RCLCPP_WARN_THROTTLE(
-                this->get_logger(),
-                *this->get_clock(),
-                1000,
-
-                "AHRS/GYRO mismatch: "
-                "AHRS=%.2f Gyro=%.2f Error=%.2f deg",
-
-                ahrs_yaw,
-                gyro_yaw,
-                error
-            );
-        }
-    }
 
 private:
 
-    // =========================================================
+    // ========================================================
     // PARAMETERS
-    // =========================================================
+    // ========================================================
 
     std::string port_name_;
     std::string frame_id_;
 
     bool enable_diagnostics_ = true;
 
-    // =========================================================
+    // ========================================================
     // PROTOCOL
-    // =========================================================
+    // ========================================================
 
     std::unique_ptr<AH127Cprotocol> protocol_;
 
-    // =========================================================
-    // ROS2
-    // =========================================================
+    // ========================================================
+    // TIMER
+    // ========================================================
 
     rclcpp::TimerBase::SharedPtr timer_;
+
+    // ========================================================
+    // PUBLISHERS
+    // ========================================================
 
     rclcpp::Publisher<
         sensor_msgs::msg::Imu
@@ -575,9 +690,9 @@ private:
         geometry_msgs::msg::Vector3Stamped
     >::SharedPtr publisher_magnetic_;
 
-    // =========================================================
-    // DIAGNOSTICS
-    // =========================================================
+    // ========================================================
+    // GYRO INTEGRATION
+    // ========================================================
 
     bool gyro_initialized_ = false;
 
@@ -614,6 +729,7 @@ int main(int argc, char *argv[])
         );
 
         rclcpp::shutdown();
+
         return 1;
     }
 

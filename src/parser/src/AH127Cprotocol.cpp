@@ -7,18 +7,19 @@
 
 namespace
 {
+
 constexpr double GRAVITY = 9.80665;
 
-// Проверка одной BCD-цифры.
 bool validBCD(uint8_t value)
 {
     return value <= 9;
 }
 
-// Проверка трёхбайтового числа:
-//
-// [SIGN | HUNDREDS] [TENS | ONES] [DEC1 | DEC2]
-//
+
+// ============================================================
+// BCD: ANGLE / GYROSCOPE
+// ============================================================
+
 bool decodeBCD5(
     const uint8_t *buf,
     double &value
@@ -61,16 +62,19 @@ bool decodeBCD5(
 } // namespace
 
 
+// ============================================================
+// CONSTRUCTOR
+// ============================================================
+
 AH127Cprotocol::AH127Cprotocol(
     const std::string &portName,
     int baudRate
 )
 {
-    // В этой реализации поддерживается 115200.
     if (baudRate != 115200)
     {
         throw std::invalid_argument(
-            "AH127C: supported baud rate is 115200"
+            "AH127C supports 115200 in this driver"
         );
     }
 
@@ -107,6 +111,10 @@ AH127Cprotocol::AH127Cprotocol(
 }
 
 
+// ============================================================
+// DESTRUCTOR
+// ============================================================
+
 AH127Cprotocol::~AH127Cprotocol()
 {
     if (m_port_.IsOpen())
@@ -137,7 +145,7 @@ uint8_t AH127Cprotocol::calculateChecksum(
 
 
 // ============================================================
-// COMMANDS
+// COMMAND SENDING
 // ============================================================
 
 void AH127Cprotocol::sendCommand(
@@ -145,11 +153,6 @@ void AH127Cprotocol::sendCommand(
     const std::vector<uint8_t> &payload
 )
 {
-    // 0x77 LEN ADDR CMD DATA... CHECKSUM
-    //
-    // LEN включает:
-    // LEN + ADDR + CMD + DATA + CHECKSUM
-
     if (payload.size() > 251)
     {
         throw std::invalid_argument(
@@ -161,21 +164,28 @@ void AH127Cprotocol::sendCommand(
 
     frame.reserve(payload.size() + 5);
 
+    // START
     frame.push_back(0x77);
 
+    // LENGTH
     frame.push_back(
         static_cast<uint8_t>(payload.size() + 4)
     );
 
+    // ADDRESS
     frame.push_back(0x00);
+
+    // COMMAND
     frame.push_back(command);
 
+    // DATA
     frame.insert(
         frame.end(),
         payload.begin(),
         payload.end()
     );
 
+    // CHECKSUM
     const uint8_t checksum = calculateChecksum(
         frame.data() + 1,
         frame.size() - 1
@@ -187,9 +197,13 @@ void AH127Cprotocol::sendCommand(
 }
 
 
+// ============================================================
+// SENSOR CONFIGURATION
+// ============================================================
+
 void AH127Cprotocol::configureSensor()
 {
-    // Автовыдача полного набора данных.
+    // Автовыдача всех данных.
     //
     // 77 05 00 56 05 60
     sendCommand(0x56, {0x05});
@@ -199,24 +213,23 @@ void AH127Cprotocol::configureSensor()
     // 77 05 00 0C 05 16
     sendCommand(0x0C, {0x05});
 
-    // Сохранение настроек в энергонезависимую память
-    // намеренно НЕ выполняется при каждом запуске.
+    // Настройки не сохраняются во flash при каждом
+    // запуске, чтобы не выполнять лишние записи.
     //
-    // Если нужно сохранить:
+    // Команда сохранения при необходимости:
     //
     // sendCommand(0x0A);
     //
-    // По принятому формату получится:
-    // 77 04 00 0A 0E
+    // Кадр: 77 04 00 0A 0E
 
     std::cout
-        << "[AH127C] Autostream configured, 50 Hz"
+        << "[AH127C] Autostream enabled, 50 Hz"
         << std::endl;
 }
 
 
 // ============================================================
-// BCD DECODING
+// DECODING
 // ============================================================
 
 bool AH127Cprotocol::decodeAngle(
@@ -233,12 +246,6 @@ bool AH127Cprotocol::decodeAcceleration(
     double &value
 )
 {
-    // Исходный формат:
-    //
-    // [SIGN | ONES] [0.1 | 0.01] [0.001 | 0.0001]
-    //
-    // Результат в g, затем перевод в м/с².
-
     const uint8_t sign = (buf[0] >> 4) & 0x0F;
 
     const uint8_t d0 = buf[0] & 0x0F;
@@ -280,9 +287,6 @@ bool AH127Cprotocol::decodeMagnetometer(
     double &value
 )
 {
-    // Сохранён исходный масштаб твоего декодера.
-    // Физические единицы нужно подтвердить по протоколу.
-
     const uint8_t sign = (buf[0] >> 4) & 0x0F;
 
     const uint8_t d0 = buf[0] & 0x0F;
@@ -341,9 +345,9 @@ bool AH127Cprotocol::parseFullFrame(
 
     DataFromAH127C decoded;
 
-    // --------------------------------------------------------
-    // Углы Эйлера
-    // --------------------------------------------------------
+    // ========================================================
+    // EULER
+    // ========================================================
 
     if (!decodeAngle(frame + 4, decoded.pitch))
         return false;
@@ -354,10 +358,6 @@ bool AH127Cprotocol::parseFullFrame(
     if (!decodeAngle(frame + 10, decoded.yaw))
         return false;
 
-    // Проверяем физически допустимые значения.
-    //
-    // Yaw может быть 0..360 либо -180..180.
-
     if (std::abs(decoded.pitch) > 180.0 ||
         std::abs(decoded.roll) > 180.0 ||
         std::abs(decoded.yaw) > 360.0)
@@ -365,9 +365,9 @@ bool AH127Cprotocol::parseFullFrame(
         return false;
     }
 
-    // --------------------------------------------------------
-    // Акселерометр
-    // --------------------------------------------------------
+    // ========================================================
+    // ACCELEROMETER
+    // ========================================================
 
     if (!decodeAcceleration(
             frame + 13,
@@ -384,22 +384,28 @@ bool AH127Cprotocol::parseFullFrame(
             decoded.Z_accel))
         return false;
 
-    // --------------------------------------------------------
-    // Гироскоп
-    // --------------------------------------------------------
+    // ========================================================
+    // GYROSCOPE
+    // ========================================================
 
-    if (!decodeAngle(frame + 25, decoded.X_rate))
+    if (!decodeAngle(
+            frame + 25,
+            decoded.X_rate))
         return false;
 
-    if (!decodeAngle(frame + 22, decoded.Y_rate))
+    if (!decodeAngle(
+            frame + 22,
+            decoded.Y_rate))
         return false;
 
-    if (!decodeAngle(frame + 28, decoded.Z_rate))
+    if (!decodeAngle(
+            frame + 28,
+            decoded.Z_rate))
         return false;
 
-    // --------------------------------------------------------
-    // Магнитометр
-    // --------------------------------------------------------
+    // ========================================================
+    // MAGNETOMETER
+    // ========================================================
 
     if (!decodeMagnetometer(
             frame + 31,
@@ -416,22 +422,16 @@ bool AH127Cprotocol::parseFullFrame(
             decoded.Z_magn))
         return false;
 
-    // --------------------------------------------------------
-    // Компенсация осей из первоначального драйвера
-    // --------------------------------------------------------
+    // ========================================================
+    // ORIGINAL AXIS COMPENSATION
+    // ========================================================
     //
-    // ВАЖНО:
-    // Это сохранённые преобразования твоего кода.
-    // Их правильность нужно проверить экспериментально.
+    // Сохраняем знаки из твоего рабочего драйвера.
 
     decoded.X_accel = -decoded.X_accel;
     decoded.Z_rate = -decoded.Z_rate;
 
-    // Проверка диапазона гироскопа.
-    //
-    // Предел ±400 град/с взят как диагностическое
-    // ограничение для AH127C.
-
+    // Проверка диапазона.
     if (std::abs(decoded.X_rate) > 400.0 ||
         std::abs(decoded.Y_rate) > 400.0 ||
         std::abs(decoded.Z_rate) > 400.0)
@@ -446,7 +446,7 @@ bool AH127Cprotocol::parseFullFrame(
 
 
 // ============================================================
-// BUFFER PARSER
+// BUFFER PARSING
 // ============================================================
 
 bool AH127Cprotocol::parseBuffer()
@@ -457,8 +457,7 @@ bool AH127Cprotocol::parseBuffer()
 
     while (offset < m_buffer_.size())
     {
-        // Ищем начало кадра.
-
+        // Поиск начала кадра.
         if (m_buffer_[offset] != 0x77)
         {
             ++offset;
@@ -466,8 +465,7 @@ bool AH127Cprotocol::parseBuffer()
             continue;
         }
 
-        // Нужно хотя бы два байта для чтения LEN.
-
+        // Недостаточно байтов для LEN.
         if (m_buffer_.size() - offset < 2)
         {
             break;
@@ -475,10 +473,12 @@ bool AH127Cprotocol::parseBuffer()
 
         const uint8_t len = m_buffer_[offset + 1];
 
-        // Минимальная длина:
-        // LEN, ADDR, CMD, CHECKSUM = 4 байта.
+        // Длина кадра по используемому протоколу.
+        //
+        // Ограничиваем ожидаемую длину,
+        // чтобы случайный 0x77 не блокировал парсер.
 
-        if (len < 4)
+        if (len < 4 || len > 64)
         {
             ++offset;
             ++discarded_bytes;
@@ -488,9 +488,7 @@ bool AH127Cprotocol::parseBuffer()
         const std::size_t frame_size =
             static_cast<std::size_t>(len) + 1;
 
-        // Если полный кадр ещё не пришёл,
-        // оставляем его в буфере.
-
+        // Неполный кадр оставляем до следующего чтения.
         if (m_buffer_.size() - offset < frame_size)
         {
             break;
@@ -512,7 +510,6 @@ bool AH127Cprotocol::parseBuffer()
         {
             ++checksum_errors;
 
-            // Сдвигаемся на один байт и снова ищем 0x77.
             ++offset;
             ++discarded_bytes;
 
@@ -521,6 +518,7 @@ bool AH127Cprotocol::parseBuffer()
 
         const uint8_t command = frame[3];
 
+        // Полный кадр измерений.
         if (command == 0x59 &&
             frame_size == FULL_FRAME_SIZE)
         {
@@ -531,7 +529,6 @@ bool AH127Cprotocol::parseBuffer()
                     frame_size,
                     decoded))
             {
-                // Обновляем только при успешном разборе.
                 data = decoded;
 
                 last_sample_time_ =
@@ -548,19 +545,11 @@ bool AH127Cprotocol::parseBuffer()
             }
         }
 
-        // Другие корректные команды, включая ответы
-        // настройки и короткий кадр 0x84, пропускаем.
-        //
-        // Короткие кадры здесь не обновляют измерение,
-        // чтобы не смешивать новые углы со старыми
-        // данными акселерометра и гироскопа.
-
+        // Переходим к следующему кадру.
         offset += frame_size;
     }
 
     // Удаляем все обработанные байты.
-    // Неполный хвост остаётся до следующего вызова.
-
     if (offset > 0)
     {
         m_buffer_.erase(
@@ -568,10 +557,6 @@ bool AH127Cprotocol::parseBuffer()
             m_buffer_.begin() + offset
         );
     }
-
-    // Аварийная защита от переполнения.
-    //
-    // В нормальном режиме не должна срабатывать.
 
     if (m_buffer_.size() > MAX_BUFFER_SIZE)
     {
@@ -584,17 +569,11 @@ bool AH127Cprotocol::parseBuffer()
 
 
 // ============================================================
-// SERIAL READING
+// READING
 // ============================================================
 
 bool AH127Cprotocol::readData()
 {
-    // Считываем всё, что уже находится в буфере
-    // последовательного порта.
-    //
-    // Верхняя граница защищает callback от бесконечного
-    // цикла при непрерывном потоке данных.
-
     constexpr std::size_t MAX_READ_BYTES = 4096;
 
     std::size_t count = 0;
@@ -610,9 +589,6 @@ bool AH127Cprotocol::readData()
 
         ++count;
     }
-
-    // Парсер вызывается и при отсутствии новых байтов:
-    // это позволяет обработать уже накопленный буфер.
 
     return parseBuffer();
 }
@@ -637,29 +613,28 @@ void AH127Cprotocol::timeoutSlot()
             std::chrono::milliseconds
         >(now - last_activity).count();
 
-    if (elapsed > 3000)
+    if (elapsed <= 3000)
     {
-        const auto since_reconfigure =
-            std::chrono::duration_cast<
-                std::chrono::milliseconds
-            >(now - last_reconfigure_time_).count();
-
-        // Не отправляем команды чаще одного раза
-        // в три секунды.
-
-        if (since_reconfigure < 3000)
-        {
-            return;
-        }
-
-        std::cerr
-            << "[AH127C] No valid full frames for "
-            << elapsed
-            << " ms. Reconfiguring..."
-            << std::endl;
-
-        configureSensor();
-
-        last_reconfigure_time_ = now;
+        return;
     }
+
+    const auto since_reconfigure =
+        std::chrono::duration_cast<
+            std::chrono::milliseconds
+        >(now - last_reconfigure_time_).count();
+
+    if (since_reconfigure < 3000)
+    {
+        return;
+    }
+
+    std::cerr
+        << "[AH127C] No valid full frames for "
+        << elapsed
+        << " ms. Reconfiguring..."
+        << std::endl;
+
+    configureSensor();
+
+    last_reconfigure_time_ = now;
 }
