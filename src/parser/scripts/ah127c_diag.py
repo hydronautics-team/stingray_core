@@ -2,6 +2,21 @@
 # -*- coding: utf-8 -*-
 """
 Диагностика датчика LC-AH127C (Bewis) через RS485/RS232.
+
+    pip install pyserial          (или: sudo apt install python3-serial)
+    python3 ah127c_diag.py /dev/ttyUSB0
+
+Что делает:
+  1. На каждой скорости (2400..115200) 1 с слушает порт - ищет кадры 0x77 (автовыдача).
+  2. На каждой скорости шлёт запросы: адрес (77 04 00 1F 23), три угла (77 04 00 04 08),
+     полный кадр (77 04 00 59 5D) и проверяет ответ по контрольной сумме.
+  3. Печатает итог: найденная скорость, адрес, углы. Всё пишет в ah127c_diag_<дата>.log.
+
+Дополнительно:
+  --baud 9600           проверить только одну скорость
+  --listen 5            только слушать N секунд (без команд)
+  --set-baud 115200     после автоопределения переключить датчик на эту скорость
+  --set-rate 10         выставить частоту автовыдачи (0,5,10,20,25,50) и тип "всё", затем сохранить
 """
 import argparse
 import datetime
@@ -20,23 +35,29 @@ RATE_CODES = {0: 0, 5: 1, 10: 2, 20: 3, 25: 4, 50: 5}
 
 LOG = open(f"ah127c_diag_{datetime.datetime.now():%Y%m%d_%H%M%S}.log", "w", encoding="utf-8")
 
+
 def out(s=""):
     print(s)
     LOG.write(s + "\n")
     LOG.flush()
 
+
 def hx(b):
     return " ".join(f"{x:02X}" for x in b)
 
+
 def frame(cmd, data=b""):
-    body = bytes([4 + len(data), 0x00, cmd]) + data
+    body = bytes([4 + len(data), 0x00, cmd]) + data   # len = len+addr+cmd+data+chk
     return b"\x77" + body + bytes([sum(body) & 0xFF])
+
 
 def bcd_angle(b):
     v = (b[0] & 0x0F) * 100 + (b[1] >> 4) * 10 + (b[1] & 0x0F) + (b[2] >> 4) * 0.1 + (b[2] & 0x0F) * 0.01
     return -v if b[0] & 0xF0 else v
 
+
 def find_frames(buf):
+    """Все кадры 77 LEN ... с верной суммой внутри буфера."""
     found = []
     i = 0
     while i + 4 <= len(buf):
@@ -50,6 +71,7 @@ def find_frames(buf):
         i += 1
     return found
 
+
 def describe(f):
     cmd = f[3]
     if cmd == 0x59 and len(f) == 57:
@@ -62,8 +84,10 @@ def describe(f):
         return f"адрес датчика = 0x{f[4]:02X}"
     return f"ответ 0x{cmd:02X} ({len(f)} байт)"
 
+
 def open_port(port, baud):
     return serial.Serial(port, baud, bytesize=8, parity="N", stopbits=1, timeout=0)
+
 
 def read_for(ser, sec):
     end = time.time() + sec
@@ -73,14 +97,17 @@ def read_for(ser, sec):
         time.sleep(0.005)
     return buf
 
+
 def query(ser, cmd_bytes, wait=0.4):
     ser.reset_input_buffer()
     ser.write(cmd_bytes)
     ser.flush()
     rx = read_for(ser, wait)
+    # RS485-переходники часто возвращают эхо своей же команды - убираем.
     if rx.startswith(cmd_bytes):
         rx = rx[len(cmd_bytes):]
     return rx
+
 
 def test_baud(port, baud, listen_sec):
     out(f"\n=== {baud} бод ===")
@@ -115,6 +142,7 @@ def test_baud(port, baud, listen_sec):
         ser.close()
     return result
 
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("port", nargs="?", default="/dev/ttyUSB0")
@@ -146,6 +174,10 @@ def main():
     out("\n================ ИТОГ ================")
     if not ok:
         out("Датчик НЕ ответил ни на одной скорости.")
+        noisy = [r["baud"] for r in results if r["auto"] == 0]
+        out("Проверьте: питание 9-36 В на Red/Black; Yellow=A, Green=B (попробуйте поменять местами);")
+        out("общий GND между переходником и датчиком; второй датчик; другой USB-RS485 переходник.")
+        out(f"Лог: {LOG.name}")
         return
     best = max(ok, key=lambda r: (r["answers"], r["auto"]))
     out(f"Датчик работает на скорости {best['baud']} бод."
@@ -159,17 +191,23 @@ def main():
         ser = open_port(a.port, best["baud"])
         if a.set_rate is not None:
             rx = query(ser, frame(0x56, b"\x05"))
+            out(f"тип автовыдачи = всё: {hx(rx)}")
             rx = query(ser, frame(0x0C, bytes([RATE_CODES[a.set_rate]])))
+            out(f"частота {a.set_rate} Гц: {hx(rx)}")
             rx = query(ser, frame(0x0A))
+            out(f"сохранить: {hx(rx)}")
         if a.set_baud and a.set_baud != best["baud"]:
             ser.write(frame(0x0B, bytes([BAUD_CODES[a.set_baud]])))
             ser.flush()
             time.sleep(0.3)
             ser.close()
+            out(f"переключил датчик на {a.set_baud}, проверяю...")
             r = test_baud(a.port, a.set_baud, 1.0)
+            out("OK" if r and (r["auto"] or r["answers"]) else "датчик не отвечает на новой скорости")
         else:
             ser.close()
     out(f"Лог: {LOG.name}")
+
 
 if __name__ == "__main__":
     main()

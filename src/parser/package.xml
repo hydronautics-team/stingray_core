@@ -2,9 +2,9 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>parser</name>
-  <version>0.0.1</version>
-  <description>Parser for LC-AH127C IMU sensor</description>
-  <maintainer email="user@example.com">User</maintainer>
+  <version>0.1.0</version>
+  <description>ROS 2 driver for Bewis LC-AH127C AHRS (RS485/RS232, protocol 0x77)</description>
+  <maintainer email="turusovpavel07@gmail.com">Pavel</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
@@ -12,9 +12,10 @@
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
   <depend>sensor_msgs</depend>
-  <depend>geometry_msgs</depend>
-  <depend>tf2</depend>
-  <depend>tf2_geometry_msgs</depend>
+  <depend>libserial-dev</depend>
+
+  <exec_depend>python3-serial</exec_depend>
+  <exec_depend>ros2launch</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

@@ -1,124 +1,78 @@
 #ifndef AH127CPROTOCOL_H
 #define AH127CPROTOCOL_H
 
-#include <chrono>
-#include <cstddef>
-#include <cstdint>
+#include <stdint.h>
 #include <string>
 #include <vector>
-
+#include <chrono>
+#include <cstddef>
 #include <libserial/SerialPort.h>
 
-struct DataFromAH127C
-{
-    double yaw = 0.0;
-    double pitch = 0.0;
-    double roll = 0.0;
-
-    // Линейное ускорение, м/с²
-    double X_accel = 0.0;
-    double Y_accel = 0.0;
-    double Z_accel = 0.0;
-
-    // Угловая скорость, град/с
-    double X_rate = 0.0;
-    double Y_rate = 0.0;
-    double Z_rate = 0.0;
-
-    // Магнитометр: единицы исходного протокола
-    double X_magn = 0.0;
-    double Y_magn = 0.0;
-    double Z_magn = 0.0;
+// Один разобранный кадр "77 38 00 59" (команда 0x59: углы + g + угл. скорости + магнитометр + кватернион).
+// Единицы: как в датчике - градусы, g, град/с, Гаусс. Кватернион q0 = скаляр (w), q1..q3 = x,y,z.
+struct ImuFrame {
+    float pitch = 0.0f, roll = 0.0f, yaw = 0.0f;   // град
+    float ax = 0.0f, ay = 0.0f, az = 0.0f;         // g
+    float gx = 0.0f, gy = 0.0f, gz = 0.0f;         // град/с
+    float mx = 0.0f, my = 0.0f, mz = 0.0f;         // Гаусс
+    float q0 = 1.0f, q1 = 0.0f, q2 = 0.0f, q3 = 0.0f;
 };
 
-class AH127Cprotocol
-{
+class AH127Cprotocol {
 public:
-    AH127Cprotocol(
-        const std::string &portName,
-        int baudRate
-    );
+    static constexpr size_t FRAME_LEN = 57;        // 0x77 + 0x38 (56 байт от длины до checksum включительно)
+    static constexpr uint8_t CMD_FULL = 0x59;
 
+    // Открывает порт. baud: 2400/4800/9600/19200/38400/57600/115200. Бросает std::exception при ошибке.
+    AH127Cprotocol(const std::string& portName, int baudRate);
+    // Конструктор без порта - для тестов через feed().
+    AH127Cprotocol();
     ~AH127Cprotocol();
 
-    AH127Cprotocol(const AH127Cprotocol &) = delete;
-    AH127Cprotocol &operator=(const AH127Cprotocol &) = delete;
+    // Настроить датчик: тип автовыдачи = всё (0x56 05), частота (0x0C), при save - сохранить (0x0A).
+    // rateHz: 0 (по запросу), 5, 10, 20, 25, 50. Возвращает false, если частота не поддерживается.
+    bool configure(int rateHz, bool save);
+    // Разовый запрос полного кадра (режим "по запросу"): 77 04 00 59 5D.
+    void requestFrame();
+    // Прочитать всё, что есть в порту, и разобрать. Возвращает число полных корректных кадров.
+    int poll();
+    // Подать байты вручную (тесты/эмуляция). Возвращает число полных корректных кадров.
+    int feed(const uint8_t* data, size_t n);
+    // Переотправить конфигурацию, если тишина дольше silenceMs. Возвращает true, если переотправили.
+    bool checkTimeout(int silenceMs);
 
-    // Возвращает true, если появился новый полный кадр.
-    bool readData();
+    const ImuFrame& latest() const { return latest_; }
+    bool hasFrame() const { return frames_ok_ > 0; }
 
-    // Контроль отсутствия новых измерений.
-    void timeoutSlot();
+    uint64_t framesOk() const { return frames_ok_; }
+    uint64_t crcErrors() const { return crc_errors_; }
+    uint64_t bytesDropped() const { return bytes_dropped_; }
 
-    // Последнее корректное полное измерение.
-    DataFromAH127C data;
+    void setDebug(bool on) { debug_ = on; }
 
-    // Статистика.
-    uint64_t valid_frames = 0;
-    uint64_t checksum_errors = 0;
-    uint64_t bcd_errors = 0;
-    uint64_t discarded_bytes = 0;
-
-    // Время получения последнего полного кадра.
-    std::chrono::steady_clock::time_point
-        last_sample_time() const
-    {
-        return last_sample_time_;
-    }
-
-private:
-    void configureSensor();
-    void sendCommand(
-        uint8_t command,
-        const std::vector<uint8_t> &payload = {}
-    );
-
-    bool parseBuffer();
-
-    bool parseFullFrame(
-        const uint8_t *frame,
-        std::size_t size,
-        DataFromAH127C &result
-    );
-
-    static uint8_t calculateChecksum(
-        const uint8_t *data,
-        std::size_t length
-    );
-
-    static bool decodeAngle(
-        const uint8_t *buf,
-        double &value
-    );
-
-    static bool decodeAcceleration(
-        const uint8_t *buf,
-        double &value
-    );
-
-    static bool decodeMagnetometer(
-        const uint8_t *buf,
-        double &value
-    );
+    // Публичные для тестов.
+    static uint8_t checksum(const uint8_t* frame, size_t frameLen); // сумма frame[1..frameLen-2]
+    static bool decodeFrame(const uint8_t* frame, ImuFrame& out);   // frame = 57 байт, начиная с 0x77
+    static float bcdAngle(const uint8_t* b);   // SXXX.YY
+    static float bcdAccel(const uint8_t* b);   // SX.YYYY
+    static float bcdMagn(const uint8_t* b);    // S.YYYYY
+    static float bcdQuat(const uint8_t* b);    // SX.YYYYYY
+    // Собрать команду 77 LEN 00 CMD DATA CHK.
+    static std::vector<uint8_t> makeCmd(uint8_t cmd, const std::vector<uint8_t>& data = {});
 
 private:
-    LibSerial::SerialPort m_port_;
-    std::vector<uint8_t> m_buffer_;
+    void sendCmd(const std::vector<uint8_t>& cmd);
+    void sendConfig();
 
-    std::chrono::steady_clock::time_point
-        last_sample_time_;
-
-    std::chrono::steady_clock::time_point
-        last_reconfigure_time_;
-
-    bool have_sample_ = false;
-
-    static constexpr std::size_t MAX_BUFFER_SIZE = 4096;
-
-    // Настройка по твоему исходному протоколу:
-    // LEN=56, полная длина=57 байт.
-    static constexpr uint8_t FULL_FRAME_LENGTH = 56;
-    static constexpr std::size_t FULL_FRAME_SIZE = 57;
+    LibSerial::SerialPort port_;
+    bool port_open_ = false;
+    std::vector<uint8_t> buf_;
+    ImuFrame latest_;
+    uint64_t frames_ok_ = 0, crc_errors_ = 0, bytes_dropped_ = 0;
+    int rate_code_ = 2;          // 10 Гц по умолчанию
+    bool save_settings_ = false;
+    bool debug_ = false;
+    std::chrono::steady_clock::time_point last_rx_;
 };
 
-#endif
+#endif // AH127CPROTOCOL_H
