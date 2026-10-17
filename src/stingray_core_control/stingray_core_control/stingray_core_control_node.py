@@ -13,7 +13,7 @@ from rcl_interfaces.msg import SetParametersResult
 import time
 import math
 
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, Vector3Stamped
 from std_msgs.msg import Float32, Float64, UInt8, Bool, UInt8MultiArray
 from sensor_msgs.msg import Imu
 from rclpy.qos import qos_profile_sensor_data
@@ -46,6 +46,7 @@ class StingrayCoreControlNode(Node):
         ).get_parameter_value().bool_value
 
         self.declare_parameter('topic_imu_data', '/imu_full_data')
+        self.declare_parameter('topic_imu_euler', '/imu_euler')
         self.declare_parameter('topic_loop_flags', '/control/loop_flags')
         self.declare_parameter('topic_pressure_sensor', '/sensors/pressure')
         self.declare_parameter('topic_control_data', '/control/data')
@@ -53,6 +54,10 @@ class StingrayCoreControlNode(Node):
 
         self.topic_imu_data = self.get_parameter(
             'topic_imu_data'
+        ).get_parameter_value().string_value
+
+        self.topic_imu_euler = self.get_parameter(
+            'topic_imu_euler'
         ).get_parameter_value().string_value
 
         self.topic_loop_flags = self.get_parameter(
@@ -222,12 +227,25 @@ class StingrayCoreControlNode(Node):
         # --- subscriptions ---
         qos = QoSProfile(depth=10)
 
-        # AH127C теперь публикует sensor_msgs/msg/Imu.
+        # Два топика AH127C:
+        # /imu_full_data -> угловые скорости (rad/s) и ускорения (m/s²)
+        # /imu_euler     -> Roll/Pitch/Yaw (градусы), где Yaw = интеграл gyro Z
+        # SENSOR_DATA QoS совместим с publisher надёжности RELIABLE и BEST_EFFORT.
         self.sub_imu_data = self.create_subscription(
             Imu,
             self.topic_imu_data,
             self.imu_callback,
             qos_profile_sensor_data
+        )
+        self.sub_imu_euler = self.create_subscription(
+            Vector3Stamped,
+            self.topic_imu_euler,
+            self.imu_euler_callback,
+            qos_profile_sensor_data
+        )
+        self.get_logger().info(
+            f"IMU subscriptions: {self.topic_imu_data} (rates/accel), "
+            f"{self.topic_imu_euler} (Euler angles in degrees)"
         )
 
         # --- orientation publishers ---
@@ -540,63 +558,64 @@ class StingrayCoreControlNode(Node):
     # ============================================================
 
     def imu_callback(self, msg: Imu):
+        """Считываем физические величины из /imu_full_data.
+
+        angular_velocity: rad/s; linear_acceleration: m/s².
+        Курсовой угол здесь НЕ меняем: он приходит из /imu_euler.
+        """
         try:
-            # sensor_msgs/Imu:
-            # angular_velocity — rad/s
-            # linear_acceleration — m/s^2
-
-            self.imu_accel_x = float(
-                msg.linear_acceleration.x
+            values = (
+                float(msg.linear_acceleration.x),
+                float(msg.linear_acceleration.y),
+                float(msg.linear_acceleration.z),
+                float(msg.angular_velocity.x),
+                float(msg.angular_velocity.y),
+                float(msg.angular_velocity.z),
             )
+            if not all(math.isfinite(v) for v in values):
+                self.get_logger().warning('Invalid IMU rates/accel: NaN or Inf')
+                return
 
-            self.imu_accel_y = float(
-                msg.linear_acceleration.y
-            )
+            (
+                self.imu_accel_x,
+                self.imu_accel_y,
+                self.imu_accel_z,
+                self.imu_rate_x,
+                self.imu_rate_y,
+                self.imu_rate_z,
+            ) = values
+        except Exception as e:
+            self.get_logger().warning(f"Error parsing IMU rates/accel: {e}")
 
-            self.imu_accel_z = float(
-                msg.linear_acceleration.z
-            )
+    def imu_euler_callback(self, msg: Vector3Stamped):
+        """Углы от /imu_euler: x=Roll, y=Pitch, z=Yaw (градусы).
 
-            self.imu_rate_x = float(
-                msg.angular_velocity.x
-            )
+        Драйвер AH127C уже публикует в z вычисленный по gyro Z курс.
+        Здесь НЕ нужно снова интегрировать гироскоп и НЕ нужно
+        извлекать Yaw из кватерниона.
+        """
+        try:
+            roll = float(msg.vector.x)
+            pitch = float(msg.vector.y)
+            yaw = float(msg.vector.z)
 
-            self.imu_rate_y = float(
-                msg.angular_velocity.y
-            )
+            if not all(math.isfinite(v) for v in (roll, pitch, yaw)):
+                self.get_logger().warning('Invalid IMU Euler: NaN or Inf')
+                return
 
-            self.imu_rate_z = float(
-                msg.angular_velocity.z
-            )
-
-            # Quaternion -> RPY
-            roll_rad, pitch_rad, yaw_rad = self.quaternion_to_rpy(
-                msg.orientation
-            )
-
-            # В градусы — как было в старом Data.msg
-            self.imu_yaw_raw = math.degrees(yaw_rad)
-
-            old_yaw = self.imu_yaw
-
+            self.imu_roll = roll
+            self.imu_pitch = pitch
+            self.imu_yaw_raw = self.normalize_angle_deg(yaw)
             self.imu_yaw = self.normalize_angle_deg(
                 self.imu_yaw_raw - self.yaw_zero_offset
             )
 
-            self.imu_pitch = math.degrees(pitch_rad)
-            self.imu_roll = math.degrees(roll_rad)
-
             self.get_logger().debug(
-                f"IMU: "
-                f"Y={self.imu_yaw:.1f}° "
-                f"P={self.imu_pitch:.1f}° "
-                f"R={self.imu_roll:.1f}°"
+                f"IMU Euler: Y={self.imu_yaw:.1f}° "
+                f"P={self.imu_pitch:.1f}° R={self.imu_roll:.1f}°"
             )
-
         except Exception as e:
-            self.get_logger().warning(
-                f"Error parsing Imu: {e}"
-            )
+            self.get_logger().warning(f"Error parsing IMU Euler: {e}")
 
     def zero_yaw_callback(self, msg: Bool):
         if not msg.data:
