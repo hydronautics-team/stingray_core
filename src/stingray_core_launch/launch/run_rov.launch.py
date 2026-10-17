@@ -40,8 +40,6 @@ def generate_launch_description():
     ms5837 = IncludeLaunchDescription(PythonLaunchDescriptionSource(ms5837_launch))
     power = IncludeLaunchDescription(PythonLaunchDescriptionSource(power_launch))
     ah127c = IncludeLaunchDescription(PythonLaunchDescriptionSource(ah127c_launch))
-
     manipulator = IncludeLaunchDescription(PythonLaunchDescriptionSource(manipulator_launch))
-
-
+    
     return LaunchDescription([thruster_link, core_control, ms5837, power, ah127c, manipulator])
