@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Any, Optional
+from typing import Any
 
 
 class CheckStatus(IntEnum):
@@ -20,5 +20,5 @@ class CheckResult:
     name: str
     status: CheckStatus
     message: str = ""
-    hint: Optional[str] = None
+    hint: str | None = None
     metrics: dict[str, Any] = field(default_factory=dict)

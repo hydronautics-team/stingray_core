@@ -72,6 +72,27 @@ ros2 run stingray_core_doctor stingray_core_doctor online
 отображать опубликованные supervisor сведения о готовности и диагностические
 сообщения компонентов, а не повторять его правила внутри doctor.
 
+### Загрузка конфигурации
+
+```bash
+ros2 run stingray_core_doctor stingray_core_doctor --config path-to-yaml
+```
+
+Необязательный параметр, который изменяет используемый файл конфигурации. 
+Файл по умолчанию расположен по следующему пути:
+```text
+welt_rov/
+└── src/
+    ├── welt_bringup/
+    ├── welt_config/
+    │   └── diagnostics/
+    │       └── doctor.yaml
+    └── stingray_core/
+        └── src/
+            └── stingray_core_doctor/
+```
+
+
 ## Что doctor не должен делать
 
 Doctor не должен:

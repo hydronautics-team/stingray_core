@@ -62,27 +62,27 @@ class EnvironmentCheck(BaseCheck):
             ))
         
 
-        domain_id = os.environ.get("ROS_DOMAIN_ID")
-        expected_domain_id = str(self.config.domain_id)
+        ros_domain_id = os.environ.get("ROS_DOMAIN_ID")
+        expected_ros_domain_id = str(self.config.expected_ros_domain_id)
 
-        if domain_id == expected_domain_id:
+        if ros_domain_id == expected_ros_domain_id:
             results.append(CheckResult(
-                name=f"ROS_DOMAIN_ID={expected_domain_id}",
+                name=f"ROS_DOMAIN_ID={expected_ros_domain_id}",
                 status=CheckStatus.OK,
             ))
-        elif domain_id is None:
+        elif ros_domain_id is None:
             results.append(CheckResult(
                 name=f"ROS_DOMAIN_ID=None",
                 status=CheckStatus.FAIL,
-                message=f"ROS_DOMAIN_ID is not set, expected '{expected_domain_id}'",
-                hint=f"Set the ROS_DOMAIN_ID: 'export ROS_DOMAIN_ID={expected_domain_id}'"
+                message=f"ROS_DOMAIN_ID is not set, expected '{expected_ros_domain_id}'",
+                hint=f"Set the ROS_DOMAIN_ID: 'export ROS_DOMAIN_ID={expected_ros_domain_id}'"
             ))
         else:
             results.append(CheckResult(
-                name=f"ROS_DOMAIN_ID={domain_id}",
+                name=f"ROS_DOMAIN_ID={ros_domain_id}",
                 status=CheckStatus.FAIL,
-                message=f"Found ROS_DOMAIN_ID='{domain_id}', expected '{expected_domain_id}'",
-                hint=f"Set the ROS_DOMAIN_ID: 'export ROS_DOMAIN_ID={expected_domain_id}'"
+                message=f"Found ROS_DOMAIN_ID='{ros_domain_id}', expected '{expected_ros_domain_id}'",
+                hint=f"Set the ROS_DOMAIN_ID: 'export ROS_DOMAIN_ID={expected_ros_domain_id}'"
             ))
 
         if not self.config.require_docker:

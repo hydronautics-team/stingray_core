@@ -5,7 +5,7 @@ import sys
 
 from stingray_core_doctor.checks.environment import EnvironmentCheck
 from stingray_core_doctor.checks.ros import RosCheck
-from stingray_core_doctor.config import DoctorConfig
+from stingray_core_doctor.config import ConfigError, load_config
 from stingray_core_doctor.report import Reporter
 from stingray_core_doctor.runner import CheckRunner
 
@@ -21,6 +21,12 @@ def parse_args(argv=None):
         default="preflight",
         choices=("preflight", "online"),
         help="preflight checks the host; online also observes a running stack",
+    )
+    parser.add_argument(
+        "--config",
+        dest="config",
+        default=None,
+        help="Path to the doctor YAML configuration file",
     )
     return parser.parse_args(argv)
 
@@ -39,9 +45,14 @@ def build_checks(mode, config):
 def main(argv=None):
     """Run independent observations and return a stable process status."""
     args = parse_args(argv)
-    config = DoctorConfig()
     reporter = Reporter()
     reporter.print_header(args.mode)
+
+    try:
+        config = load_config(args.config)
+    except ConfigError as exc:
+        print(f"\n[ERROR] Configuration error: {exc}", file=sys.stderr)
+        return 1
 
     categories = CheckRunner().iter_run(build_checks(args.mode, config))
     for category in categories:
