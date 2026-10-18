@@ -47,18 +47,6 @@ class TopicConfig:
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name.strip():
             raise ConfigError("Topic name must be a non-empty string")
-        if self.timeout_sec <= 0:
-            raise ConfigError(
-                f"timeout_sec for '{self.name}' must be > 0, got {self.timeout_sec}"
-            )
-        if self.min_hz is not None and self.min_hz < 0:
-            raise ConfigError(
-                f"min_hz for '{self.name}' must be >= 0, got {self.min_hz}"
-            )
-        if self.max_hz is not None and self.max_hz <= 0:
-            raise ConfigError(
-                f"max_hz for '{self.name}' must be > 0, got {self.max_hz}"
-            )
         if (
             self.min_hz is not None
             and self.max_hz is not None
@@ -139,6 +127,12 @@ def _check_unknown_keys(data: dict[str, Any], allowed: set[str], context: str) -
         raise ConfigError(f"Unknown fields in '{context}': {unknown}")
 
 
+def _expect_number(data: Any, context: str) -> float:
+    if not (isinstance(data, int) or isinstance(data, float)) and data <= 0:
+        raise ConfigError(f"{context} must be a positive float")
+    return data
+
+
 def _parse_topic(
     raw: Any,
     default: TopicConfig,
@@ -189,28 +183,15 @@ def _parse_topic(
             raise ConfigError(
                 f"Field '{context}.expected_frame_id' must be a non-empty string"
             )
+
     if "min_hz" in data:
-        min_hz = data["min_hz"]
-        if not (isinstance(min_hz, int) or isinstance(min_hz, float)) and min_hz <= 0:
-            raise ConfigError("min_hz must be a positive float")
+        min_hz = _expect_number(data["min_hz"])
     if "max_hz" in data:
-        max_hz = data["max_hz"]
-        if not (isinstance(max_hz, int) or isinstance(max_hz, float)) and max_hz <= 0:
-            raise ConfigError("max_hz must be a positive float")
+        max_hz = _expect_number(data["max_hz"])
     if "min_value" in data:
-        min_value = data["min_value"]
-        if (
-            not (isinstance(min_value, int) or isinstance(min_value, float))
-            and min_value <= 0
-        ):
-            raise ConfigError("min_value must be a positive float")
+        min_value = _expect_number(data["min_value"])
     if "max_value" in data:
-        max_value = data["max_value"]
-        if (
-            not (isinstance(max_value, int) or isinstance(max_value, float))
-            and max_value <= 0
-        ):
-            raise ConfigError("max_value must be a positive float")
+        max_value = _expect_number(data["max_value"])
 
     return TopicConfig(
         name=name,

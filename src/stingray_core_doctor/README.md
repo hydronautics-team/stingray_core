@@ -78,7 +78,7 @@ ros2 run stingray_core_doctor stingray_core_doctor online
 ros2 run stingray_core_doctor stingray_core_doctor --config path-to-yaml
 ```
 
-Необязательный параметр, который изменяет используемый файл конфигурации. 
+Необязательный параметр `--config`, который изменяет используемый файл конфигурации. 
 Файл по умолчанию расположен по следующему пути:
 ```text
 welt_rov/
