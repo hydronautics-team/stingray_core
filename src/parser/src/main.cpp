@@ -35,7 +35,7 @@ public:
         port_name_ =
             this->declare_parameter<std::string>(
                 "port",
-                "/dev/ttyUSB0"
+                "/dev/imu"
             );
 
         frame_id_ =
