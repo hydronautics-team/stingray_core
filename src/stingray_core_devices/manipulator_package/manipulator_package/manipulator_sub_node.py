@@ -7,7 +7,7 @@ import serial
 class ManipulatorSubscriber(Node):
     def __init__(self):
         super().__init__('manipulator_subscriber')
-        self.port_path = '/dev/ttyUSB1'
+        self.port_path = '/dev/rs485'
         self.baud_rate = 115200
         
         try:
@@ -19,7 +19,7 @@ class ManipulatorSubscriber(Node):
 
         self.subscription = self.create_subscription(
             Int32,
-            '/stingray_core/device/manipulator/cmd',
+            '/stingray_core/devices/manipulator/cmd',
             self.pwm_callback,
             10
         )
