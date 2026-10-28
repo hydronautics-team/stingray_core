@@ -8,8 +8,8 @@ import math
 import time
 
 import rclpy
-from dvl_msgs.msg import DVL, DVLDR
-from geometry_msgs.msg import PointStamped, Twist, Vector3
+from geometry_msgs.msg import Twist
+from nav_msgs.msg import Odometry
 from rcl_interfaces.msg import ParameterDescriptor, SetParametersResult
 from rclpy.node import Node
 from rclpy.parameter import Parameter
@@ -20,8 +20,7 @@ from rclpy.qos import (
     ReliabilityPolicy,
 )
 from sensor_msgs.msg import Imu
-from std_msgs.msg import Bool, Float32, Float64, UInt8, UInt8MultiArray
-from vectornav_msgs.msg import CommonGroup
+from std_msgs.msg import Float64, UInt8, UInt8MultiArray
 
 from .control.axis_controller import (
     AngularAxisController,
@@ -54,25 +53,15 @@ class StingrayCoreControlNode(Node):
         self.get_logger().info(
             f"Started at {self.rate_hz} Hz | axes={self.axes} | thrusters={len(self.thrusters)}"
         )
-        if self.sensor_backend == "ah127c_ms5837":
-            self.get_logger().info(
-                "Sensor backend: AH127C + MS5837 | "
-                f"imu={self.topic_ah127c_imu} | "
-                f"depth={self.topic_ms5837_depth} | "
-                f"depth_scale={self.ms5837_depth_scale}"
-            )
-        else:
-            self.get_logger().info(
-                "Sensor backend: VectorNav + standard pressure sensor"
-            )
+        self.get_logger().info(
+            f"State input: imu={self.topic_imu} | odometry={self.topic_odometry}"
+        )
 
     def control_loop(self):
         now = time.time()
         dt = now - self.last_time if self.last_time is not None else 0.0
         self.last_time = now
         self.last_dt = max(min(dt, 0.05), 1e-3)
-
-        self._update_motion_estimation(self.last_dt)
 
         monotonic_now = time.monotonic()
         timed_out_axes = []
@@ -168,55 +157,20 @@ class StingrayCoreControlNode(Node):
         self.declare_parameter("debug_publish", False)
 
         defaults = {
-            "topic_imu_angular": "/vectornav/raw/common",
-            "topic_imu_linear_accel": "/vectornav/imu",
-            "topic_imu_angular_rate": "/vectornav/imu",
-            "topic_dvl_data": "/dvl/data",
-            "topic_dvl_position": "/dvl/position",
+            "topic_imu": "/core/sensors/imu",
+            "topic_odometry": "/core/state/odometry",
             "topic_loop_flags": "/control/loop_flags",
-            "topic_pressure_sensor": "/stingray_core/pressure_sensor/depth",
             "topic_control_data": "/control/data",
-            "topic_zero_yaw": "/imu/zero_yaw",
-            # Alternative sensor set used on the current vehicle.
-            "topic_ah127c_imu": "/imu_full_data",
-            "topic_ms5837_depth": "/ms5837/depth",
         }
 
         for name, default in defaults.items():
             self.declare_parameter(name, default)
             setattr(self, name, self.get_parameter(name).value)
 
-        # "vectornav" keeps the original subscriptions unchanged.
-        # "ah127c_ms5837" reads sensor_msgs/Imu from AH127C and Float32
-        # depth from MS5837.
-        self.declare_parameter("sensor_backend", "vectornav")
-        self.sensor_backend = str(self.get_parameter("sensor_backend").value)
-        if self.sensor_backend not in ("vectornav", "ah127c_ms5837"):
-            raise ValueError(
-                "sensor_backend must be 'vectornav' or 'ah127c_ms5837', "
-                f"got {self.sensor_backend!r}"
-            )
-
-        # The supplied MS5837 node publishes millimetres, while the control
-        # node and its depth controller work in metres.
-        self.declare_parameter("ms5837_depth_scale", 0.001)
-        self.ms5837_depth_scale = float(self.get_parameter("ms5837_depth_scale").value)
-
         self.declare_parameter(
             "axes", ["surge", "sway", "heave", "roll", "pitch", "yaw"]
         )
         self.axes = list(self.get_parameter("axes").value)
-
-        self.declare_parameter("use_dvl_velocity", False)
-        self.use_dvl_velocity = bool(self.get_parameter("use_dvl_velocity").value)
-
-        self.declare_parameter("use_distance_measurement", False)
-        self.use_distance_measurement = bool(
-            self.get_parameter("use_distance_measurement").value
-        )
-
-        self.declare_parameter("dvl_velocity_alpha", 0.2)
-        self.dvl_velocity_alpha = float(self.get_parameter("dvl_velocity_alpha").value)
 
         self.declare_parameter("dvl_timeout_sec", 0.5)
         self.dvl_timeout_sec = float(self.get_parameter("dvl_timeout_sec").value)
@@ -311,13 +265,6 @@ class StingrayCoreControlNode(Node):
         self.depth = 0.0
         self.distance_to_bottom = 0.0
 
-        self.surge_velocity_imu = 0.0
-        self.sway_velocity_imu = 0.0
-        self.heave_velocity_imu = 0.0
-        self.surge_velocity_est = 0.0
-        self.sway_velocity_est = 0.0
-        self.heave_velocity_est = 0.0
-
         self.dvl_velocity_x = 0.0
         self.dvl_velocity_y = 0.0
         self.dvl_velocity_z = 0.0
@@ -332,7 +279,6 @@ class StingrayCoreControlNode(Node):
             axis: 0.0 for axis in self.axes
         }
 
-        self.yaw_zero_offset = 0.0
         self.imu_yaw_raw = 0.0
 
         self.axis_ctrl: dict[str, AxisController] = {
@@ -406,42 +352,14 @@ class StingrayCoreControlNode(Node):
             time.time() - self.dvl_position_last_time
         ) <= self.dvl_position_timeout_sec
 
-    def _update_motion_estimation(self, dt: float):
-        # IMU-only оценка скоростей интегрированием ускорений
-        self.surge_velocity_imu += self.imu.accel_x * dt
-        self.sway_velocity_imu += self.imu.accel_y * dt
-        self.heave_velocity_imu += self.imu.accel_z * dt
-
-        use_dvl_now = (
-            self.use_dvl_velocity and self.dvl_velocity_valid and self._is_dvl_fresh()
-        )
-        alpha = max(0.0, min(1.0, self.dvl_velocity_alpha))
-
-        if use_dvl_now:
-            # IMU + DVL: blended correction для снижения дрейфа IMU
-            self.surge_velocity_est = (
-                alpha * self.surge_velocity_imu + (1.0 - alpha) * self.dvl_velocity_x
-            )
-            self.sway_velocity_est = (
-                alpha * self.sway_velocity_imu + (1.0 - alpha) * self.dvl_velocity_y
-            )
-            self.heave_velocity_est = (
-                alpha * self.heave_velocity_imu + (1.0 - alpha) * self.dvl_velocity_z
-            )
-        else:
-            # IMU-only
-            self.surge_velocity_est = self.surge_velocity_imu
-            self.sway_velocity_est = self.sway_velocity_imu
-            self.heave_velocity_est = self.heave_velocity_imu
-
     def _get_surge_velocity_measurement(self) -> float:
-        return self.surge_velocity_est
+        return self.dvl_velocity_x
 
     def _get_sway_velocity_measurement(self) -> float:
-        return self.sway_velocity_est
+        return self.dvl_velocity_y
 
     def _get_heave_velocity_measurement(self) -> float:
-        return self.heave_velocity_est
+        return self.dvl_velocity_z
 
     def _init_subscriptions(self):
         # Explicit QoS profiles for deterministic behavior by topic class.
@@ -459,80 +377,20 @@ class StingrayCoreControlNode(Node):
             durability=DurabilityPolicy.VOLATILE,
         )
 
-        qos_event = QoSProfile(
-            history=HistoryPolicy.KEEP_LAST,
-            depth=1,
-            reliability=ReliabilityPolicy.RELIABLE,
-            durability=DurabilityPolicy.VOLATILE,
+        self.sub_imu = self.create_subscription(
+            Imu, self.topic_imu, self.imu_callback, qos_sensor
         )
 
-        if self.sensor_backend == "ah127c_ms5837":
-            # One AH127C message already contains orientation, angular rates
-            # and linear acceleration, so one callback updates the full state.
-            self.sub_ah127c_imu = self.create_subscription(
-                Imu,
-                self.topic_ah127c_imu,
-                self.ah127c_imu_callback,
-                qos_sensor,
-            )
-        else:
-            self.sub_imu_angular = self.create_subscription(
-                CommonGroup,
-                self.topic_imu_angular,
-                self.imu_angular_callback,
-                qos_sensor,
-            )
-
-            self.sub_imu_linear_accel = self.create_subscription(
-                Imu,
-                self.topic_imu_linear_accel,
-                self.imu_linear_accel_callback,
-                qos_sensor,
-            )
-
-            self.sub_imu_angular_rate = self.create_subscription(
-                Imu,
-                self.topic_imu_angular_rate,
-                self.imu_angular_rate_callback,
-                qos_sensor,
-            )
-
-        self.sub_dvl_data = self.create_subscription(
-            DVL, self.topic_dvl_data, self.dvl_data_callback, qos_sensor
-        )
-
-        self.sub_dvl_position = self.create_subscription(
-            DVLDR,
-            self.topic_dvl_position,
-            self.dvl_position_callback,
-            qos_sensor,
+        self.sub_odometry = self.create_subscription(
+            Odometry, self.topic_odometry, self.odometry_callback, qos_sensor
         )
 
         self.sub_control_mode_flags = self.create_subscription(
             UInt8, self.topic_loop_flags, self.control_mode_flags_callback, qos_command
         )
 
-        if self.sensor_backend == "ah127c_ms5837":
-            self.sub_ms5837_depth = self.create_subscription(
-                Float32,
-                self.topic_ms5837_depth,
-                self.ms5837_depth_callback,
-                qos_sensor,
-            )
-        else:
-            self.sub_pressure_sensor = self.create_subscription(
-                PointStamped,
-                self.topic_pressure_sensor,
-                self.pressure_sensor_callback,
-                qos_sensor,
-            )
-
         self.sub_control_data = self.create_subscription(
             Twist, self.topic_control_data, self.control_data_callback, qos_command
-        )
-
-        self.sub_zero_yaw = self.create_subscription(
-            Bool, self.topic_zero_yaw, self.zero_yaw_callback, qos_event
         )
 
     def _init_publishers(self):
@@ -589,8 +447,8 @@ class StingrayCoreControlNode(Node):
         self.pub_out = self.create_publisher(Float64, "~/debug/out", qos_debug)
 
     # --- Колбэки ---
-    def ah127c_imu_callback(self, msg: Imu):
-        """Use AH127C quaternion, gyro and accelerometer as control feedback."""
+    def imu_callback(self, msg: Imu):
+        """Consume the sensor-independent IMU stream produced by localization."""
         try:
             qx = float(msg.orientation.x)
             qy = float(msg.orientation.y)
@@ -599,7 +457,7 @@ class StingrayCoreControlNode(Node):
 
             norm = math.sqrt(qx * qx + qy * qy + qz * qz + qw * qw)
             if norm < 1e-9:
-                self.get_logger().warning("AH127C supplied a zero quaternion")
+                self.get_logger().warning("Localization supplied a zero quaternion")
                 return
 
             qx /= norm
@@ -619,15 +477,10 @@ class StingrayCoreControlNode(Node):
             yaw_deg = math.degrees(math.atan2(sin_yaw_cos_pitch, cos_yaw_cos_pitch))
 
             self.imu_yaw_raw = yaw_deg
-            self.imu.yaw = self.normalize_angle_deg(
-                self.imu_yaw_raw - self.yaw_zero_offset
-            )
+            self.imu.yaw = self.normalize_angle_deg(yaw_deg)
             self.imu.pitch = pitch_deg
             self.imu.roll = roll_deg
 
-            # sensor_msgs/Imu angular_velocity is specified in rad/s. The
-            # existing controllers already consume the VectorNav rates in the
-            # same SI units, so no additional conversion is required here.
             self.imu.rate_x = float(msg.angular_velocity.x)
             self.imu.rate_y = float(msg.angular_velocity.y)
             self.imu.rate_z = float(msg.angular_velocity.z)
@@ -636,68 +489,34 @@ class StingrayCoreControlNode(Node):
             self.imu.accel_y = float(msg.linear_acceleration.y)
             self.imu.accel_z = float(msg.linear_acceleration.z)
         except Exception as e:
-            self.get_logger().warning(f"Error parsing AH127C Imu message: {e}")
+            self.get_logger().warning(f"Error parsing standardized Imu message: {e}")
 
-    def imu_angular_callback(self, msg: CommonGroup):
+    def odometry_callback(self, msg: Odometry):
+        """Consume fused position, depth and velocity from localization."""
         try:
-            ypr: Vector3 = msg.yawpitchroll
-
-            self.imu_yaw_raw = float(ypr.x)
-
-            self.imu.yaw = self.normalize_angle_deg(
-                self.imu_yaw_raw - self.yaw_zero_offset
-            )
-            self.imu.pitch = float(ypr.y)
-            self.imu.roll = float(ypr.z)
-
-        except Exception as e:
-            self.get_logger().warning(f"Error parsing CommonGroup yawpitchroll: {e}")
-
-    def imu_angular_rate_callback(self, msg: Imu):
-        try:
-            self.imu.rate_x = float(msg.angular_velocity.x)
-            self.imu.rate_y = float(msg.angular_velocity.y)
-            self.imu.rate_z = float(msg.angular_velocity.z)
-        except Exception as e:
-            self.get_logger().warning(
-                f"Error parsing imu angular_velocity from Imu msg: {e}"
-            )
-
-    def imu_linear_accel_callback(self, msg: Imu):
-        try:
-            self.imu.accel_x = float(msg.linear_acceleration.x)
-            self.imu.accel_y = float(msg.linear_acceleration.y)
-            self.imu.accel_z = float(msg.linear_acceleration.z)
-        except Exception as e:
-            self.get_logger().warning(
-                f"Error parsing imu linear acceleration from Imu msg: {e}"
-            )
-
-    def dvl_data_callback(self, msg: DVL):
-        try:
-            self.dvl_velocity_x = float(msg.velocity.x)
-            self.dvl_velocity_y = float(msg.velocity.y)
-            self.dvl_velocity_z = float(msg.velocity.z)
-            self.dvl_velocity_valid = bool(msg.velocity_valid)
-
+            self.dvl_velocity_x = float(msg.twist.twist.linear.x)
+            self.dvl_velocity_y = float(msg.twist.twist.linear.y)
+            self.dvl_velocity_z = float(msg.twist.twist.linear.z)
+            self.dvl_velocity_valid = all(
+                math.isfinite(value)
+                for value in (
+                    self.dvl_velocity_x,
+                    self.dvl_velocity_y,
+                    self.dvl_velocity_z,
+                )
+            ) and max(msg.twist.covariance[0], msg.twist.covariance[7]) < 100.0
             self.dvl_last_time = time.time()
 
-            if self.use_distance_measurement:
-                self.distance_to_bottom = float(msg.altitude)
-        except Exception as e:
-            self.get_logger().warning(f"Error parsing DVL msg: {e}")
-
-    def dvl_position_callback(self, msg: DVLDR):
-        try:
-            self.dvl_position_x = float(msg.position.x)
-            self.dvl_position_y = float(msg.position.y)
-            self.get_logger().info(
-                f"DVL | "
-                f"X: {self.dvl_position_x:+.3f} | "
-                f"Y: {self.dvl_position_y:+.3f} | "
-            )
-            self.dvl_position_valid = True
+            self.dvl_position_x = float(msg.pose.pose.position.x)
+            self.dvl_position_y = float(msg.pose.pose.position.y)
+            self.dvl_position_valid = all(
+                math.isfinite(value)
+                for value in (self.dvl_position_x, self.dvl_position_y)
+            ) and max(msg.pose.covariance[0], msg.pose.covariance[7]) < 100.0
             self.dvl_position_last_time = time.time()
+            # REP-103 odometry Z is positive upward; control depth is positive down.
+            self.depth = -float(msg.pose.pose.position.z)
+
             current_position = {
                 "surge": self.dvl_position_x,
                 "sway": self.dvl_position_y,
@@ -711,31 +530,7 @@ class StingrayCoreControlNode(Node):
                     self.control_setpoint[axis] = current_position[axis]
                     self.position_target_initialized[axis] = True
         except Exception as e:
-            self.get_logger().warning(f"Error parsing DVL position msg: {e}")
-
-    def zero_yaw_callback(self, msg: Bool):
-        if not msg.data:
-            return
-
-        self.yaw_zero_offset = self.imu_yaw_raw
-        self.get_logger().info(f"Yaw zeroed at {self.yaw_zero_offset:.2f} deg")
-
-    def pressure_sensor_callback(self, msg: PointStamped):
-        try:
-            self.depth = float(msg.point.z)
-        except Exception as e:
-            self.get_logger().warning(f"Error parsing depth msg: {e}")
-
-    def ms5837_depth_callback(self, msg: Float32):
-        """Convert the alternative MS5837 depth stream to metres."""
-        try:
-            depth_metres = float(msg.data) * self.ms5837_depth_scale
-            if not math.isfinite(depth_metres):
-                self.get_logger().warning("MS5837 supplied non-finite depth")
-                return
-            self.depth = depth_metres
-        except Exception as e:
-            self.get_logger().warning(f"Error parsing MS5837 depth message: {e}")
+            self.get_logger().warning(f"Error parsing standardized odometry: {e}")
 
     def control_data_callback(self, msg: Twist):
         command_time = time.monotonic()

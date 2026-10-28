@@ -21,12 +21,9 @@ def generate_launch_description():
     params_file_thruster = LaunchConfiguration('params_file_thruster')
     params_file_controllers = LaunchConfiguration('params_file_controllers')
     rate_hz = LaunchConfiguration('rate_hz')
-    topic_imu_linear_accel = LaunchConfiguration('topic_imu_linear_accel')
-    topic_imu_angular_rate = LaunchConfiguration('topic_imu_angular_rate')
-    topic_dvl_data = LaunchConfiguration('topic_dvl_data')
-    topic_dvl_position = LaunchConfiguration('topic_dvl_position')
+    topic_imu = LaunchConfiguration('topic_imu')
+    topic_odometry = LaunchConfiguration('topic_odometry')
     topic_loop_flags = LaunchConfiguration('topic_loop_flags')
-    topic_pressure_sensor = LaunchConfiguration('topic_pressure_sensor')
     topic_control_data = LaunchConfiguration('topic_control_data')
     # thruster_direction_matrix = LaunchConfiguration('thruster_direction_matrix')
 
@@ -56,39 +53,21 @@ def generate_launch_description():
         ),
 
         DeclareLaunchArgument(
-            'topic_imu_linear_accel',
-            default_value='/vectornav/imu',
-            description='Topic for IMU linear acceleration (Imu.linear_acceleration)'
+            'topic_imu',
+            default_value='/core/sensors/imu',
+            description='Standardized localization IMU topic (sensor_msgs/Imu)'
         ),
 
         DeclareLaunchArgument(
-            'topic_imu_angular_rate',
-            default_value='/vectornav/imu',
-            description='Topic for IMU angular rate (Vector3)'
-        ),
-
-        DeclareLaunchArgument(
-            'topic_dvl_data',
-            default_value='/dvl/data',
-            description='Topic for DVL data (dvl_msgs/DVL)'
-        ),
-
-        DeclareLaunchArgument(
-            'topic_dvl_position',
-            default_value='/dvl/position',
-            description='Topic for DVL position (dvl_msgs/DVLDR)'
+            'topic_odometry',
+            default_value='/core/state/odometry',
+            description='Fused localization state (nav_msgs/Odometry)'
         ),
 
         DeclareLaunchArgument(
             'topic_loop_flags',
             default_value='/control/loop_flags',
             description='Topic for control loop flags (UInt8)'
-        ),
-
-        DeclareLaunchArgument(
-            'topic_pressure_sensor',
-            default_value='/stingray_core/pressure_sensor/depth',
-            description='Topic for pressure/depth (geometry_msgs/msg/PointStamped)'
         ),
 
         DeclareLaunchArgument(
@@ -113,12 +92,9 @@ def generate_launch_description():
                 params_file_controllers,
                 {
                     'rate_hz': rate_hz,
-                    'topic_imu_linear_accel': topic_imu_linear_accel,
-                    # 'topic_imu_angular_rate': topic_imu_angular_rate,
-                    'topic_dvl_data': topic_dvl_data,
-                    'topic_dvl_position': topic_dvl_position,
+                    'topic_imu': topic_imu,
+                    'topic_odometry': topic_odometry,
                     'topic_loop_flags': topic_loop_flags,
-                    'topic_pressure_sensor': topic_pressure_sensor,
                     'topic_control_data': topic_control_data,
                     # 'thruster_direction_matrix': thruster_direction_matrix,
                 }
