@@ -18,6 +18,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(dvl_msgs REQUIRED)
@@ -40,6 +41,7 @@ ament_target_dependencies(dvl_adapter
   rclcpp
   dvl_msgs
   nav_msgs
+  std_srvs
 )
 
 # ============================================================

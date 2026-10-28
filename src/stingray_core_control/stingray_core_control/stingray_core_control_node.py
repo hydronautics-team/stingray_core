@@ -100,8 +100,12 @@ class StingrayCoreControlNode(Node):
                         self.control.impact[axis] = u[axis]
                         continue
                 elif axis == "heave":
+                    # linear.z задаёт скорость изменения уставки глубины, м/с.
+                    self.control_setpoint[axis] += (
+                        self.control_input[axis] * self.last_dt
+                    )
                     # The command callback stores an absolute depth setpoint.
-                    pass
+                    # pass
                 else:
                     # Angular inputs are rates integrated into attitude
                     # setpoints.
@@ -629,15 +633,47 @@ class StingrayCoreControlNode(Node):
 
         for axis, value in incoming.items():
             if axis == "heave" and self.control.enabled.get("heave", False):
+                self.control_input[axis] = value
+                self.last_control_input_time[axis] = command_time
                 # Closed loop: linear.z is an absolute positive-down depth.
-                self.control_setpoint[axis] = value
-            elif axis in ("surge", "sway") and self.control.enabled.get(
-                axis, False
-            ):
-                # Normally this is an absolute DVL position [m]. In feedback
-                # setup mode it is a direct velocity setpoint [m/s].
-                self.control_setpoint[axis] = value
-                self.position_target_initialized[axis] = True
+                # self.control_setpoint[axis] = value
+            elif axis in ("surge", "sway") and self.control.enabled.get(axis, False):
+                if self.flag_setup_feedback_speed:
+                    # Режим настройки скорости: прямая уставка скорости.
+                    self.control_setpoint[axis] = value
+                else:
+                    # Позиционный режим: команда — желаемое смещение
+                    # относительно текущего положения аппарата.
+                    if axis == "surge":
+                        self.control_setpoint[axis] = self.dvl_position_x + value
+                    else:  # sway
+                        self.control_setpoint[axis] = self.dvl_position_y + value
+
+                    self.position_target_initialized[axis] = True
+
+                    self.get_logger().info(
+                        f"{axis} target: current="
+                        f"{self.dvl_position_x if axis == 'surge' else self.dvl_position_y:+.3f} m, "
+                        f"offset={value:+.3f} m, "
+                        f"target={self.control_setpoint[axis]:+.3f} m"
+                    )
+            # elif axis in ("surge", "sway") and self.control.enabled.get(axis, False):
+            #     if self.flag_setup_feedback_speed:
+            #         # В режиме настройки контура скорости команда остаётся
+            #         # непосредственной уставкой скорости, м/с.
+            #         self.control_setpoint[axis] = value
+            #     else:
+            #         # В позиционном режиме команда задаёт скорость
+            #         # перемещения удерживаемой точки, м/с.
+            #         self.control_input[axis] = value
+            #         self.last_control_input_time[axis] = command_time
+            # elif axis in ("surge", "sway") and self.control.enabled.get(
+            #     axis, False
+            # ):
+            #     # Normally this is an absolute DVL position [m]. In feedback
+            #     # setup mode it is a direct velocity setpoint [m/s].
+            #     self.control_setpoint[axis] = value
+            #     self.position_target_initialized[axis] = True
             else:
                 # Open-loop heave remains a direct pilot impact. Other axes
                 # retain their existing command semantics.
@@ -667,15 +703,19 @@ class StingrayCoreControlNode(Node):
                 if new_value:
                     if axis == "heave":
                         self.control_input[axis] = 0.0
-                        self.control_setpoint[axis] = self.depth
+                        self.control_setpoint[axis] = 30 #self.depth
                         self.controllers["heave"].reset()
                         self.controllers["heave"].prev_depth = self.depth
                     elif axis == "yaw":
                         self.control_setpoint[axis] = self.imu.yaw
                     elif axis == "pitch":
-                        self.control_setpoint[axis] = self.imu.pitch
+                        self.control_setpoint[axis] = 0.0
+                        self.controllers["pitch"].reset()
+                        # self.control_setpoint[axis] = self.imu.pitch
                     elif axis == "roll":
-                        self.control_setpoint[axis] = self.imu.roll
+                        self.control_setpoint[axis] = 0.0
+                        self.controllers["roll"].reset()
+                        # self.control_setpoint[axis] = self.imu.roll
                     elif axis == "surge":
                         self.control_input[axis] = 0.0
                         if self.flag_setup_feedback_speed:
