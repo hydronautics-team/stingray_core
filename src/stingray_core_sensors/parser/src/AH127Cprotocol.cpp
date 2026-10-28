@@ -1,261 +1,640 @@
 #include "AH127Cprotocol.h"
-#include <stdint.h>
-#include <vector>
+
 #include <algorithm>
+#include <cmath>
 #include <iostream>
+#include <stdexcept>
 
-#define LOG_INFO(msg) std::cout << "[INFO]: " << msg << std::endl
-#define LOG_ERR(msg) std::cerr << "[ERROR]: " << msg << std::endl
-
-
-AH127Cprotocol::AH127Cprotocol(std::string portName, int baudRate)
-
+namespace
 {
-    m_port.Open(portName);
-    m_port.SetBaudRate(LibSerial::BaudRate::BAUD_9600);
 
+constexpr double GRAVITY = 9.80665;
 
-    char cmd_1[6]; //задание формата посылки и частоты выдачи данных, 2.15 и 2.17
-    cmd_1[0] = 0x77;
-    cmd_1[1] = 0x05;
-    cmd_1[2] = 0x00;
-    cmd_1[3] = 0x56;
-    cmd_1[4] = 0x05;
-    cmd_1[5] = 0x60;
-
-    std::vector<uint8_t> v_cmd1(cmd_1, cmd_1 + 6);
-    m_port.Write(v_cmd1);
-    std::cout << "cmd_1 отправлена успешно (0x56 0x05)" << std::endl;
-
-    char cmd_2[6];
-    cmd_2[0] = 0x77;
-    cmd_2[1] = 0x05;
-    cmd_2[2] = 0x00;
-    cmd_2[3] = 0x0C;
-    cmd_2[4] = 0x05;
-    cmd_2[5] = 0x16;
-    std::vector<uint8_t> v_cmd2(cmd_2, cmd_2 + 6);
-    m_port.Write(v_cmd2);
-    std::cout << "cmd_2 отправлена успешно (0x0C 0x05)" << std::endl;
+bool validBCD(uint8_t value)
+{
+    return value <= 9;
 }
 
-uint8_t AH127Cprotocol::calculateCRC(const uint8_t data[], uint32_t length) {
-     unsigned int i;
-     unsigned short crc = 0;
-     for(i=0; i<length; i++){
-         crc += data[i];
-     }
-    return crc & 0xFF;
-}
 
-bool AH127Cprotocol::correctChecksum(const std::vector<uint8_t> &ba) {
-    if (ba.size() < 56) return false;
-    if (calculateCRC((unsigned char*)ba.data(), 55) == ba[55]) {
-        return true;
+// ============================================================
+// BCD: ANGLE / GYROSCOPE
+// ============================================================
+
+bool decodeBCD5(
+    const uint8_t *buf,
+    double &value
+)
+{
+    const uint8_t sign = (buf[0] >> 4) & 0x0F;
+
+    const uint8_t d2 = buf[0] & 0x0F;
+    const uint8_t d1 = (buf[1] >> 4) & 0x0F;
+    const uint8_t d0 = buf[1] & 0x0F;
+
+    const uint8_t f1 = (buf[2] >> 4) & 0x0F;
+    const uint8_t f2 = buf[2] & 0x0F;
+
+    if (sign > 1 ||
+        !validBCD(d2) ||
+        !validBCD(d1) ||
+        !validBCD(d0) ||
+        !validBCD(f1) ||
+        !validBCD(f2))
+    {
+        return false;
     }
-    return false;
+
+    value =
+        d2 * 100.0 +
+        d1 * 10.0 +
+        d0 +
+        f1 * 0.1 +
+        f2 * 0.01;
+
+    if (sign == 1)
+    {
+        value = -value;
+    }
+
+    return true;
 }
 
-void AH127Cprotocol::readData() {
-    if (m_port.IsDataAvailable()) {
-        uint8_t byte;
-        while(m_port.IsDataAvailable()){
-            m_port.ReadByte(byte); 
-            m_buffer.push_back(byte);
+} // namespace
+
+
+// ============================================================
+// CONSTRUCTOR
+// ============================================================
+
+AH127Cprotocol::AH127Cprotocol(
+    const std::string &portName,
+    int baudRate
+)
+{
+    if (baudRate != 115200)
+    {
+        throw std::invalid_argument(
+            "AH127C supports 115200 in this driver"
+        );
+    }
+
+    m_port_.Open(portName);
+
+    m_port_.SetBaudRate(
+        LibSerial::BaudRate::BAUD_115200
+    );
+
+    m_port_.SetCharacterSize(
+        LibSerial::CharacterSize::CHAR_SIZE_8
+    );
+
+    m_port_.SetStopBits(
+        LibSerial::StopBits::STOP_BITS_1
+    );
+
+    m_port_.SetParity(
+        LibSerial::Parity::PARITY_NONE
+    );
+
+    const auto now = std::chrono::steady_clock::now();
+
+    last_sample_time_ = now;
+    last_reconfigure_time_ = now;
+
+    std::cout
+        << "[AH127C] Port opened: "
+        << portName
+        << " @ 115200"
+        << std::endl;
+
+    configureSensor();
+}
+
+
+// ============================================================
+// DESTRUCTOR
+// ============================================================
+
+AH127Cprotocol::~AH127Cprotocol()
+{
+    if (m_port_.IsOpen())
+    {
+        m_port_.Close();
+    }
+}
+
+
+// ============================================================
+// CHECKSUM
+// ============================================================
+
+uint8_t AH127Cprotocol::calculateChecksum(
+    const uint8_t *data,
+    std::size_t length
+)
+{
+    uint32_t sum = 0;
+
+    for (std::size_t i = 0; i < length; ++i)
+    {
+        sum += data[i];
+    }
+
+    return static_cast<uint8_t>(sum & 0xFF);
+}
+
+
+// ============================================================
+// COMMAND SENDING
+// ============================================================
+
+void AH127Cprotocol::sendCommand(
+    uint8_t command,
+    const std::vector<uint8_t> &payload
+)
+{
+    if (payload.size() > 251)
+    {
+        throw std::invalid_argument(
+            "AH127C command payload too large"
+        );
+    }
+
+    std::vector<uint8_t> frame;
+
+    frame.reserve(payload.size() + 5);
+
+    // START
+    frame.push_back(0x77);
+
+    // LENGTH
+    frame.push_back(
+        static_cast<uint8_t>(payload.size() + 4)
+    );
+
+    // ADDRESS
+    frame.push_back(0x00);
+
+    // COMMAND
+    frame.push_back(command);
+
+    // DATA
+    frame.insert(
+        frame.end(),
+        payload.begin(),
+        payload.end()
+    );
+
+    // CHECKSUM
+    const uint8_t checksum = calculateChecksum(
+        frame.data() + 1,
+        frame.size() - 1
+    );
+
+    frame.push_back(checksum);
+
+    m_port_.Write(frame);
+}
+
+
+// ============================================================
+// SENSOR CONFIGURATION
+// ============================================================
+
+void AH127Cprotocol::configureSensor()
+{
+    // Автовыдача всех данных.
+    //
+    // 77 05 00 56 05 60
+    sendCommand(0x56, {0x05});
+
+    // Частота 50 Гц.
+    //
+    // 77 05 00 0C 05 16
+    sendCommand(0x0C, {0x05});
+
+    // Настройки не сохраняются во flash при каждом
+    // запуске, чтобы не выполнять лишние записи.
+    //
+    // Команда сохранения при необходимости:
+    //
+    // sendCommand(0x0A);
+    //
+    // Кадр: 77 04 00 0A 0E
+
+    std::cout
+        << "[AH127C] Autostream enabled, 50 Hz"
+        << std::endl;
+}
+
+
+// ============================================================
+// DECODING
+// ============================================================
+
+bool AH127Cprotocol::decodeAngle(
+    const uint8_t *buf,
+    double &value
+)
+{
+    return decodeBCD5(buf, value);
+}
+
+
+bool AH127Cprotocol::decodeAcceleration(
+    const uint8_t *buf,
+    double &value
+)
+{
+    const uint8_t sign = (buf[0] >> 4) & 0x0F;
+
+    const uint8_t d0 = buf[0] & 0x0F;
+    const uint8_t d1 = (buf[1] >> 4) & 0x0F;
+    const uint8_t d2 = buf[1] & 0x0F;
+    const uint8_t d3 = (buf[2] >> 4) & 0x0F;
+    const uint8_t d4 = buf[2] & 0x0F;
+
+    if (sign > 1 ||
+        !validBCD(d0) ||
+        !validBCD(d1) ||
+        !validBCD(d2) ||
+        !validBCD(d3) ||
+        !validBCD(d4))
+    {
+        return false;
+    }
+
+    double accel_g =
+        d0 +
+        d1 * 0.1 +
+        d2 * 0.01 +
+        d3 * 0.001 +
+        d4 * 0.0001;
+
+    if (sign == 1)
+    {
+        accel_g = -accel_g;
+    }
+
+    value = accel_g * GRAVITY;
+
+    return true;
+}
+
+
+bool AH127Cprotocol::decodeMagnetometer(
+    const uint8_t *buf,
+    double &value
+)
+{
+    const uint8_t sign = (buf[0] >> 4) & 0x0F;
+
+    const uint8_t d0 = buf[0] & 0x0F;
+    const uint8_t d1 = (buf[1] >> 4) & 0x0F;
+    const uint8_t d2 = buf[1] & 0x0F;
+    const uint8_t d3 = (buf[2] >> 4) & 0x0F;
+    const uint8_t d4 = buf[2] & 0x0F;
+
+    if (sign > 1 ||
+        !validBCD(d0) ||
+        !validBCD(d1) ||
+        !validBCD(d2) ||
+        !validBCD(d3) ||
+        !validBCD(d4))
+    {
+        return false;
+    }
+
+    value =
+        d0 * 0.1 +
+        d1 * 0.01 +
+        d2 * 0.001 +
+        d3 * 0.0001 +
+        d4 * 0.00001;
+
+    if (sign == 1)
+    {
+        value = -value;
+    }
+
+    return true;
+}
+
+
+// ============================================================
+// FULL FRAME DECODING
+// ============================================================
+
+bool AH127Cprotocol::parseFullFrame(
+    const uint8_t *frame,
+    std::size_t size,
+    DataFromAH127C &result
+)
+{
+    if (size != FULL_FRAME_SIZE)
+    {
+        return false;
+    }
+
+    if (frame[0] != 0x77 ||
+        frame[1] != FULL_FRAME_LENGTH ||
+        frame[3] != 0x59)
+    {
+        return false;
+    }
+
+    DataFromAH127C decoded;
+
+    // ========================================================
+    // EULER
+    // ========================================================
+
+    if (!decodeAngle(frame + 4, decoded.pitch))
+        return false;
+
+    if (!decodeAngle(frame + 7, decoded.roll))
+        return false;
+
+    if (!decodeAngle(frame + 10, decoded.yaw))
+        return false;
+
+    if (std::abs(decoded.pitch) > 180.0 ||
+        std::abs(decoded.roll) > 180.0 ||
+        std::abs(decoded.yaw) > 360.0)
+    {
+        return false;
+    }
+
+    // ========================================================
+    // ACCELEROMETER
+    // ========================================================
+
+    if (!decodeAcceleration(
+            frame + 13,
+            decoded.X_accel))
+        return false;
+
+    if (!decodeAcceleration(
+            frame + 16,
+            decoded.Y_accel))
+        return false;
+
+    if (!decodeAcceleration(
+            frame + 19,
+            decoded.Z_accel))
+        return false;
+
+    // ========================================================
+    // GYROSCOPE
+    // ========================================================
+
+    if (!decodeAngle(
+            frame + 25,
+            decoded.X_rate))
+        return false;
+
+    if (!decodeAngle(
+            frame + 22,
+            decoded.Y_rate))
+        return false;
+
+    if (!decodeAngle(
+            frame + 28,
+            decoded.Z_rate))
+        return false;
+
+    // ========================================================
+    // MAGNETOMETER
+    // ========================================================
+
+    if (!decodeMagnetometer(
+            frame + 31,
+            decoded.X_magn))
+        return false;
+
+    if (!decodeMagnetometer(
+            frame + 34,
+            decoded.Y_magn))
+        return false;
+
+    if (!decodeMagnetometer(
+            frame + 37,
+            decoded.Z_magn))
+        return false;
+
+    // ========================================================
+    // ORIGINAL AXIS COMPENSATION
+    // ========================================================
+    //
+    // Сохраняем знаки из твоего рабочего драйвера.
+
+    decoded.X_accel = -decoded.X_accel;
+    decoded.Z_rate = -decoded.Z_rate;
+
+    // Проверка диапазона.
+    if (std::abs(decoded.X_rate) > 400.0 ||
+        std::abs(decoded.Y_rate) > 400.0 ||
+        std::abs(decoded.Z_rate) > 400.0)
+    {
+        return false;
+    }
+
+    result = decoded;
+
+    return true;
+}
+
+
+// ============================================================
+// BUFFER PARSING
+// ============================================================
+
+bool AH127Cprotocol::parseBuffer()
+{
+    bool new_full_frame = false;
+
+    std::size_t offset = 0;
+
+    while (offset < m_buffer_.size())
+    {
+        // Поиск начала кадра.
+        if (m_buffer_[offset] != 0x77)
+        {
+            ++offset;
+            ++discarded_bytes;
+            continue;
         }
-        readyReadForTimer();
-        parseBuffer();
+
+        // Недостаточно байтов для LEN.
+        if (m_buffer_.size() - offset < 2)
+        {
+            break;
+        }
+
+        const uint8_t len = m_buffer_[offset + 1];
+
+        // Длина кадра по используемому протоколу.
+        //
+        // Ограничиваем ожидаемую длину,
+        // чтобы случайный 0x77 не блокировал парсер.
+
+        if (len < 4 || len > 64)
+        {
+            ++offset;
+            ++discarded_bytes;
+            continue;
+        }
+
+        const std::size_t frame_size =
+            static_cast<std::size_t>(len) + 1;
+
+        // Неполный кадр оставляем до следующего чтения.
+        if (m_buffer_.size() - offset < frame_size)
+        {
+            break;
+        }
+
+        const uint8_t *frame =
+            m_buffer_.data() + offset;
+
+        const uint8_t expected_checksum =
+            calculateChecksum(
+                frame + 1,
+                frame_size - 2
+            );
+
+        const uint8_t received_checksum =
+            frame[frame_size - 1];
+
+        if (expected_checksum != received_checksum)
+        {
+            ++checksum_errors;
+
+            ++offset;
+            ++discarded_bytes;
+
+            continue;
+        }
+
+        const uint8_t command = frame[3];
+
+        // Полный кадр измерений.
+        if (command == 0x59 &&
+            frame_size == FULL_FRAME_SIZE)
+        {
+            DataFromAH127C decoded;
+
+            if (parseFullFrame(
+                    frame,
+                    frame_size,
+                    decoded))
+            {
+                data = decoded;
+
+                last_sample_time_ =
+                    std::chrono::steady_clock::now();
+
+                have_sample_ = true;
+                new_full_frame = true;
+
+                ++valid_frames;
+            }
+            else
+            {
+                ++bcd_errors;
+            }
+        }
+
+        // Переходим к следующему кадру.
+        offset += frame_size;
     }
-}
 
-void AH127Cprotocol::readyReadForTimer() {
-    last_receive_time = std::chrono::steady_clock::now();
-}
-
-void AH127Cprotocol::timeoutSlot(){
-auto now = std::chrono::steady_clock::now();
-auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_receive_time).count();
- double deltaTMax = 2000;
-    if (elapsed>deltaTMax) {
-        uint8_t cmd_1[6]; //задание формата посылки, 2.15
-        cmd_1[0] = 0x77;
-        cmd_1[1] = 0x05;
-        cmd_1[2] = 0x00;
-        cmd_1[3] = 0x0C;
-        cmd_1[4] = 0x05;
-        cmd_1[5] = 0x16;
-        std::vector<uint8_t> v_cmd1(cmd_1, cmd_1 + 6);
-        m_port.Write(v_cmd1);
-        
-
-        uint8_t cmd_2[6]; //задание частоты выдачи данных, 2.17
-        cmd_2[0] = 0x77;
-        cmd_2[1] = 0x05;
-        cmd_2[2] = 0x00;
-        cmd_2[3] = 0x56;
-        cmd_2[4] = 0x05;
-        cmd_2[5] = 0x60;
-        std::vector<uint8_t> v_cmd2(cmd_2, cmd_2 + 6);
-        m_port.Write(v_cmd2);
-
-        readyReadForTimer();
+    // Удаляем все обработанные байты.
+    if (offset > 0)
+    {
+        m_buffer_.erase(
+            m_buffer_.begin(),
+            m_buffer_.begin() + offset
+        );
     }
+
+    if (m_buffer_.size() > MAX_BUFFER_SIZE)
+    {
+        discarded_bytes += m_buffer_.size();
+        m_buffer_.clear();
+    }
+
+    return new_full_frame;
 }
 
-float ThreeBytesToFloat(const uint8_t* buf) {
-    float result = 0.0f;
-    result += int(buf[0] & 0x0F) * 100;
-    result += int((buf[1] & 0xF0) >> 4) * 10;
-    result += int(buf[1] & 0x0F);
-    result += int((buf[2] & 0xF0) >> 4) * 0.1;
-    result += int(buf[2] & 0x0F) * 0.01;
-    result *= (buf[0] & 0xF0) ? (-1) : (1);
-    return result;
+
+// ============================================================
+// READING
+// ============================================================
+
+bool AH127Cprotocol::readData()
+{
+    constexpr std::size_t MAX_READ_BYTES = 4096;
+
+    std::size_t count = 0;
+
+    while (count < MAX_READ_BYTES &&
+           m_port_.IsDataAvailable())
+    {
+        uint8_t byte = 0;
+
+        m_port_.ReadByte(byte);
+
+        m_buffer_.push_back(byte);
+
+        ++count;
+    }
+
+    return parseBuffer();
 }
 
-float ThreeBytesToFloatAccel(const uint8_t* buf) {
-    float result = 0.0;
-    result += int(buf[0] & 0x0F);
-    result += int((buf[1] & 0xF0) >> 4) * 0.1;
-    result += int(buf[1] & 0x0F)*0.01;
-    result += int((buf[2] & 0xF0) >> 4) * 0.001;
-    result += int(buf[2] & 0x0F) * 0.0001;
-    result *= (buf[0] & 0xF0) ? (-1) : (1);
-    return result*9.81;
-}
 
-float ThreeBytesToFloatMagn(const uint8_t* buf) {
-    float result = 0.0;
-    result += int(buf[0] & 0x0F)*0.1;
-    result += int((buf[1] & 0xF0) >> 4) * 0.01;
-    result += int(buf[1] & 0x0F)*0.001;
-    result += int((buf[2] & 0xF0) >> 4) * 0.0001;
-    result += int(buf[2] & 0x0F) * 0.00001;
-    result *= (buf[0] & 0xF0) ? (-1) : (1);
-    return result;
-}
+// ============================================================
+// TIMEOUT
+// ============================================================
 
-float FourBytesToFloatQvat(const uint8_t* buf) {
-    float result = 0.0;
-    result += int(buf[0] & 0x0F);
-    result += int((buf[1] & 0xF0) >> 4) * 0.1;
-    result += int(buf[1] & 0x0F)*0.01;
-    result += int((buf[2] & 0xF0) >> 4) * 0.001;
-    result += int(buf[2] & 0x0F) * 0.0001;
-    result += int(buf[3] & 0x0F) * 0.00001;
-    result += int(buf[3] & 0x0F) * 0.000001;
-    result *= (buf[0] & 0xF0) ? (-1) : (1);
-    return result;
-}
+void AH127Cprotocol::timeoutSlot()
+{
+    const auto now =
+        std::chrono::steady_clock::now();
 
-void PrintMsg(DataFromAH127C const& msg) {
-    std::cout << "yaw: " << msg.yaw << std::endl;
-    std::cout << "pitch: " << msg.pitch << std::endl;
-    std::cout << "roll: " << msg.roll << std::endl;
-    std::cout << "X_accel: " << msg.X_accel << std::endl;
-    std::cout << "Y_accel: " << msg.Y_accel << std::endl;
-    std::cout << "Z_accel: " << msg.Z_accel << std::endl;
-    std::cout << "X_rate: " << msg.X_rate << std::endl;
-    std::cout << "Y_rate: " << msg.Y_rate << std::endl;
-    std::cout << "Z_rate: " << msg.Z_rate << std::endl;
-    std::cout << "X_magn: " << msg.X_magn << std::endl;
-    std::cout << "Y_magn: " << msg.Y_magn << std::endl;
-    std::cout << "Z_magn: " << msg.Z_magn << std::endl;
-    std::cout << "first_qvat " << msg.first_qvat << std::endl;
-    std::cout << "second_qvat " << msg.second_qvat << std::endl;
-    std::cout << "third_qvat " << msg.third_qvat << std::endl;
-    std::cout << "four_qvat " << msg.four_qvat << std::endl;
-}
+    const auto last_activity =
+        have_sample_
+            ? last_sample_time_
+            : last_reconfigure_time_;
 
-void AH127Cprotocol::parseBuffer() {
-    if (m_buffer.size() <= 4 ) {
+    const auto elapsed =
+        std::chrono::duration_cast<
+            std::chrono::milliseconds
+        >(now - last_activity).count();
+
+    if (elapsed <= 3000)
+    {
         return;
     }
 
-    uint8_t* cal_start_ptr = reinterpret_cast<uint8_t*>(&calibr_start);
+    const auto since_reconfigure =
+        std::chrono::duration_cast<
+            std::chrono::milliseconds
+        >(now - last_reconfigure_time_).count();
 
-    if (flag_start_cal == 1) {
-        auto it = std::search(m_buffer.begin(), m_buffer.end(), 
-                              cal_start_ptr, cal_start_ptr + sizeof(Header_AH_calibration_start));
-
-        if (it == m_buffer.end()) {
-            std::cout << "команда начала калибровки не распознана" << std::endl;
-            return; 
-        } else {
-            flag_calibration_start = 1;
-            flag_calibration_end = 0;
-            std::cout << "команда калибровки дошла до датчика, можно начинать калибровку" << std::endl;
-        }
-        flag_start_cal = 0;
-    }
-
-    if (flag_finish_cal == 1) {
-        uint8_t* cal_end_ptr = reinterpret_cast<uint8_t*>(&calibr_end);
-        auto it_cal_end = std::search(m_buffer.begin(), m_buffer.end(), 
-                                     cal_end_ptr, cal_end_ptr + sizeof(Header_AH_calibration_end));
-
-        if (it_cal_end == m_buffer.end()) {
-            std::cout << "команда окончания калибровки не распознана" << std::endl;
-            return;
-        } else {
-            flag_calibration_start = 0;
-            flag_calibration_end = 1;
-            std::cout << "команда окончания калибровки дошла до датчика, результат калибровки записан" << std::endl;
-
-            uint8_t cmd_1[6] = {0x77, 0x05, 0x00, 0x0C, 0x05, 0x16};
-            std::vector<uint8_t> v_cmd1(cmd_1, cmd_1 + 6);
-            m_port.Write(v_cmd1);
-
-            uint8_t cmd_2[6] = {0x77, 0x05, 0x00, 0x56, 0x05, 0x60};
-            std::vector<uint8_t> v_cmd2(cmd_2, cmd_2 + 6);
-            m_port.Write(v_cmd2);
-        }
-        flag_finish_cal = 0;
-    }
-
-    uint8_t* h_ptr = reinterpret_cast<uint8_t*>(&data.header);
-    auto it_header = std::search(m_buffer.begin(), m_buffer.end(), 
-                                 h_ptr, h_ptr + sizeof(Header_AH));
-
-    if (it_header == m_buffer.end()) {
-        std::cout << "no message" << std::endl;
+    if (since_reconfigure < 3000)
+    {
         return;
     }
 
-    if (it_header != m_buffer.begin()) {
-        m_buffer.erase(m_buffer.begin(), it_header);
-    }
+    std::cerr
+        << "[AH127C] No valid full frames for "
+        << elapsed
+        << " ms. Reconfiguring..."
+        << std::endl;
 
-    if (m_buffer.size() < 57) {
-        return;
-    }
+    configureSensor();
 
-    std::vector<uint8_t> packetData(m_buffer.begin() + 1, m_buffer.begin() + 57);
-
-    if (correctChecksum(packetData)) {
-        DataFromAH127C msg;
-        const uint8_t* ptr = m_buffer.data();
-
-        msg.pitch   = ThreeBytesToFloat(ptr + 4);
-        msg.roll    = ThreeBytesToFloat(ptr + 7);
-        msg.yaw     = ThreeBytesToFloat(ptr + 10);
-        msg.X_accel = -ThreeBytesToFloatAccel(ptr + 13);
-        msg.Y_accel = ThreeBytesToFloatAccel(ptr + 16);
-        msg.Z_accel = ThreeBytesToFloatAccel(ptr + 19);
-        msg.X_rate  = ThreeBytesToFloat(ptr + 25);
-        msg.Y_rate  = ThreeBytesToFloat(ptr + 22);
-        msg.Z_rate  = -ThreeBytesToFloat(ptr + 28);
-        msg.X_magn  = ThreeBytesToFloatMagn(ptr + 31);
-        msg.Y_magn  = ThreeBytesToFloatMagn(ptr + 34);
-        msg.Z_magn  = ThreeBytesToFloatMagn(ptr + 37);
-        msg.first_qvat  = FourBytesToFloatQvat(ptr + 40);
-        msg.second_qvat = FourBytesToFloatQvat(ptr + 44);
-        msg.third_qvat  = FourBytesToFloatQvat(ptr + 48);
-        msg.four_qvat   = FourBytesToFloatQvat(ptr + 52);
-        
-        data = msg;
-        m_buffer.erase(m_buffer.begin(), m_buffer.begin() + 57);
-    } else {
-        m_buffer.erase(m_buffer.begin());
-    }
+    last_reconfigure_time_ = now;
 }

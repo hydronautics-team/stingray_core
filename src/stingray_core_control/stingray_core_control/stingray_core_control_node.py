@@ -4,6 +4,7 @@ Stingray Core Control Node
 Minimal ROS2 node skeleton with 100 Hz control loop callback.
 """
 
+import math
 import time
 
 import rclpy
@@ -19,7 +20,7 @@ from rclpy.qos import (
     ReliabilityPolicy,
 )
 from sensor_msgs.msg import Imu
-from std_msgs.msg import Bool, Float64, UInt8, UInt8MultiArray
+from std_msgs.msg import Bool, Float32, Float64, UInt8, UInt8MultiArray
 from vectornav_msgs.msg import CommonGroup
 
 from .control.axis_controller import (
@@ -53,6 +54,17 @@ class StingrayCoreControlNode(Node):
         self.get_logger().info(
             f"Started at {self.rate_hz} Hz | axes={self.axes} | thrusters={len(self.thrusters)}"
         )
+        if self.sensor_backend == "ah127c_ms5837":
+            self.get_logger().info(
+                "Sensor backend: AH127C + MS5837 | "
+                f"imu={self.topic_ah127c_imu} | "
+                f"depth={self.topic_ms5837_depth} | "
+                f"depth_scale={self.ms5837_depth_scale}"
+            )
+        else:
+            self.get_logger().info(
+                "Sensor backend: VectorNav + standard pressure sensor"
+            )
 
     def control_loop(self):
         now = time.time()
@@ -75,8 +87,7 @@ class StingrayCoreControlNode(Node):
                 timed_out_axes.append(axis)
         if timed_out_axes:
             self.get_logger().warning(
-                "Control command timeout; stopping axes: "
-                + ", ".join(timed_out_axes)
+                "Control command timeout; stopping axes: " + ", ".join(timed_out_axes)
             )
 
         # === 1. Определяем управляющие воздействия ===
@@ -166,11 +177,30 @@ class StingrayCoreControlNode(Node):
             "topic_pressure_sensor": "/stingray_core/pressure_sensor/depth",
             "topic_control_data": "/control/data",
             "topic_zero_yaw": "/imu/zero_yaw",
+            # Alternative sensor set used on the current vehicle.
+            "topic_ah127c_imu": "/imu_full_data",
+            "topic_ms5837_depth": "/ms5837/depth",
         }
 
         for name, default in defaults.items():
             self.declare_parameter(name, default)
             setattr(self, name, self.get_parameter(name).value)
+
+        # "vectornav" keeps the original subscriptions unchanged.
+        # "ah127c_ms5837" reads sensor_msgs/Imu from AH127C and Float32
+        # depth from MS5837.
+        self.declare_parameter("sensor_backend", "vectornav")
+        self.sensor_backend = str(self.get_parameter("sensor_backend").value)
+        if self.sensor_backend not in ("vectornav", "ah127c_ms5837"):
+            raise ValueError(
+                "sensor_backend must be 'vectornav' or 'ah127c_ms5837', "
+                f"got {self.sensor_backend!r}"
+            )
+
+        # The supplied MS5837 node publishes millimetres, while the control
+        # node and its depth controller work in metres.
+        self.declare_parameter("ms5837_depth_scale", 0.001)
+        self.ms5837_depth_scale = float(self.get_parameter("ms5837_depth_scale").value)
 
         self.declare_parameter(
             "axes", ["surge", "sway", "heave", "roll", "pitch", "yaw"]
@@ -436,17 +466,36 @@ class StingrayCoreControlNode(Node):
             durability=DurabilityPolicy.VOLATILE,
         )
 
-        self.sub_imu_angular = self.create_subscription(
-            CommonGroup, self.topic_imu_angular, self.imu_angular_callback, qos_sensor
-        )
+        if self.sensor_backend == "ah127c_ms5837":
+            # One AH127C message already contains orientation, angular rates
+            # and linear acceleration, so one callback updates the full state.
+            self.sub_ah127c_imu = self.create_subscription(
+                Imu,
+                self.topic_ah127c_imu,
+                self.ah127c_imu_callback,
+                qos_sensor,
+            )
+        else:
+            self.sub_imu_angular = self.create_subscription(
+                CommonGroup,
+                self.topic_imu_angular,
+                self.imu_angular_callback,
+                qos_sensor,
+            )
 
-        self.sub_imu_linear_accel = self.create_subscription(
-            Imu, self.topic_imu_linear_accel, self.imu_linear_accel_callback, qos_sensor
-        )
+            self.sub_imu_linear_accel = self.create_subscription(
+                Imu,
+                self.topic_imu_linear_accel,
+                self.imu_linear_accel_callback,
+                qos_sensor,
+            )
 
-        self.sub_imu_angular_rate = self.create_subscription(
-            Imu, self.topic_imu_angular_rate, self.imu_angular_rate_callback, qos_sensor
-        )
+            self.sub_imu_angular_rate = self.create_subscription(
+                Imu,
+                self.topic_imu_angular_rate,
+                self.imu_angular_rate_callback,
+                qos_sensor,
+            )
 
         self.sub_dvl_data = self.create_subscription(
             DVL, self.topic_dvl_data, self.dvl_data_callback, qos_sensor
@@ -463,12 +512,20 @@ class StingrayCoreControlNode(Node):
             UInt8, self.topic_loop_flags, self.control_mode_flags_callback, qos_command
         )
 
-        self.sub_pressure_sensor = self.create_subscription(
-            PointStamped,
-            self.topic_pressure_sensor,
-            self.pressure_sensor_callback,
-            qos_sensor,
-        )
+        if self.sensor_backend == "ah127c_ms5837":
+            self.sub_ms5837_depth = self.create_subscription(
+                Float32,
+                self.topic_ms5837_depth,
+                self.ms5837_depth_callback,
+                qos_sensor,
+            )
+        else:
+            self.sub_pressure_sensor = self.create_subscription(
+                PointStamped,
+                self.topic_pressure_sensor,
+                self.pressure_sensor_callback,
+                qos_sensor,
+            )
 
         self.sub_control_data = self.create_subscription(
             Twist, self.topic_control_data, self.control_data_callback, qos_command
@@ -532,6 +589,55 @@ class StingrayCoreControlNode(Node):
         self.pub_out = self.create_publisher(Float64, "~/debug/out", qos_debug)
 
     # --- Колбэки ---
+    def ah127c_imu_callback(self, msg: Imu):
+        """Use AH127C quaternion, gyro and accelerometer as control feedback."""
+        try:
+            qx = float(msg.orientation.x)
+            qy = float(msg.orientation.y)
+            qz = float(msg.orientation.z)
+            qw = float(msg.orientation.w)
+
+            norm = math.sqrt(qx * qx + qy * qy + qz * qz + qw * qw)
+            if norm < 1e-9:
+                self.get_logger().warning("AH127C supplied a zero quaternion")
+                return
+
+            qx /= norm
+            qy /= norm
+            qz /= norm
+            qw /= norm
+
+            sin_roll_cos_pitch = 2.0 * (qw * qx + qy * qz)
+            cos_roll_cos_pitch = 1.0 - 2.0 * (qx * qx + qy * qy)
+            roll_deg = math.degrees(math.atan2(sin_roll_cos_pitch, cos_roll_cos_pitch))
+
+            sin_pitch = max(-1.0, min(1.0, 2.0 * (qw * qy - qz * qx)))
+            pitch_deg = math.degrees(math.asin(sin_pitch))
+
+            sin_yaw_cos_pitch = 2.0 * (qw * qz + qx * qy)
+            cos_yaw_cos_pitch = 1.0 - 2.0 * (qy * qy + qz * qz)
+            yaw_deg = math.degrees(math.atan2(sin_yaw_cos_pitch, cos_yaw_cos_pitch))
+
+            self.imu_yaw_raw = yaw_deg
+            self.imu.yaw = self.normalize_angle_deg(
+                self.imu_yaw_raw - self.yaw_zero_offset
+            )
+            self.imu.pitch = pitch_deg
+            self.imu.roll = roll_deg
+
+            # sensor_msgs/Imu angular_velocity is specified in rad/s. The
+            # existing controllers already consume the VectorNav rates in the
+            # same SI units, so no additional conversion is required here.
+            self.imu.rate_x = float(msg.angular_velocity.x)
+            self.imu.rate_y = float(msg.angular_velocity.y)
+            self.imu.rate_z = float(msg.angular_velocity.z)
+
+            self.imu.accel_x = float(msg.linear_acceleration.x)
+            self.imu.accel_y = float(msg.linear_acceleration.y)
+            self.imu.accel_z = float(msg.linear_acceleration.z)
+        except Exception as e:
+            self.get_logger().warning(f"Error parsing AH127C Imu message: {e}")
+
     def imu_angular_callback(self, msg: CommonGroup):
         try:
             ypr: Vector3 = msg.yawpitchroll
@@ -620,6 +726,17 @@ class StingrayCoreControlNode(Node):
         except Exception as e:
             self.get_logger().warning(f"Error parsing depth msg: {e}")
 
+    def ms5837_depth_callback(self, msg: Float32):
+        """Convert the alternative MS5837 depth stream to metres."""
+        try:
+            depth_metres = float(msg.data) * self.ms5837_depth_scale
+            if not math.isfinite(depth_metres):
+                self.get_logger().warning("MS5837 supplied non-finite depth")
+                return
+            self.depth = depth_metres
+        except Exception as e:
+            self.get_logger().warning(f"Error parsing MS5837 depth message: {e}")
+
     def control_data_callback(self, msg: Twist):
         command_time = time.monotonic()
         incoming = {
@@ -703,7 +820,7 @@ class StingrayCoreControlNode(Node):
                 if new_value:
                     if axis == "heave":
                         self.control_input[axis] = 0.0
-                        self.control_setpoint[axis] = 30 #self.depth
+                        self.control_setpoint[axis] = 0.30  # 30 cm, positive down
                         self.controllers["heave"].reset()
                         self.controllers["heave"].prev_depth = self.depth
                     elif axis == "yaw":
