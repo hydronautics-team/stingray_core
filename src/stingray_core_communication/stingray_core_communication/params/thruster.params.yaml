@@ -8,3 +8,4 @@
     parity: none
     stop_bits: "1"
     direction_gpio: -1
+    motor_protocol: hydrolib

@@ -65,6 +65,7 @@ public:
           slave_memory_(std::move(read_cb), std::move(write_cb)),
           slave_(stream_, slave_memory_, logger)
     {
+        motor_protocol_ = this->declare_parameter<std::string>("motor_protocol", "hydrolib");
         serial_pub_ = this->create_publisher<std_msgs::msg::UInt8MultiArray>("serial_write", 10);
         serial_sub_ = this->create_subscription<std_msgs::msg::UInt8MultiArray>(
             "serial_read", 20, std::bind(&LinkNodeBase::readCallback, this, std::placeholders::_1));
@@ -164,7 +165,7 @@ private:
 
     void readCallback(const std_msgs::msg::UInt8MultiArray::SharedPtr msg)
     {
-        if (msg->data.empty())
+        if (motor_protocol_ != "hydrolib" || msg->data.empty())
         {
             return;
         }
@@ -178,6 +179,7 @@ private:
     Mode mode_;
     int self_addr_;
     int dev_addr_;
+    std::string motor_protocol_;
 
     rclcpp::Subscription<std_msgs::msg::UInt8MultiArray>::SharedPtr serial_sub_;
     rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr serial_pub_;
