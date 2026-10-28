@@ -19,6 +19,10 @@ def load_existing_yaml(path: Path) -> dict:
 
 def get_src_param_path(config_name: str) -> Path:
     """Путь к YAML в исходниках (для git)"""
+    config_dir = os.environ.get("STINGRAY_CONFIG_DIR")
+    if config_dir:
+        return Path(config_dir) / f"{config_name}.yaml"
+
     ws_env = os.environ.get("STINGRAY_WS")
     if ws_env:
         return Path(ws_env) / "src" / PKG_DIR_NAME / "params" / f"{config_name}.yaml"

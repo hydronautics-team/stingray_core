@@ -1,0 +1,95 @@
+<?xml version="1.0"?>
+
+<robot
+  xmlns:xacro="http://www.ros.org/wiki/xacro"
+  name="neowelt2">
+
+  <!--
+    base_link coordinate convention:
+
+      X -> forward
+      Y -> left
+      Z -> up
+  -->
+
+  <!-- ========================= -->
+  <!-- Base                       -->
+  <!-- ========================= -->
+
+  <link name="base_link"/>
+
+
+  <!-- ========================= -->
+  <!-- VectorNav VN-100           -->
+  <!-- ========================= -->
+
+  <link name="imu_link"/>
+
+  <joint name="base_link_to_imu_link" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+
+    <!--
+      VectorNav:
+        +307.85 mm forward
+        +4.47 mm up
+        0.18 mm right
+    -->
+    <origin
+      xyz="0.30785 -0.00018 0.00447"
+      rpy="0 0 0"/>
+  </joint>
+
+
+    <!--
+    DVL A50
+
+    Physical mounting:
+        sensor is rotated relative to base_link.
+
+    The DVL firmware already compensates this
+    rotation and publishes velocity in base_link
+    coordinate convention.
+
+    Therefore no additional rotational transform
+    is applied here.
+    -->
+
+  <link name="dvl_link"/>
+
+  <joint name="base_link_to_dvl_link" type="fixed">
+    <parent link="base_link"/>
+    <child link="dvl_link"/>
+
+    <!--
+      DVL:
+        +48 mm forward
+        -124.84 mm down
+    -->
+    <origin
+      xyz="0.048 0 -0.12484"
+      rpy="0 0 0"/>
+  </joint>
+
+
+  <!-- ========================= -->
+  <!-- Pressure sensor            -->
+  <!-- ========================= -->
+
+  <link name="pressure_link"/>
+
+  <joint name="base_link_to_pressure_link" type="fixed">
+    <parent link="base_link"/>
+    <child link="pressure_link"/>
+
+    <!--
+      Pressure sensor:
+        +232 mm forward
+        +102 mm up
+    -->
+    <origin
+      xyz="0.232 0 0.102"
+      rpy="0 0 0"/>
+  </joint>
+
+</robot>

@@ -73,11 +73,11 @@ private:
         unsigned address,
         unsigned length)
     {
-        RCLCPP_INFO(
-            this->get_logger(),
-            "memoryWrite: address=%u length=%u",
-            address,
-            length);
+        // RCLCPP_INFO(
+        //     this->get_logger(),
+        //     "memoryWrite: address=%u length=%u",
+        //     address,
+        //     length);
 
         if (length != sizeof(uint64_t))
         {
@@ -92,25 +92,25 @@ private:
         const auto *data =
             static_cast<const uint8_t *>(buffer);
 
-        RCLCPP_INFO(
-            this->get_logger(),
-            "RAW: %u %u %u %u %u %u %u %u",
-            data[0],
-            data[1],
-            data[2],
-            data[3],
-            data[4],
-            data[5],
-            data[6],
-            data[7]);
+        // RCLCPP_INFO(
+        //     this->get_logger(),
+        //     "RAW: %u %u %u %u %u %u %u %u",
+        //     data[0],
+        //     data[1],
+        //     data[2],
+        //     data[3],
+        //     data[4],
+        //     data[5],
+        //     data[6],
+        //     data[7]);
 
         const uint64_t value =
             decodeUint64LE(data);
 
-        RCLCPP_INFO(
-            this->get_logger(),
-            "Pressure raw: %llu",
-            static_cast<unsigned long long>(value));
+        // RCLCPP_INFO(
+        //     this->get_logger(),
+        //     "Pressure raw: %llu",
+        //     static_cast<unsigned long long>(value));
 
         publishRaw(value);
 
