@@ -16,6 +16,8 @@ VectornavAdapter::VectornavAdapter()
       have_ypr_(false)
 {
     frame_id_ = declare_parameter<std::string>("frame_id", "imu_link");
+    output_topic_ =
+        declare_parameter<std::string>("output_topic", "/core/sensors/imu_raw");
 
     imu_sub_ = create_subscription<sensor_msgs::msg::Imu>(
         "/vectornav/imu", rclcpp::SensorDataQoS(),
@@ -25,8 +27,7 @@ VectornavAdapter::VectornavAdapter()
         "/vectornav/raw/common", rclcpp::SensorDataQoS(),
         std::bind(&VectornavAdapter::commonCallback, this, std::placeholders::_1));
 
-    imu_pub_ =
-        create_publisher<sensor_msgs::msg::Imu>("/core/sensors/imu", rclcpp::SensorDataQoS());
+    imu_pub_ = create_publisher<sensor_msgs::msg::Imu>(output_topic_, rclcpp::SensorDataQoS());
 
     RCLCPP_INFO(get_logger(), "VectorNav adapter started");
 }

@@ -35,6 +35,7 @@ private:
     bool have_ypr_;
 
     std::string frame_id_;
+    std::string output_topic_;
 };
 
 } // namespace stingray_core::localization

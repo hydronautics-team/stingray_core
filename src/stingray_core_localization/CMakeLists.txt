@@ -59,6 +59,7 @@ target_include_directories(pressure_adapter PUBLIC
 ament_target_dependencies(pressure_adapter
   rclcpp
   geometry_msgs
+  std_msgs
 )
 
 # ============================================================
@@ -81,6 +82,25 @@ ament_target_dependencies(vectornav_adapter
 )
 
 # ============================================================
+# Generic standard IMU adapter (AH127C and other Imu publishers)
+# ============================================================
+
+add_executable(imu_adapter
+  src/imu_adapter.cpp
+)
+
+target_include_directories(imu_adapter PUBLIC
+  include
+)
+
+ament_target_dependencies(imu_adapter
+  rclcpp
+  sensor_msgs
+  std_msgs
+  tf2
+)
+
+# ============================================================
 # Install
 # ============================================================
 
@@ -89,6 +109,7 @@ install(
     dvl_adapter
     pressure_adapter
     vectornav_adapter
+    imu_adapter
   DESTINATION lib/${PROJECT_NAME}
 )
 
