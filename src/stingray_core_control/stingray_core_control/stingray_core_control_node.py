@@ -41,6 +41,10 @@ from .state.control import ControlState
 from .state.imu import ImuState
 from .utils.save_params import save_params
 
+CONTROL_MODE_MANUAL = 0
+CONTROL_MODE_ASSISTED = 1
+CONTROL_MODE_AUTOMATIC = 2
+
 
 class StingrayCoreControlNode(Node):
     def __init__(self):
@@ -83,7 +87,24 @@ class StingrayCoreControlNode(Node):
         u: dict[str, float] = {}
 
         for axis in self.axes:
+            if self.control_mode == CONTROL_MODE_MANUAL:
+                u[axis] = self.control_input[axis]
+                self.control.impact[axis] = u[axis]
+                continue
+
             if axis in self.axis_ctrl and self.control.enabled[axis]:
+                manual_impact = self.control_input[axis]
+                manual_active = abs(manual_impact) > self.manual_impact_deadband
+                sum_mode_active = self._sum_mode_active()
+
+                if sum_mode_active:
+                    # Пока оператор двигает аппарат, точка удержания следует за
+                    # текущим состоянием. На первом цикле после отпускания газа
+                    # захватываем её ещё раз и затем оставляем неизменной.
+                    if manual_active or self.manual_impact_active[axis]:
+                        self._capture_hold_setpoint(axis)
+                    self.manual_impact_active[axis] = manual_active
+
                 if axis in ("surge", "sway"):
                     if (
                         not self.position_target_initialized[axis]
@@ -96,17 +117,19 @@ class StingrayCoreControlNode(Node):
                     ):
                         # Both DVL position and velocity are mandatory for the
                         # horizontal position loops.
-                        u[axis] = 0.0
+                        # При суммировании потеря обратной связи не должна
+                        # блокировать прямое управление оператором.
+                        u[axis] = manual_impact if sum_mode_active else 0.0
                         self.control.impact[axis] = u[axis]
                         continue
-                elif axis == "heave":
+                elif axis == "heave" and not sum_mode_active:
                     # linear.z задаёт скорость изменения уставки глубины, м/с.
                     self.control_setpoint[axis] += (
                         self.control_input[axis] * self.last_dt
                     )
                     # The command callback stores an absolute depth setpoint.
                     # pass
-                else:
+                elif not sum_mode_active:
                     # Angular inputs are rates integrated into attitude
                     # setpoints.
                     self.control_setpoint[axis] += (
@@ -117,6 +140,8 @@ class StingrayCoreControlNode(Node):
                     target=self.control_setpoint[axis],
                     dt=self.last_dt,
                 )
+                if sum_mode_active:
+                    u[axis] += manual_impact
             else:
                 u[axis] = self.control_input[axis]
                 # # Для разомкнутого контура воздействие одноразовое: 1 цикл,
@@ -161,6 +186,8 @@ class StingrayCoreControlNode(Node):
             "topic_odometry": "/core/state/odometry",
             "topic_loop_flags": "/control/loop_flags",
             "topic_control_data": "/control/data",
+            "topic_manual_impact": "/control/manual_impact",
+            "topic_control_mode": "/control/mode",
         }
 
         for name, default in defaults.items():
@@ -183,6 +210,11 @@ class StingrayCoreControlNode(Node):
         self.declare_parameter("command_timeout_sec", 0.5)
         self.command_timeout_sec = float(
             self.get_parameter("command_timeout_sec").value
+        )
+
+        self.declare_parameter("manual_impact_deadband", 1e-3)
+        self.manual_impact_deadband = float(
+            self.get_parameter("manual_impact_deadband").value
         )
 
         self.declare_parameter("thrusters", Parameter.Type.STRING_ARRAY)
@@ -257,6 +289,11 @@ class StingrayCoreControlNode(Node):
 
         # Последняя полученная команда из /control/data
         self.control_input: dict[str, float] = {axis: 0.0 for axis in self.axes}
+        self.control_mode = CONTROL_MODE_MANUAL
+        self.sum_control_impacts = False
+        self.manual_impact_active: dict[str, bool] = {
+            axis: False for axis in self.axes
+        }
         # Удерживаемые цели для замкнутых контуров
         self.control_setpoint: dict[str, float] = {axis: 0.0 for axis in self.axes}
         # Флаг одноразовой подачи для разомкнутых контуров
@@ -358,6 +395,44 @@ class StingrayCoreControlNode(Node):
     def _get_sway_velocity_measurement(self) -> float:
         return self.dvl_velocity_y
 
+    def _capture_hold_setpoint(self, axis: str) -> bool:
+        """Move an enabled loop's hold target to the current vehicle state."""
+        if axis == "surge":
+            if self.flag_setup_feedback_speed:
+                self.control_setpoint[axis] = 0.0
+                self.position_target_initialized[axis] = True
+                return True
+            if not self._is_dvl_position_fresh():
+                return False
+            self.control_setpoint[axis] = self.dvl_position_x
+            self.position_target_initialized[axis] = True
+        elif axis == "sway":
+            if self.flag_setup_feedback_speed:
+                self.control_setpoint[axis] = 0.0
+                self.position_target_initialized[axis] = True
+                return True
+            if not self._is_dvl_position_fresh():
+                return False
+            self.control_setpoint[axis] = self.dvl_position_y
+            self.position_target_initialized[axis] = True
+        elif axis == "heave":
+            self.control_setpoint[axis] = self.depth
+        elif axis == "yaw":
+            self.control_setpoint[axis] = self.imu.yaw
+        elif axis == "pitch":
+            self.control_setpoint[axis] = self.imu.pitch
+        elif axis == "roll":
+            self.control_setpoint[axis] = self.imu.roll
+        else:
+            return False
+        return True
+
+    def _sum_mode_active(self) -> bool:
+        return (
+            self.control_mode == CONTROL_MODE_ASSISTED
+            and self.sum_control_impacts
+        )
+
     def _get_heave_velocity_measurement(self) -> float:
         return self.dvl_velocity_z
 
@@ -391,6 +466,14 @@ class StingrayCoreControlNode(Node):
 
         self.sub_control_data = self.create_subscription(
             Twist, self.topic_control_data, self.control_data_callback, qos_command
+        )
+
+        self.sub_manual_impact = self.create_subscription(
+            Twist, self.topic_manual_impact, self.manual_control_callback, qos_command
+        )
+
+        self.sub_control_mode = self.create_subscription(
+            UInt8, self.topic_control_mode, self.control_mode_callback, qos_command
         )
 
     def _init_publishers(self):
@@ -533,6 +616,41 @@ class StingrayCoreControlNode(Node):
             self.get_logger().warning(f"Error parsing standardized odometry: {e}")
 
     def control_data_callback(self, msg: Twist):
+        """Accept commands from welt_auv only in automatic mode."""
+        if self.control_mode != CONTROL_MODE_AUTOMATIC:
+            return
+        self._process_control_command(msg)
+
+    def manual_control_callback(self, msg: Twist):
+        """Accept operator impact, with a latched takeover from automatic mode."""
+        values = (
+            msg.linear.x,
+            msg.linear.y,
+            msg.linear.z,
+            msg.angular.x,
+            msg.angular.y,
+            msg.angular.z,
+        )
+        has_manual_input = any(
+            abs(float(value)) > self.manual_impact_deadband for value in values
+        )
+        if self.control_mode == CONTROL_MODE_AUTOMATIC:
+            if not has_manual_input:
+                return
+            self.control_mode = CONTROL_MODE_ASSISTED
+            self.sum_control_impacts = True
+            for axis in self.axes:
+                self.control_input[axis] = 0.0
+                self.manual_impact_active[axis] = False
+                if self.control.enabled.get(axis, False):
+                    self._capture_hold_setpoint(axis)
+            self.get_logger().warning(
+                "Manual input took over automatic control; switched to ASSISTED"
+            )
+
+        self._process_control_command(msg)
+
+    def _process_control_command(self, msg: Twist):
         command_time = time.monotonic()
         incoming = {
             "surge": float(msg.linear.x),
@@ -544,7 +662,16 @@ class StingrayCoreControlNode(Node):
         }
 
         for axis, value in incoming.items():
-            if axis == "heave" and self.control.enabled.get("heave", False):
+            if self.control_mode == CONTROL_MODE_MANUAL:
+                self.control_input[axis] = value
+                self.last_control_input_time[axis] = command_time
+            elif self._sum_mode_active() and self.control.enabled.get(axis, False):
+                # In assisted-manual mode every incoming value is a direct
+                # pilot impact. The control loop moves the hold target while
+                # this value is non-zero and freezes it on release.
+                self.control_input[axis] = value
+                self.last_control_input_time[axis] = command_time
+            elif axis == "heave" and self.control.enabled.get("heave", False):
                 self.control_input[axis] = value
                 self.last_control_input_time[axis] = command_time
                 # Closed loop: linear.z is an absolute positive-down depth.
@@ -592,8 +719,37 @@ class StingrayCoreControlNode(Node):
                 self.control_input[axis] = value
                 self.last_control_input_time[axis] = command_time
 
+    def control_mode_callback(self, msg: UInt8):
+        requested_mode = int(msg.data)
+        if requested_mode not in (
+            CONTROL_MODE_MANUAL,
+            CONTROL_MODE_ASSISTED,
+            CONTROL_MODE_AUTOMATIC,
+        ):
+            self.get_logger().warning(
+                f"Ignored invalid control mode: {requested_mode}"
+            )
+            return
+        if requested_mode == self.control_mode:
+            return
+
+        old_mode = self.control_mode
+        self.control_mode = requested_mode
+        for axis in self.axes:
+            self.control_input[axis] = 0.0
+            self.manual_impact_active[axis] = False
+            if self.control.enabled.get(axis, False):
+                self._capture_hold_setpoint(axis)
+        self.get_logger().info(
+            f"Control mode changed: {old_mode} -> {self.control_mode}"
+        )
+
     def control_mode_flags_callback(self, msg: UInt8):
         flags = int(msg.data)
+        new_sum_control_impacts = bool(flags & (1 << 6))
+        sum_mode_changed = new_sum_control_impacts != self.sum_control_impacts
+        self.sum_control_impacts = new_sum_control_impacts
+
         new_enabled = {
             "surge": bool(flags & (1 << 0)),
             "sway": bool(flags & (1 << 1)),
@@ -650,6 +806,8 @@ class StingrayCoreControlNode(Node):
                         else:
                             self.position_target_initialized[axis] = False
                         self.controllers[axis].reset()
+                    if self.sum_control_impacts:
+                        self._capture_hold_setpoint(axis)
                 else:
                     # При выключении контура не повторяем старую команду.
                     self.control_input[axis] = 0.0
@@ -658,6 +816,20 @@ class StingrayCoreControlNode(Node):
                         self.position_target_initialized[axis] = False
 
             self.control.enabled[axis] = new_value
+
+        if sum_mode_changed:
+            # A command received under the previous interpretation must never
+            # leak into the new mode. The GUI republishes current controls on
+            # its next cycle.
+            for axis in self.axes:
+                self.control_input[axis] = 0.0
+                self.manual_impact_active[axis] = False
+                if self.control.enabled.get(axis, False):
+                    self._capture_hold_setpoint(axis)
+            changed.append(
+                "sum_control_impacts: "
+                f"{not self.sum_control_impacts} -> {self.sum_control_impacts}"
+            )
 
         if changed:
             self.get_logger().info(
