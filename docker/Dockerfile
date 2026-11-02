@@ -5,9 +5,12 @@ RUN apt-get update && apt-get install -y \
     python3-pip python3-colcon-common-extensions \
     python3-smbus python3-smbus2 libi2c-dev i2c-tools \
     libasio-dev netcat socat \
+    python3-serial\
     ros-humble-rclcpp ros-humble-std-msgs ros-humble-sensor-msgs ros-humble-udp-msgs \
     bash bash-completion command-not-found less \
     python3-colorama \
+    python3-libgpiod \
+    libserial-dev \
     ros-humble-rqt \
     ros-humble-rqt-common-plugins \
     ros-humble-rqt-gui-py \

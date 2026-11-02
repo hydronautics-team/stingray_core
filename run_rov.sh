@@ -6,17 +6,17 @@ echo "----------------------------------------"
 echo "🔧 Building all Stingray packages (including launch)..."
 echo "----------------------------------------"
 
-colcon build --packages-select \
-    dvl_msgs \
+colcon build --executor sequential --paths src/* src/stingray_core_devices/manipulator_package --packages-select \
     stingray_core_control \
     stingray_core_communication \
     serial_driver \
     io_context \
     asio_cmake_module \
-    vectornav_msgs \
-    vectornav \
-    stingray_core_launch \
-    pressure_sensor
+    power_control \
+    parser \
+    ms5837_pressure_sensor \
+    manipulator_package \
+    stingray_core_launch
 
 echo "----------------------------------------"
 echo "🔄 Sourcing install/setup.bash ..."

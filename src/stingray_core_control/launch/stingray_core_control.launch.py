@@ -20,7 +20,6 @@ def generate_launch_description():
     rate_hz = LaunchConfiguration('rate_hz')
     topic_imu_linear_accel = LaunchConfiguration('topic_imu_linear_accel')
     topic_imu_angular_rate = LaunchConfiguration('topic_imu_angular_rate')
-    topic_dvl_data = LaunchConfiguration('topic_dvl_data')
     topic_loop_flags = LaunchConfiguration('topic_loop_flags')
     topic_pressure_sensor = LaunchConfiguration('topic_pressure_sensor')
     topic_control_data = LaunchConfiguration('topic_control_data')
@@ -35,20 +34,14 @@ def generate_launch_description():
 
         DeclareLaunchArgument(
             'topic_imu_linear_accel',
-            default_value='/vectornav/imu',
-            description='Topic for IMU linear acceleration (Imu.linear_acceleration)'
+            default_value='/vectornav/imu_accel',
+            description='Topic for IMU linear acceleration (Vector3)'
         ),
 
         DeclareLaunchArgument(
             'topic_imu_angular_rate',
             default_value='/vectornav/imu',
             description='Topic for IMU angular rate (Vector3)'
-        ),
-
-        DeclareLaunchArgument(
-            'topic_dvl_data',
-            default_value='/dvl/data',
-            description='Topic for DVL data (dvl_msgs/DVL)'
         ),
 
         DeclareLaunchArgument(
@@ -59,8 +52,8 @@ def generate_launch_description():
 
         DeclareLaunchArgument(
             'topic_pressure_sensor',
-            default_value='/stingray_core/pressure_sensor/depth',
-            description='Topic for pressure/depth (Float64)'
+            default_value='/sensors/pressure',
+            description='Topic for pressure/depth (Float32)'
         ),
 
         DeclareLaunchArgument(
@@ -87,7 +80,6 @@ def generate_launch_description():
                     'rate_hz': rate_hz,
                     'topic_imu_linear_accel': topic_imu_linear_accel,
                     # 'topic_imu_angular_rate': topic_imu_angular_rate,
-                    'topic_dvl_data': topic_dvl_data,
                     'topic_loop_flags': topic_loop_flags,
                     'topic_pressure_sensor': topic_pressure_sensor,
                     'topic_control_data': topic_control_data,
