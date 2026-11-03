@@ -370,19 +370,10 @@ class StingrayCoreControlNode(Node):
             durability=DurabilityPolicy.VOLATILE,
         )
 
-        qos_control_flags = QoSProfile(
+        qos_command = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
-            depth=1,
+            depth=5,
             reliability=ReliabilityPolicy.RELIABLE,
-            durability=DurabilityPolicy.VOLATILE,
-        )
-
-        # Pilot commands are a live stream: always consume the newest sample
-        # instead of retransmitting stale commands after a network hiccup.
-        qos_control_data = QoSProfile(
-            history=HistoryPolicy.KEEP_LAST,
-            depth=1,
-            reliability=ReliabilityPolicy.BEST_EFFORT,
             durability=DurabilityPolicy.VOLATILE,
         )
 
@@ -395,14 +386,11 @@ class StingrayCoreControlNode(Node):
         )
 
         self.sub_control_mode_flags = self.create_subscription(
-            UInt8,
-            self.topic_loop_flags,
-            self.control_mode_flags_callback,
-            qos_control_flags,
+            UInt8, self.topic_loop_flags, self.control_mode_flags_callback, qos_command
         )
 
         self.sub_control_data = self.create_subscription(
-            Twist, self.topic_control_data, self.control_data_callback, qos_control_data
+            Twist, self.topic_control_data, self.control_data_callback, qos_command
         )
 
     def _init_publishers(self):
