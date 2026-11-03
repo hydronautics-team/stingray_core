@@ -348,14 +348,6 @@ class RollController(BaseController):
 # Linear controllers
 # -----------------------
 class DepthController(BaseController):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.prev_depth = 0.0
-
-    def reset(self):
-        super().reset()
-        self.prev_depth = 0.0
-
     def update(
         self,
         setpoint: float,
@@ -369,11 +361,9 @@ class DepthController(BaseController):
         # защита dt
         dt = max(min(dt, 0.05), 1e-3)
 
-        # -------- скорость глубины --------
-        #depth_rate = measurement_rate
-        depth_rate = (measurement-self.prev_depth)/dt
-
-        self.prev_depth = measurement
+        # The rate is calculated when a new odometry sample arrives.  Do not
+        # differentiate the same depth repeatedly at the control-loop rate.
+        depth_rate = measurement_rate
 
         # -------- режим настройки скорости --------
         if flag_setup_feedback_speed:

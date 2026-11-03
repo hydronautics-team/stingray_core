@@ -249,8 +249,10 @@ class StingrayCoreControlNode(Node):
 
             self.controllers[axis] = axis_class_map[axis](**params)
 
-        for ctrl in self.controllers.values():
-            ctrl.set_debug_hook(self.debug_cb)
+        for axis, ctrl in self.controllers.items():
+            ctrl.set_debug_hook(
+                lambda data, axis=axis: self.debug_cb(axis, data)
+            )
 
         self.imu = ImuState()
         self.control = ControlState.from_axes(self.axes)
@@ -263,6 +265,9 @@ class StingrayCoreControlNode(Node):
         self.open_loop_pending: dict[str, bool] = {axis: False for axis in self.axes}
 
         self.depth = 0.0
+        self.depth_rate = 0.0
+        self.previous_depth = None
+        self.previous_depth_stamp = None
         self.distance_to_bottom = 0.0
 
         self.dvl_velocity_x = 0.0
@@ -359,7 +364,7 @@ class StingrayCoreControlNode(Node):
         return self.dvl_velocity_y
 
     def _get_heave_velocity_measurement(self) -> float:
-        return self.dvl_velocity_z
+        return self.depth_rate
 
     def _init_subscriptions(self):
         # Explicit QoS profiles for deterministic behavior by topic class.
@@ -446,6 +451,23 @@ class StingrayCoreControlNode(Node):
         )
         self.pub_out = self.create_publisher(Float64, "~/debug/out", qos_debug)
 
+        debug_fields = (
+            "err_position",
+            "output_pi",
+            "feedback_speed",
+            "measurement_rate",
+            "out",
+        )
+        self.axis_debug_publishers = {
+            axis: {
+                field: self.create_publisher(
+                    Float64, f"~/debug/{axis}/{field}", qos_debug
+                )
+                for field in debug_fields
+            }
+            for axis in self.axes
+        }
+
     # --- Колбэки ---
     def imu_callback(self, msg: Imu):
         """Consume the sensor-independent IMU stream produced by localization."""
@@ -514,8 +536,32 @@ class StingrayCoreControlNode(Node):
                 for value in (self.dvl_position_x, self.dvl_position_y)
             ) and max(msg.pose.covariance[0], msg.pose.covariance[7]) < 100.0
             self.dvl_position_last_time = time.time()
-            # REP-103 odometry Z is positive upward; control depth is positive down.
-            self.depth = -float(msg.pose.pose.position.z)
+            # REP-103 odometry Z is positive upward; control depth and its
+            # rate are positive down. Calculate the rate once per new odometry
+            # sample, using the message timestamp rather than the 100 Hz loop.
+            new_depth = -float(msg.pose.pose.position.z)
+            stamp = (
+                float(msg.header.stamp.sec)
+                + float(msg.header.stamp.nanosec) * 1e-9
+            )
+            if stamp <= 0.0:
+                stamp = time.monotonic()
+
+            if (
+                self.previous_depth is not None
+                and self.previous_depth_stamp is not None
+            ):
+                depth_dt = stamp - self.previous_depth_stamp
+                if 1e-4 <= depth_dt <= 1.0:
+                    self.depth_rate = (
+                        new_depth - self.previous_depth
+                    ) / depth_dt
+                else:
+                    self.depth_rate = 0.0
+
+            self.depth = new_depth
+            self.previous_depth = new_depth
+            self.previous_depth_stamp = stamp
 
             current_position = {
                 "surge": self.dvl_position_x,
@@ -617,7 +663,6 @@ class StingrayCoreControlNode(Node):
                         self.control_input[axis] = 0.0
                         self.control_setpoint[axis] = 0.30  # 30 cm, positive down
                         self.controllers["heave"].reset()
-                        self.controllers["heave"].prev_depth = self.depth
                     elif axis == "yaw":
                         self.control_setpoint[axis] = self.imu.yaw
                     elif axis == "pitch":
@@ -746,15 +791,24 @@ class StingrayCoreControlNode(Node):
     def _is_controller_param(self, name: str) -> bool:
         return name.startswith("controllers.")
 
-    def debug_cb(self, data: dict):
+    def debug_cb(self, axis: str, data: dict):
         if not self.get_parameter("debug_publish").value:
             return
 
-        self.pub_err_position.publish(Float64(data=data["err_position"]))
-        self.pub_output_pi.publish(Float64(data=data["output_pi"]))
-        self.pub_feedback_speed.publish(Float64(data=data["feedback_speed"]))
-        self.pub_measurement_rate.publish(Float64(data=data["measurement_rate"]))
-        self.pub_out.publish(Float64(data=data["out"]))
+        publishers = self.axis_debug_publishers[axis]
+        for field, publisher in publishers.items():
+            publisher.publish(Float64(data=float(data[field])))
+
+        # Keep the old topics as heave-only aliases. They are no longer
+        # overwritten by whichever angular controller runs last.
+        if axis == "heave":
+            self.pub_err_position.publish(Float64(data=data["err_position"]))
+            self.pub_output_pi.publish(Float64(data=data["output_pi"]))
+            self.pub_feedback_speed.publish(Float64(data=data["feedback_speed"]))
+            self.pub_measurement_rate.publish(
+                Float64(data=data["measurement_rate"])
+            )
+            self.pub_out.publish(Float64(data=data["out"]))
 
 
 def main(args=None):
