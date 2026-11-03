@@ -1,32 +1,24 @@
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
-from launch.substitutions import Command
-from ament_index_python.packages import get_package_share_directory
-
-import os
+from launch.substitutions import Command, LaunchConfiguration
 
 
 def generate_launch_description():
-    package_dir = get_package_share_directory(
-        'stingray_core_description'
-    )
-
-    xacro_file = os.path.join(
-        package_dir,
-        'urdf',
-        'neowelt2.urdf.xacro'
-    )
-
     robot_description = ParameterValue(
         Command([
             'xacro ',
-            xacro_file
+            LaunchConfiguration('description_file')
         ]),
         value_type=str
     )
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'description_file',
+            description='Absolute path to the platform URDF or Xacro file',
+        ),
         Node(
             package='robot_state_publisher',
             executable='robot_state_publisher',
