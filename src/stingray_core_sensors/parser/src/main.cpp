@@ -3,6 +3,7 @@
 #include <cmath>
 #include <functional>
 #include <memory>
+#include <stdexcept>
 #include <string>
 
 #include "rclcpp/rclcpp.hpp"
@@ -11,6 +12,7 @@
 #include "geometry_msgs/msg/vector3_stamped.hpp"
 
 #include "tf2/LinearMath/Quaternion.h"
+#include "tf2/LinearMath/Matrix3x3.h"
 
 #include "AH127Cprotocol.h"
 
@@ -49,6 +51,38 @@ public:
                 "enable_diagnostics",
                 true
             );
+
+        orientation_source_ =
+            this->declare_parameter<std::string>(
+                "orientation_source",
+                "mahony"
+            );
+
+        mahony_kp_ =
+            this->declare_parameter<double>(
+                "mahony_kp",
+                1.5
+            );
+
+        accel_rejection_threshold_ =
+            this->declare_parameter<double>(
+                "accel_rejection_threshold",
+                2.0
+            );
+
+        gyro_bias_calibration_sec_ =
+            this->declare_parameter<double>(
+                "gyro_bias_calibration_sec",
+                3.0
+            );
+
+        if (orientation_source_ != "mahony" &&
+            orientation_source_ != "sensor")
+        {
+            throw std::invalid_argument(
+                "orientation_source must be 'mahony' or 'sensor'"
+            );
+        }
 
         // ====================================================
         // PUBLISHERS
@@ -134,7 +168,8 @@ public:
 
         RCLCPP_INFO(
             this->get_logger(),
-            "Yaw source: integrated gyroscope Z"
+            "Orientation source: %s",
+            orientation_source_.c_str()
         );
     }
 
@@ -160,6 +195,12 @@ private:
     static constexpr double DEG_TO_RAD =
         PI / 180.0;
 
+    static constexpr double RAD_TO_DEG =
+        180.0 / PI;
+
+    static constexpr double GRAVITY =
+        9.80665;
+
 
     // ========================================================
     // NORMALIZE ANGLE
@@ -178,6 +219,134 @@ private:
         }
 
         return angle;
+    }
+
+
+    // ========================================================
+    // MAHONY IMU FILTER (GYROSCOPE + ACCELEROMETER)
+    // ========================================================
+
+    tf2::Quaternion updateOrientation(
+        const DataFromAH127C &d
+    )
+    {
+        const auto sample_time = protocol_->last_sample_time();
+
+        if (!orientation_initialized_)
+        {
+            orientation_q_.setRPY(
+                d.roll * DEG_TO_RAD,
+                d.pitch * DEG_TO_RAD,
+                d.yaw * DEG_TO_RAD
+            );
+            orientation_q_.normalize();
+            last_orientation_time_ = sample_time;
+            bias_calibration_start_ = sample_time;
+            orientation_initialized_ = true;
+            return orientation_q_;
+        }
+
+        const double dt = std::chrono::duration<double>(
+            sample_time - last_orientation_time_
+        ).count();
+        last_orientation_time_ = sample_time;
+
+        if (dt <= 0.0 || dt > 0.1)
+        {
+            return orientation_q_;
+        }
+
+        const double raw_gx = d.X_rate * DEG_TO_RAD;
+        const double raw_gy = d.Y_rate * DEG_TO_RAD;
+        const double raw_gz = d.Z_rate * DEG_TO_RAD;
+        const double gyro_norm_deg = std::sqrt(
+            d.X_rate * d.X_rate +
+            d.Y_rate * d.Y_rate +
+            d.Z_rate * d.Z_rate
+        );
+
+        const double calibration_elapsed =
+            std::chrono::duration<double>(
+                sample_time - bias_calibration_start_
+            ).count();
+
+        // Bias is estimated only from samples where the vehicle is still.
+        if (!gyro_bias_ready_ && gyro_norm_deg < 5.0)
+        {
+            gyro_bias_sum_x_ += raw_gx;
+            gyro_bias_sum_y_ += raw_gy;
+            gyro_bias_sum_z_ += raw_gz;
+            ++gyro_bias_samples_;
+        }
+
+        if (!gyro_bias_ready_ &&
+            calibration_elapsed >= gyro_bias_calibration_sec_)
+        {
+            if (gyro_bias_samples_ > 0)
+            {
+                gyro_bias_x_ = gyro_bias_sum_x_ / gyro_bias_samples_;
+                gyro_bias_y_ = gyro_bias_sum_y_ / gyro_bias_samples_;
+                gyro_bias_z_ = gyro_bias_sum_z_ / gyro_bias_samples_;
+            }
+            gyro_bias_ready_ = true;
+            RCLCPP_INFO(
+                this->get_logger(),
+                "Gyro bias: x=%.4f y=%.4f z=%.4f deg/s (%lu samples)",
+                gyro_bias_x_ * RAD_TO_DEG,
+                gyro_bias_y_ * RAD_TO_DEG,
+                gyro_bias_z_ * RAD_TO_DEG,
+                static_cast<unsigned long>(gyro_bias_samples_)
+            );
+        }
+
+        double gx = raw_gx - gyro_bias_x_;
+        double gy = raw_gy - gyro_bias_y_;
+        double gz = raw_gz - gyro_bias_z_;
+
+        const double accel_norm = std::sqrt(
+            d.X_accel * d.X_accel +
+            d.Y_accel * d.Y_accel +
+            d.Z_accel * d.Z_accel
+        );
+
+        // Reject acceleration feedback during translation or strong vibration.
+        if (accel_norm > 1e-6 &&
+            std::abs(accel_norm - GRAVITY) <= accel_rejection_threshold_)
+        {
+            const double ax = d.X_accel / accel_norm;
+            const double ay = d.Y_accel / accel_norm;
+            const double az = d.Z_accel / accel_norm;
+
+            const double qw = orientation_q_.w();
+            const double qx = orientation_q_.x();
+            const double qy = orientation_q_.y();
+            const double qz = orientation_q_.z();
+
+            // Expected gravity direction in the sensor frame.
+            const double vx = 2.0 * (qx * qz - qw * qy);
+            const double vy = 2.0 * (qw * qx + qy * qz);
+            const double vz = qw * qw - qx * qx - qy * qy + qz * qz;
+
+            // measured gravity x expected gravity
+            gx += mahony_kp_ * (ay * vz - az * vy);
+            gy += mahony_kp_ * (az * vx - ax * vz);
+            gz += mahony_kp_ * (ax * vy - ay * vx);
+        }
+
+        const double qw = orientation_q_.w();
+        const double qx = orientation_q_.x();
+        const double qy = orientation_q_.y();
+        const double qz = orientation_q_.z();
+        const double half_dt = 0.5 * dt;
+
+        orientation_q_.setValue(
+            qx + half_dt * ( qw * gx + qy * gz - qz * gy),
+            qy + half_dt * ( qw * gy - qx * gz + qz * gx),
+            qz + half_dt * ( qw * gz + qx * gy - qy * gx),
+            qw + half_dt * (-qx * gx - qy * gy - qz * gz)
+        );
+        orientation_q_.normalize();
+        return orientation_q_;
     }
 
 
@@ -441,6 +610,31 @@ private:
             const double corrected_yaw =
                 integrated_yaw_deg_;
 
+            tf2::Quaternion q;
+
+            if (orientation_source_ == "mahony")
+            {
+                q = updateOrientation(d);
+            }
+            else
+            {
+                q.setRPY(
+                    d.roll * DEG_TO_RAD,
+                    d.pitch * DEG_TO_RAD,
+                    corrected_yaw * DEG_TO_RAD
+                );
+                q.normalize();
+            }
+
+            double output_roll_rad = 0.0;
+            double output_pitch_rad = 0.0;
+            double output_yaw_rad = 0.0;
+            tf2::Matrix3x3(q).getRPY(
+                output_roll_rad,
+                output_pitch_rad,
+                output_yaw_rad
+            );
+
             // =================================================
             // 1. SENSOR_MSGS / IMU
             // =================================================
@@ -449,30 +643,6 @@ private:
 
             imu_msg.header.stamp = stamp;
             imu_msg.header.frame_id = frame_id_;
-
-            // =================================================
-            // EULER -> QUATERNION
-            // =================================================
-
-            const double roll_rad =
-                d.roll * DEG_TO_RAD;
-
-            const double pitch_rad =
-                d.pitch * DEG_TO_RAD;
-
-            // Используем новый курс.
-            const double yaw_rad =
-                corrected_yaw * DEG_TO_RAD;
-
-            tf2::Quaternion q;
-
-            q.setRPY(
-                roll_rad,
-                pitch_rad,
-                yaw_rad
-            );
-
-            q.normalize();
 
             imu_msg.orientation.x = q.x();
             imu_msg.orientation.y = q.y();
@@ -547,14 +717,11 @@ private:
             euler_msg.header.stamp = stamp;
             euler_msg.header.frame_id = frame_id_;
 
-            // Roll от AH127C.
-            euler_msg.vector.x = d.roll;
-
-            // Pitch от AH127C.
-            euler_msg.vector.y = d.pitch;
-
-            // Новый Yaw по гироскопу.
-            euler_msg.vector.z = -corrected_yaw;
+            // Euler angles are derived from the exact quaternion published
+            // above, so both topics always describe the same orientation.
+            euler_msg.vector.x = output_roll_rad * RAD_TO_DEG;
+            euler_msg.vector.y = output_pitch_rad * RAD_TO_DEG;
+            euler_msg.vector.z = output_yaw_rad * RAD_TO_DEG;
 
             publisher_euler_->publish(euler_msg);
 
@@ -592,12 +759,12 @@ private:
                 200,
 
                 "IMU: Roll=%7.2f Pitch=%7.2f "
-                "Yaw_Gyro=%7.2f Yaw_AH127C=%7.2f "
+                "Yaw_Filter=%7.2f Yaw_AH127C=%7.2f "
                 "GyroZ=%7.2f deg/s",
 
-                d.roll,
-                d.pitch,
-                corrected_yaw,
+                euler_msg.vector.x,
+                euler_msg.vector.y,
+                euler_msg.vector.z,
                 d.yaw,
                 d.Z_rate
             );
@@ -653,8 +820,12 @@ private:
 
     std::string port_name_;
     std::string frame_id_;
+    std::string orientation_source_;
 
     bool enable_diagnostics_ = true;
+    double mahony_kp_ = 1.5;
+    double accel_rejection_threshold_ = 2.0;
+    double gyro_bias_calibration_sec_ = 3.0;
 
     // ========================================================
     // PROTOCOL
@@ -700,6 +871,23 @@ private:
 
     std::chrono::steady_clock::time_point
         last_gyro_time_;
+
+    // ========================================================
+    // ORIENTATION FILTER
+    // ========================================================
+
+    bool orientation_initialized_ = false;
+    bool gyro_bias_ready_ = false;
+    tf2::Quaternion orientation_q_{0.0, 0.0, 0.0, 1.0};
+    std::chrono::steady_clock::time_point last_orientation_time_;
+    std::chrono::steady_clock::time_point bias_calibration_start_;
+    std::size_t gyro_bias_samples_ = 0;
+    double gyro_bias_sum_x_ = 0.0;
+    double gyro_bias_sum_y_ = 0.0;
+    double gyro_bias_sum_z_ = 0.0;
+    double gyro_bias_x_ = 0.0;
+    double gyro_bias_y_ = 0.0;
+    double gyro_bias_z_ = 0.0;
 };
 
 
