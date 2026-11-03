@@ -509,30 +509,28 @@ private:
             // COVARIANCE
             // =================================================
             //
-            // Оставляем ковариации нулевыми,
-            // поскольку реальные значения неизвестны.
-            //
-            // Для использования в EKF их необходимо
-            // определить по характеристикам датчика
-            // и результатам испытаний.
+            // Initial conservative estimates in SI units. These avoid an
+            // overconfident EKF and must be refined from stationary logs.
+            // Orientation: rad^2 (yaw is less certain due to heading drift).
+            imu_msg.orientation_covariance = {
+                0.01, 0.0, 0.0,
+                0.0, 0.01, 0.0,
+                0.0, 0.0, 0.04
+            };
 
-            std::fill(
-                imu_msg.orientation_covariance.begin(),
-                imu_msg.orientation_covariance.end(),
-                0.0
-            );
+            // Angular velocity: (rad/s)^2.
+            imu_msg.angular_velocity_covariance = {
+                0.0025, 0.0, 0.0,
+                0.0, 0.0025, 0.0,
+                0.0, 0.0, 0.0025
+            };
 
-            std::fill(
-                imu_msg.angular_velocity_covariance.begin(),
-                imu_msg.angular_velocity_covariance.end(),
-                0.0
-            );
-
-            std::fill(
-                imu_msg.linear_acceleration_covariance.begin(),
-                imu_msg.linear_acceleration_covariance.end(),
-                0.0
-            );
+            // Linear acceleration: (m/s^2)^2.
+            imu_msg.linear_acceleration_covariance = {
+                0.04, 0.0, 0.0,
+                0.0, 0.04, 0.0,
+                0.0, 0.0, 0.04
+            };
 
             // =================================================
             // PUBLISH IMU

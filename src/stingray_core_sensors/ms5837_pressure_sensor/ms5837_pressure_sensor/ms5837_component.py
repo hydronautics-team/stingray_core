@@ -2,11 +2,7 @@ import rclpy
 from rclpy.node import Node
 
 from nav_msgs.msg import Odometry
-from sensor_msgs.msg import FluidPressure
-from sensor_msgs.msg import Temperature
 from std_msgs.msg import Float32
-
-from rcl_interfaces.msg import SetParametersResult
 
 from . import ms5837
 
@@ -57,28 +53,16 @@ class BarComponentr:
 
         time.sleep(1)
 
-    def pressure_value(self):
-        if self.sensor.read():
-                hpa_data = self.sensor.pressure()
-                psi_data = self.sensor.pressure(ms5837.UNITS_psi)
-        else:
-                exit(1)
-        return hpa_data, psi_data
+    def sample(self):
+        """Read the ADC once and derive every output from the same sample."""
+        if not self.sensor.read():
+            return None
 
-    def temperature_value(self):
-        if self.sensor.read():
-                temp_degrees = self.sensor.temperature()
-                temp_farenheit = self.sensor.temperature(ms5837.UNITS_Farenheit)
-        else:
-                exit(1)
-        return temp_degrees, temp_farenheit
-
-    def depth_value(self):
-        if self.sensor.read():
-                depth_data = self.sensor.depth()
-        else:
-                exit(1)
-        return depth_data
+        return (
+            self.sensor.pressure(),
+            self.sensor.temperature(),
+            self.sensor.depth(),
+        )
 
     def depth_init_error(self):
            return self.init_fresh_depth, self.init_salt_depth
@@ -93,7 +77,8 @@ class BarNode(Node):
         self.pub_depth = self.create_publisher(Float32, 'ms5837/depth', 10)
         self.pub_odom = self.create_publisher(Odometry, 'ms5837/odom', 10)
 
-        timer_period = 0.02  # seconds
+        # OSR 8192 needs about 41 ms for pressure and temperature conversion.
+        timer_period = 0.05  # 20 Hz
         self.timer = self.create_timer(timer_period, self.timer_callback)
 
         self.ms5837_data = BarComponentr()
@@ -107,9 +92,12 @@ class BarNode(Node):
 
     def timer_callback(self):
 
-        hpa_data, psi_data = self.ms5837_data.pressure_value()
-        temp_degrees, temp_farenheit = self.ms5837_data.temperature_value()
-        depth_data = self.ms5837_data.depth_value()
+        sample = self.ms5837_data.sample()
+        if sample is None:
+            self.get_logger().error("MS5837 read failed")
+            return
+
+        hpa_data, temp_degrees, depth_data = sample
 
         self.msg_pressure.data = round(hpa_data, 1)
 
@@ -119,8 +107,6 @@ class BarNode(Node):
         ajust_depth = 0.1 # meter
 
         self.msg_depth.data = round(depth_data - ajust_depth - self.init_fresh, 3) * 1000
-        depth_data_mm = round(self.msg_depth.data*1000, 3)
-
         self.msg_odom.header.stamp = self.get_clock().now().to_msg()
         self.msg_odom.header.frame_id = "ms5837_link"
         self.msg_odom.pose.pose.position.z = - self.msg_depth.data
