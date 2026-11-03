@@ -237,7 +237,7 @@ private:
             orientation_q_.setRPY(
                 d.roll * DEG_TO_RAD,
                 d.pitch * DEG_TO_RAD,
-                d.yaw * DEG_TO_RAD
+                -d.yaw * DEG_TO_RAD
             );
             orientation_q_.normalize();
             last_orientation_time_ = sample_time;
@@ -258,7 +258,9 @@ private:
 
         const double raw_gx = d.X_rate * DEG_TO_RAD;
         const double raw_gy = d.Y_rate * DEG_TO_RAD;
-        const double raw_gz = d.Z_rate * DEG_TO_RAD;
+        // Vehicle convention: a turn to starboard (right) is positive yaw.
+        // This is opposite to the ROS REP-103 positive Z rotation.
+        const double raw_gz = -d.Z_rate * DEG_TO_RAD;
         const double gyro_norm_deg = std::sqrt(
             d.X_rate * d.X_rate +
             d.Y_rate * d.Y_rate +
@@ -389,10 +391,10 @@ private:
             // не влияет на интегрирование.
 
             integrated_yaw_deg_ =
-                normalizeAngle(d.yaw);
+                normalizeAngle(-d.yaw);
 
             previous_gyro_rate_ =
-                d.Z_rate;
+                -d.Z_rate;
 
             last_gyro_time_ =
                 sample_time;
@@ -430,7 +432,7 @@ private:
         if (dt > 0.1)
         {
             previous_gyro_rate_ =
-                d.Z_rate;
+                -d.Z_rate;
 
             last_gyro_time_ =
                 sample_time;
@@ -461,7 +463,7 @@ private:
         const double average_rate =
             0.5 * (
                 previous_gyro_rate_ +
-                d.Z_rate
+                -d.Z_rate
             );
 
         integrated_yaw_deg_ +=
@@ -481,7 +483,7 @@ private:
         // ====================================================
 
         previous_gyro_rate_ =
-            d.Z_rate;
+            -d.Z_rate;
 
         last_gyro_time_ =
             sample_time;
@@ -504,7 +506,7 @@ private:
 
         // Сырой курс AH127C.
         const double ahrs_yaw =
-            normalizeAngle(d.yaw);
+            normalizeAngle(-d.yaw);
 
         // Курс по гироскопу.
         const double gyro_yaw =
@@ -660,7 +662,7 @@ private:
                 d.Y_rate * DEG_TO_RAD;
 
             imu_msg.angular_velocity.z =
-                d.Z_rate * DEG_TO_RAD;
+                -d.Z_rate * DEG_TO_RAD;
 
             // =================================================
             // LINEAR ACCELERATION
@@ -766,7 +768,7 @@ private:
                 euler_msg.vector.y,
                 euler_msg.vector.z,
                 d.yaw,
-                d.Z_rate
+                -d.Z_rate
             );
 
             // =================================================
