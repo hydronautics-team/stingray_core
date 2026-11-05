@@ -41,6 +41,52 @@ from .state.control import ControlState
 from .state.imu import ImuState
 from .utils.save_params import save_params
 
+CONTROL_MODE_MANUAL = 0
+CONTROL_MODE_ASSISTED = 1
+CONTROL_MODE_AUTOMATIC = 2
+
+
+def relative_position_target(current: float, offset: float) -> float:
+    """Convert a relative linear position command to an absolute target."""
+    return current + offset
+
+
+def setpoint_changed(previous: float | None, current: float) -> bool:
+    """Return whether a streamed setpoint represents a new command."""
+    return previous is None or not math.isclose(previous, current, abs_tol=1e-9)
+
+
+def body_offset_to_odom(
+    surge: float, sway: float, yaw_deg: float
+) -> tuple[float, float]:
+    """Rotate a relative body-frame horizontal offset into the odom frame."""
+    yaw = math.radians(yaw_deg)
+    return (
+        surge * math.cos(yaw) - sway * math.sin(yaw),
+        surge * math.sin(yaw) + sway * math.cos(yaw),
+    )
+
+
+def odom_error_to_body(
+    error_x: float, error_y: float, yaw_deg: float
+) -> tuple[float, float]:
+    """Rotate an odom-frame horizontal position error into the body frame."""
+    yaw = math.radians(yaw_deg)
+    return (
+        error_x * math.cos(yaw) + error_y * math.sin(yaw),
+        -error_x * math.sin(yaw) + error_y * math.cos(yaw),
+    )
+
+
+def horizontal_setpoint_changed(
+    previous: tuple[float, float] | None, current: tuple[float, float]
+) -> bool:
+    """Return whether a streamed surge/sway setpoint pair changed."""
+    return previous is None or any(
+        not math.isclose(old, new, abs_tol=1e-9)
+        for old, new in zip(previous, current)
+    )
+
 
 class StingrayCoreControlNode(Node):
     def __init__(self):
@@ -81,9 +127,43 @@ class StingrayCoreControlNode(Node):
 
         # === 1. Определяем управляющие воздействия ===
         u: dict[str, float] = {}
+        horizontal_error_body = odom_error_to_body(
+            self.control_setpoint["surge"] - self.dvl_position_x,
+            self.control_setpoint["sway"] - self.dvl_position_y,
+            self.imu.yaw,
+        )
+
+        assisted_mode = self.control_mode == CONTROL_MODE_ASSISTED
+        sum_mode_active = assisted_mode and self.sum_control_impacts
+        if sum_mode_active:
+            horizontal_active = any(
+                abs(self.control_input[axis]) > self.manual_impact_deadband
+                for axis in ("surge", "sway")
+            )
+            horizontal_was_active = any(
+                self.manual_impact_active[axis] for axis in ("surge", "sway")
+            )
+            if horizontal_active or horizontal_was_active:
+                self._capture_horizontal_hold_setpoint()
+            self.manual_impact_active["surge"] = horizontal_active
+            self.manual_impact_active["sway"] = horizontal_active
 
         for axis in self.axes:
+            if self.control_mode == CONTROL_MODE_MANUAL:
+                u[axis] = self.control_input[axis]
+                self.control.impact[axis] = u[axis]
+                continue
+
             if axis in self.axis_ctrl and self.control.enabled[axis]:
+                manual_impact = self.control_input[axis] if assisted_mode else 0.0
+                if sum_mode_active and axis not in ("surge", "sway"):
+                    manual_active = (
+                        abs(manual_impact) > self.manual_impact_deadband
+                    )
+                    if manual_active or self.manual_impact_active[axis]:
+                        self._capture_hold_setpoint(axis)
+                    self.manual_impact_active[axis] = manual_active
+
                 if axis in ("surge", "sway"):
                     if (
                         not self.position_target_initialized[axis]
@@ -96,27 +176,30 @@ class StingrayCoreControlNode(Node):
                     ):
                         # Both DVL position and velocity are mandatory for the
                         # horizontal position loops.
-                        u[axis] = 0.0
+                        # In assisted mode the operator must retain direct
+                        # control even if localization is temporarily invalid.
+                        u[axis] = manual_impact if assisted_mode else 0.0
                         self.control.impact[axis] = u[axis]
                         continue
-                elif axis == "heave":
-                    # linear.z задаёт скорость изменения уставки глубины, м/с.
-                    self.control_setpoint[axis] += (
-                        self.control_input[axis] * self.last_dt
-                    )
-                    # The command callback stores an absolute depth setpoint.
-                    # pass
-                else:
-                    # Angular inputs are rates integrated into attitude
-                    # setpoints.
-                    self.control_setpoint[axis] += (
-                        self.control_input[axis] * self.last_dt
-                    )
 
-                u[axis] = self.axis_ctrl[axis].compute(
-                    target=self.control_setpoint[axis],
-                    dt=self.last_dt,
-                )
+                if self.flag_setup_feedback_speed:
+                    # Tuning mode is the only mode where /control/data carries
+                    # velocity setpoints instead of position/angle setpoints.
+                    self.control_setpoint[axis] = self.control_input[axis]
+
+                target = self.control_setpoint[axis]
+                if axis == "surge" and not self.flag_setup_feedback_speed:
+                    target = horizontal_error_body[0]
+                elif axis == "sway" and not self.flag_setup_feedback_speed:
+                    target = horizontal_error_body[1]
+
+                u[axis] = self.axis_ctrl[axis].compute(target=target, dt=self.last_dt)
+                if assisted_mode:
+                    # With summing disabled the hold point remains fixed, so
+                    # manual impact only displaces the vehicle temporarily.
+                    # With summing enabled the hold point follows the vehicle
+                    # and is captured once more when the operator releases it.
+                    u[axis] += manual_impact
             else:
                 u[axis] = self.control_input[axis]
                 # # Для разомкнутого контура воздействие одноразовое: 1 цикл,
@@ -161,6 +244,7 @@ class StingrayCoreControlNode(Node):
             "topic_odometry": "/core/state/odometry",
             "topic_loop_flags": "/control/loop_flags",
             "topic_control_data": "/control/data",
+            "topic_control_mode": "/control/mode",
         }
 
         for name, default in defaults.items():
@@ -183,6 +267,11 @@ class StingrayCoreControlNode(Node):
         self.declare_parameter("command_timeout_sec", 0.5)
         self.command_timeout_sec = float(
             self.get_parameter("command_timeout_sec").value
+        )
+
+        self.declare_parameter("manual_impact_deadband", 1e-3)
+        self.manual_impact_deadband = float(
+            self.get_parameter("manual_impact_deadband").value
         )
 
         self.declare_parameter("thrusters", Parameter.Type.STRING_ARRAY)
@@ -259,6 +348,11 @@ class StingrayCoreControlNode(Node):
 
         # Последняя полученная команда из /control/data
         self.control_input: dict[str, float] = {axis: 0.0 for axis in self.axes}
+        self.control_mode = CONTROL_MODE_MANUAL
+        self.sum_control_impacts = False
+        self.manual_impact_active: dict[str, bool] = {
+            axis: False for axis in self.axes
+        }
         # Удерживаемые цели для замкнутых контуров
         self.control_setpoint: dict[str, float] = {axis: 0.0 for axis in self.axes}
         # Флаг одноразовой подачи для разомкнутых контуров
@@ -283,6 +377,10 @@ class StingrayCoreControlNode(Node):
         self.last_control_input_time: dict[str, float] = {
             axis: 0.0 for axis in self.axes
         }
+        self.last_closed_loop_command: dict[str, float | None] = {
+            axis: None for axis in self.axes
+        }
+        self.last_horizontal_command: tuple[float, float] | None = None
 
         self.imu_yaw_raw = 0.0
 
@@ -314,13 +412,13 @@ class StingrayCoreControlNode(Node):
             ),
             "surge": LinearPositionAxisController(
                 controller=self.controllers["surge"],
-                pos_fn=lambda: self.dvl_position_x,
+                pos_fn=lambda: 0.0,
                 vel_fn=self._get_surge_velocity_measurement,
                 feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
             ),
             "sway": LinearPositionAxisController(
                 controller=self.controllers["sway"],
-                pos_fn=lambda: self.dvl_position_y,
+                pos_fn=lambda: 0.0,
                 vel_fn=self._get_sway_velocity_measurement,
                 feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
             ),
@@ -366,6 +464,35 @@ class StingrayCoreControlNode(Node):
     def _get_heave_velocity_measurement(self) -> float:
         return self.depth_rate
 
+    def _capture_horizontal_hold_setpoint(self) -> bool:
+        """Capture the current odom X/Y as one horizontal hold target."""
+        if not self._is_dvl_position_fresh():
+            return False
+        self.control_setpoint["surge"] = self.dvl_position_x
+        self.control_setpoint["sway"] = self.dvl_position_y
+        for axis in ("surge", "sway"):
+            if self.control.enabled.get(axis, False):
+                self.position_target_initialized[axis] = True
+                self.controllers[axis].reset()
+        return True
+
+    def _capture_hold_setpoint(self, axis: str) -> bool:
+        """Capture the current state as an enabled loop's hold target."""
+        if axis in ("surge", "sway"):
+            return self._capture_horizontal_hold_setpoint()
+        if axis == "heave":
+            self.control_setpoint[axis] = self.depth
+        elif axis == "yaw":
+            self.control_setpoint[axis] = self.imu.yaw
+        elif axis == "pitch":
+            self.control_setpoint[axis] = self.imu.pitch
+        elif axis == "roll":
+            self.control_setpoint[axis] = self.imu.roll
+        else:
+            return False
+        self.controllers[axis].reset()
+        return True
+
     def _init_subscriptions(self):
         # Explicit QoS profiles for deterministic behavior by topic class.
         qos_sensor = QoSProfile(
@@ -396,6 +523,10 @@ class StingrayCoreControlNode(Node):
 
         self.sub_control_data = self.create_subscription(
             Twist, self.topic_control_data, self.control_data_callback, qos_command
+        )
+
+        self.sub_control_mode = self.create_subscription(
+            UInt8, self.topic_control_mode, self.control_mode_callback, qos_command
         )
 
     def _init_publishers(self):
@@ -563,22 +694,45 @@ class StingrayCoreControlNode(Node):
             self.previous_depth = new_depth
             self.previous_depth_stamp = stamp
 
-            current_position = {
-                "surge": self.dvl_position_x,
-                "sway": self.dvl_position_y,
-            }
-            for axis in ("surge", "sway"):
-                if (
-                    self.control.enabled.get(axis, False)
-                    and not self.flag_setup_feedback_speed
-                    and not self.position_target_initialized[axis]
-                ):
-                    self.control_setpoint[axis] = current_position[axis]
-                    self.position_target_initialized[axis] = True
+            horizontal_needs_initialization = any(
+                self.control.enabled.get(axis, False)
+                and not self.position_target_initialized[axis]
+                for axis in ("surge", "sway")
+            )
+            if not self.flag_setup_feedback_speed and horizontal_needs_initialization:
+                # X/Y form one odom-frame target even if only one horizontal
+                # controller is enabled, so initialize them atomically.
+                self.control_setpoint["surge"] = self.dvl_position_x
+                self.control_setpoint["sway"] = self.dvl_position_y
+                for axis in ("surge", "sway"):
+                    if self.control.enabled.get(axis, False):
+                        self.position_target_initialized[axis] = True
         except Exception as e:
             self.get_logger().warning(f"Error parsing standardized odometry: {e}")
 
     def control_data_callback(self, msg: Twist):
+        if self.control_mode in (CONTROL_MODE_MANUAL, CONTROL_MODE_ASSISTED):
+            self._process_manual_impact(msg)
+            return
+        self._process_position_setpoint(msg)
+
+    def _process_manual_impact(self, msg: Twist):
+        """Store UMAS-GUI commands as direct axis impacts."""
+        command_time = time.monotonic()
+        incoming = {
+            "surge": float(msg.linear.x),
+            "sway": float(msg.linear.y),
+            "heave": float(msg.linear.z),
+            "roll": float(msg.angular.x),
+            "pitch": float(msg.angular.y),
+            "yaw": float(msg.angular.z),
+        }
+        for axis, value in incoming.items():
+            self.control_input[axis] = value
+            self.last_control_input_time[axis] = command_time
+
+    def _process_position_setpoint(self, msg: Twist):
+        """Resolve automatic relative-position and absolute-angle setpoints."""
         command_time = time.monotonic()
         incoming = {
             "surge": float(msg.linear.x),
@@ -589,57 +743,115 @@ class StingrayCoreControlNode(Node):
             "yaw": float(msg.angular.z),
         }
 
-        for axis, value in incoming.items():
-            if axis == "heave" and self.control.enabled.get("heave", False):
-                self.control_input[axis] = value
-                self.last_control_input_time[axis] = command_time
-                # Closed loop: linear.z is an absolute positive-down depth.
-                # self.control_setpoint[axis] = value
-            elif axis in ("surge", "sway") and self.control.enabled.get(axis, False):
-                if self.flag_setup_feedback_speed:
-                    # Режим настройки скорости: прямая уставка скорости.
-                    self.control_setpoint[axis] = value
-                else:
-                    # Позиционный режим: команда — желаемое смещение
-                    # относительно текущего положения аппарата.
-                    if axis == "surge":
-                        self.control_setpoint[axis] = self.dvl_position_x + value
-                    else:  # sway
-                        self.control_setpoint[axis] = self.dvl_position_y + value
-
-                    self.position_target_initialized[axis] = True
-
-                    self.get_logger().info(
-                        f"{axis} target: current="
-                        f"{self.dvl_position_x if axis == 'surge' else self.dvl_position_y:+.3f} m, "
-                        f"offset={value:+.3f} m, "
-                        f"target={self.control_setpoint[axis]:+.3f} m"
-                    )
-            # elif axis in ("surge", "sway") and self.control.enabled.get(axis, False):
-            #     if self.flag_setup_feedback_speed:
-            #         # В режиме настройки контура скорости команда остаётся
-            #         # непосредственной уставкой скорости, м/с.
-            #         self.control_setpoint[axis] = value
-            #     else:
-            #         # В позиционном режиме команда задаёт скорость
-            #         # перемещения удерживаемой точки, м/с.
-            #         self.control_input[axis] = value
-            #         self.last_control_input_time[axis] = command_time
-            # elif axis in ("surge", "sway") and self.control.enabled.get(
-            #     axis, False
-            # ):
-            #     # Normally this is an absolute DVL position [m]. In feedback
-            #     # setup mode it is a direct velocity setpoint [m/s].
-            #     self.control_setpoint[axis] = value
-            #     self.position_target_initialized[axis] = True
+        horizontal_command = (incoming["surge"], incoming["sway"])
+        horizontal_closed = any(
+            self.control.enabled.get(axis, False) for axis in ("surge", "sway")
+        )
+        if (
+            horizontal_closed
+            and not self.flag_setup_feedback_speed
+            and horizontal_setpoint_changed(
+                self.last_horizontal_command, horizontal_command
+            )
+        ):
+            if self._is_dvl_position_fresh():
+                offset_x, offset_y = body_offset_to_odom(
+                    horizontal_command[0], horizontal_command[1], self.imu.yaw
+                )
+                targets = {
+                    "surge": self.dvl_position_x + offset_x,
+                    "sway": self.dvl_position_y + offset_y,
+                }
+                for horizontal_axis in ("surge", "sway"):
+                    # These two fields store the target X/Y coordinates in
+                    # odom; both coordinates belong to one atomic target.
+                    self.control_setpoint[horizontal_axis] = targets[horizontal_axis]
+                    if self.control.enabled.get(horizontal_axis, False):
+                        self.position_target_initialized[horizontal_axis] = True
+                        self.controllers[horizontal_axis].reset()
+                self.last_horizontal_command = horizontal_command
             else:
-                # Open-loop heave remains a direct pilot impact. Other axes
-                # retain their existing command semantics.
+                self.get_logger().warning(
+                    "Ignored horizontal setpoint: odometry position is stale"
+                )
+
+        for axis, value in incoming.items():
+            if not self.control.enabled.get(axis, False):
                 self.control_input[axis] = value
                 self.last_control_input_time[axis] = command_time
+                continue
+
+            if self.flag_setup_feedback_speed:
+                # In tuning mode all six fields are direct velocity setpoints.
+                self.control_input[axis] = value
+                self.last_control_input_time[axis] = command_time
+                continue
+
+            if axis in ("surge", "sway"):
+                # The horizontal pair was resolved atomically above so that
+                # body-frame march/lag can be rotated into the odom frame.
+                self.control_input[axis] = 0.0
+                continue
+
+            # Closed position/attitude loops hold the resolved target and do
+            # not integrate /control/data in the periodic control loop.
+            self.control_input[axis] = 0.0
+            if not setpoint_changed(self.last_closed_loop_command[axis], value):
+                continue
+
+            if axis == "heave":
+                # Depth is positive down; linear.z is a relative displacement.
+                self.control_setpoint[axis] = relative_position_target(
+                    self.depth, value
+                )
+            else:
+                # angular.x/y/z are absolute attitude setpoints in degrees.
+                self.control_setpoint[axis] = self.normalize_angle_deg(value)
+
+            self.last_closed_loop_command[axis] = value
+            self.controllers[axis].reset()
+
+    def control_mode_callback(self, msg: UInt8):
+        requested_mode = int(msg.data)
+        if requested_mode not in (
+            CONTROL_MODE_MANUAL,
+            CONTROL_MODE_ASSISTED,
+            CONTROL_MODE_AUTOMATIC,
+        ):
+            self.get_logger().warning(
+                f"Ignored invalid control mode: {requested_mode}"
+            )
+            return
+        if requested_mode == self.control_mode:
+            return
+
+        old_mode = self.control_mode
+        self.control_mode = requested_mode
+        for axis in self.axes:
+            self.control_input[axis] = 0.0
+            self.manual_impact_active[axis] = False
+            self.last_closed_loop_command[axis] = None
+        self.last_horizontal_command = None
+
+        if requested_mode != CONTROL_MODE_MANUAL:
+            self._capture_horizontal_hold_setpoint()
+            for axis in ("heave", "yaw"):
+                if self.control.enabled.get(axis, False):
+                    self._capture_hold_setpoint(axis)
+            for axis in ("pitch", "roll"):
+                if self.control.enabled.get(axis, False):
+                    self.control_setpoint[axis] = 0.0
+                    self.controllers[axis].reset()
+
+        self.get_logger().info(
+            f"Control mode changed: {old_mode} -> {self.control_mode}"
+        )
 
     def control_mode_flags_callback(self, msg: UInt8):
         flags = int(msg.data)
+        new_sum_control_impacts = bool(flags & (1 << 6))
+        sum_mode_changed = new_sum_control_impacts != self.sum_control_impacts
+        self.sum_control_impacts = new_sum_control_impacts
         new_enabled = {
             "surge": bool(flags & (1 << 0)),
             "sway": bool(flags & (1 << 1)),
@@ -650,6 +862,7 @@ class StingrayCoreControlNode(Node):
         }
 
         changed = []
+        newly_enabled = set()
         for axis, new_value in new_enabled.items():
             old_value = bool(self.control.enabled.get(axis, False))
             if old_value != new_value:
@@ -659,27 +872,30 @@ class StingrayCoreControlNode(Node):
                 #     # При включении контура берём последнюю принятую команду как цель.
                 #     self.control_setpoint[axis] = self.control_input[axis]
                 if new_value:
+                    newly_enabled.add(axis)
+                    self.last_closed_loop_command[axis] = None
+                    if axis in ("surge", "sway"):
+                        self.last_horizontal_command = None
                     if axis == "heave":
                         self.control_input[axis] = 0.0
-                        self.control_setpoint[axis] = 0.30  # 30 cm, positive down
+                        self.control_setpoint[axis] = self.depth
                         self.controllers["heave"].reset()
                     elif axis == "yaw":
                         self.control_setpoint[axis] = self.imu.yaw
                     elif axis == "pitch":
                         self.control_setpoint[axis] = 0.0
                         self.controllers["pitch"].reset()
-                        # self.control_setpoint[axis] = self.imu.pitch
                     elif axis == "roll":
                         self.control_setpoint[axis] = 0.0
                         self.controllers["roll"].reset()
-                        # self.control_setpoint[axis] = self.imu.roll
                     elif axis == "surge":
                         self.control_input[axis] = 0.0
                         if self.flag_setup_feedback_speed:
                             self.control_setpoint[axis] = 0.0
                             self.position_target_initialized[axis] = True
                         elif self._is_dvl_position_fresh():
-                            self.control_setpoint[axis] = self.dvl_position_x
+                            self.control_setpoint["surge"] = self.dvl_position_x
+                            self.control_setpoint["sway"] = self.dvl_position_y
                             self.position_target_initialized[axis] = True
                         else:
                             self.position_target_initialized[axis] = False
@@ -690,7 +906,8 @@ class StingrayCoreControlNode(Node):
                             self.control_setpoint[axis] = 0.0
                             self.position_target_initialized[axis] = True
                         elif self._is_dvl_position_fresh():
-                            self.control_setpoint[axis] = self.dvl_position_y
+                            self.control_setpoint["surge"] = self.dvl_position_x
+                            self.control_setpoint["sway"] = self.dvl_position_y
                             self.position_target_initialized[axis] = True
                         else:
                             self.position_target_initialized[axis] = False
@@ -701,8 +918,30 @@ class StingrayCoreControlNode(Node):
                     self.open_loop_pending[axis] = False
                     if axis in self.position_target_initialized:
                         self.position_target_initialized[axis] = False
+                    self.last_closed_loop_command[axis] = None
+                    if axis in ("surge", "sway"):
+                        self.last_horizontal_command = None
 
             self.control.enabled[axis] = new_value
+
+        if sum_mode_changed:
+            # Do not carry a manual impact across a semantics switch. Capture
+            # the current point to avoid a jump when summing is toggled.
+            for axis in self.axes:
+                self.control_input[axis] = 0.0
+                self.manual_impact_active[axis] = False
+            self._capture_horizontal_hold_setpoint()
+            for axis in ("heave", "yaw", "pitch", "roll"):
+                if self.control.enabled.get(axis, False):
+                    # A pitch/roll loop closed by this same flags message must
+                    # keep its mandatory zero-degree target.
+                    if axis in ("pitch", "roll") and axis in newly_enabled:
+                        continue
+                    self._capture_hold_setpoint(axis)
+            changed.append(
+                "sum_control_impacts: "
+                f"{not self.sum_control_impacts} -> {self.sum_control_impacts}"
+            )
 
         if changed:
             self.get_logger().info(
