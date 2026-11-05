@@ -3,6 +3,7 @@ import math
 from stingray_core_control.control.controllers import SurgeController, SwayController
 from stingray_core_control.stingray_core_control_node import (
     body_offset_to_odom,
+    horizontal_position_command,
     horizontal_setpoint_changed,
     odom_error_to_body,
     relative_position_target,
@@ -72,3 +73,9 @@ def test_repeated_horizontal_pair_is_not_a_new_command():
     assert horizontal_setpoint_changed(previous=None, current=(1.0, 2.0))
     assert not horizontal_setpoint_changed(previous=(1.0, 2.0), current=(1.0, 2.0))
     assert horizontal_setpoint_changed(previous=(1.0, 2.0), current=(1.0, 3.0))
+
+
+def test_mixed_horizontal_modes_keep_only_position_offset():
+    assert horizontal_position_command(1.0, 2.0, True, False) == (0.0, 2.0)
+    assert horizontal_position_command(1.0, 2.0, False, True) == (1.0, 0.0)
+    assert horizontal_position_command(1.0, 2.0, True, True) == (0.0, 0.0)

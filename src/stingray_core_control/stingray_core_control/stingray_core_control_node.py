@@ -93,6 +93,19 @@ def horizontal_setpoint_changed(
     )
 
 
+def horizontal_position_command(
+    surge: float,
+    sway: float,
+    surge_speed_mode: bool,
+    sway_speed_mode: bool,
+) -> tuple[float, float]:
+    """Keep only offsets assigned to horizontal position loops."""
+    return (
+        0.0 if surge_speed_mode else surge,
+        0.0 if sway_speed_mode else sway,
+    )
+
+
 class StingrayCoreControlNode(Node):
     def __init__(self):
         super().__init__("stingray_core_control_node")
@@ -133,8 +146,8 @@ class StingrayCoreControlNode(Node):
         # === 1. Определяем управляющие воздействия ===
         u: dict[str, float] = {}
         horizontal_error_body = odom_error_to_body(
-            self.control_setpoint["surge"] - self.dvl_position_x,
-            self.control_setpoint["sway"] - self.dvl_position_y,
+            self.horizontal_position_setpoint["surge"] - self.dvl_position_x,
+            self.horizontal_position_setpoint["sway"] - self.dvl_position_y,
             self.imu.yaw,
         )
 
@@ -161,6 +174,7 @@ class StingrayCoreControlNode(Node):
 
             if axis in self.axis_ctrl and self.control.enabled[axis]:
                 manual_impact = self.control_input[axis] if assisted_mode else 0.0
+                speed_feedback = self._uses_speed_feedback(axis)
                 if sum_mode_active and axis not in ("surge", "sway"):
                     manual_active = (
                         abs(manual_impact) > self.manual_impact_deadband
@@ -171,12 +185,14 @@ class StingrayCoreControlNode(Node):
 
                 if axis in ("surge", "sway"):
                     if (
-                        not self.position_target_initialized[axis]
-                        or not self._is_dvl_fresh()
+                        not self._is_dvl_fresh()
                         or not self.dvl_velocity_valid
                         or (
-                            not self.flag_setup_feedback_speed
-                            and not self._is_dvl_position_fresh()
+                            not speed_feedback
+                            and (
+                                not self.position_target_initialized[axis]
+                                or not self._is_dvl_position_fresh()
+                            )
                         )
                     ):
                         # Both DVL position and velocity are mandatory for the
@@ -187,15 +203,10 @@ class StingrayCoreControlNode(Node):
                         self.control.impact[axis] = u[axis]
                         continue
 
-                if self.flag_setup_feedback_speed:
-                    # Tuning mode is the only mode where /control/data carries
-                    # velocity setpoints instead of position/angle setpoints.
-                    self.control_setpoint[axis] = self.control_input[axis]
-
                 target = self.control_setpoint[axis]
-                if axis == "surge" and not self.flag_setup_feedback_speed:
+                if axis == "surge" and not speed_feedback:
                     target = horizontal_error_body[0]
-                elif axis == "sway" and not self.flag_setup_feedback_speed:
+                elif axis == "sway" and not speed_feedback:
                     target = horizontal_error_body[1]
 
                 u[axis] = self.axis_ctrl[axis].compute(target=target, dt=self.last_dt)
@@ -261,6 +272,13 @@ class StingrayCoreControlNode(Node):
             "axes", ["surge", "sway", "heave", "roll", "pitch", "yaw"]
         )
         self.axes = list(self.get_parameter("axes").value)
+        self.feedback_speed_by_axis = {}
+        for axis in self.axes:
+            pname = f"feedback_speed.{axis}"
+            self.declare_parameter(pname, self.flag_setup_feedback_speed)
+            self.feedback_speed_by_axis[axis] = bool(
+                self.get_parameter(pname).value
+            )
 
         self.declare_parameter("dvl_timeout_sec", 0.5)
         self.dvl_timeout_sec = float(self.get_parameter("dvl_timeout_sec").value)
@@ -282,6 +300,9 @@ class StingrayCoreControlNode(Node):
 
         self.declare_parameter("thrusters", Parameter.Type.STRING_ARRAY)
         self.thrusters = list(self.get_parameter("thrusters").value)
+
+    def _uses_speed_feedback(self, axis: str) -> bool:
+        return bool(self.feedback_speed_by_axis.get(axis, False))
 
     def _init_control_core(self):
         coeffs = {}
@@ -362,6 +383,9 @@ class StingrayCoreControlNode(Node):
         }
         # Удерживаемые цели для замкнутых контуров
         self.control_setpoint: dict[str, float] = {axis: 0.0 for axis in self.axes}
+        # Odom X/Y target remains a pair even when only one horizontal axis
+        # uses position feedback and the other one uses velocity feedback.
+        self.horizontal_position_setpoint = {"surge": 0.0, "sway": 0.0}
         # Флаг одноразовой подачи для разомкнутых контуров
         self.open_loop_pending: dict[str, bool] = {axis: False for axis in self.axes}
 
@@ -396,38 +420,38 @@ class StingrayCoreControlNode(Node):
                 controller=self.controllers["yaw"],
                 angle_fn=lambda: self.imu.yaw,
                 rate_fn=lambda: self.imu.rate_z,
-                feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
+                feedback_flag_fn=lambda: self._uses_speed_feedback("yaw"),
             ),
             "pitch": AngularAxisController(
                 controller=self.controllers["pitch"],
                 angle_fn=lambda: self.imu.pitch,
                 rate_fn=lambda: self.imu.rate_y,
-                feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
+                feedback_flag_fn=lambda: self._uses_speed_feedback("pitch"),
             ),
             "roll": AngularAxisController(
                 controller=self.controllers["roll"],
                 angle_fn=lambda: self.imu.roll,
                 rate_fn=lambda: self.imu.rate_x,
-                feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
+                feedback_flag_fn=lambda: self._uses_speed_feedback("roll"),
             ),
             "heave": LinearAxisController(
                 controller=self.controllers["heave"],
                 pos_fn=lambda: self.depth,
                 vel_fn=self._get_heave_velocity_measurement,
                 accel_fn=lambda: self.imu.accel_z,
-                feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
+                feedback_flag_fn=lambda: self._uses_speed_feedback("heave"),
             ),
             "surge": LinearPositionAxisController(
                 controller=self.controllers["surge"],
                 pos_fn=lambda: 0.0,
                 vel_fn=self._get_surge_velocity_measurement,
-                feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
+                feedback_flag_fn=lambda: self._uses_speed_feedback("surge"),
             ),
             "sway": LinearPositionAxisController(
                 controller=self.controllers["sway"],
                 pos_fn=lambda: 0.0,
                 vel_fn=self._get_sway_velocity_measurement,
-                feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
+                feedback_flag_fn=lambda: self._uses_speed_feedback("sway"),
             ),
         }
 
@@ -473,12 +497,25 @@ class StingrayCoreControlNode(Node):
 
     def _capture_horizontal_hold_setpoint(self) -> bool:
         """Capture the current odom X/Y as one horizontal hold target."""
-        if not self._is_dvl_position_fresh():
+        position_axes = [
+            axis
+            for axis in ("surge", "sway")
+            if self.control.enabled.get(axis, False)
+            and not self._uses_speed_feedback(axis)
+        ]
+        if position_axes and not self._is_dvl_position_fresh():
             return False
-        self.control_setpoint["surge"] = self.dvl_position_x
-        self.control_setpoint["sway"] = self.dvl_position_y
+        if position_axes:
+            self.horizontal_position_setpoint["surge"] = self.dvl_position_x
+            self.horizontal_position_setpoint["sway"] = self.dvl_position_y
         for axis in ("surge", "sway"):
             if self.control.enabled.get(axis, False):
+                if self._uses_speed_feedback(axis):
+                    self.control_setpoint[axis] = 0.0
+                else:
+                    self.control_setpoint[axis] = (
+                        self.horizontal_position_setpoint[axis]
+                    )
                 self.position_target_initialized[axis] = True
                 self.controllers[axis].reset()
         return True
@@ -487,6 +524,10 @@ class StingrayCoreControlNode(Node):
         """Capture the current state as an enabled loop's hold target."""
         if axis in ("surge", "sway"):
             return self._capture_horizontal_hold_setpoint()
+        if self._uses_speed_feedback(axis):
+            self.control_setpoint[axis] = 0.0
+            self.controllers[axis].reset()
+            return True
         if axis == "heave":
             self.control_setpoint[axis] = self.depth
         elif axis == "yaw":
@@ -594,6 +635,9 @@ class StingrayCoreControlNode(Node):
         self.pub_out = self.create_publisher(Float64, "~/debug/out", qos_debug)
 
         debug_fields = (
+            "setpoint",
+            "measurement",
+            "speed_mode",
             "err_position",
             "output_pi",
             "feedback_speed",
@@ -707,16 +751,21 @@ class StingrayCoreControlNode(Node):
 
             horizontal_needs_initialization = any(
                 self.control.enabled.get(axis, False)
+                and not self._uses_speed_feedback(axis)
                 and not self.position_target_initialized[axis]
                 for axis in ("surge", "sway")
             )
-            if not self.flag_setup_feedback_speed and horizontal_needs_initialization:
+            if horizontal_needs_initialization:
                 # X/Y form one odom-frame target even if only one horizontal
                 # controller is enabled, so initialize them atomically.
-                self.control_setpoint["surge"] = self.dvl_position_x
-                self.control_setpoint["sway"] = self.dvl_position_y
+                self.horizontal_position_setpoint["surge"] = self.dvl_position_x
+                self.horizontal_position_setpoint["sway"] = self.dvl_position_y
                 for axis in ("surge", "sway"):
                     if self.control.enabled.get(axis, False):
+                        if not self._uses_speed_feedback(axis):
+                            self.control_setpoint[axis] = (
+                                self.horizontal_position_setpoint[axis]
+                            )
                         self.position_target_initialized[axis] = True
         except Exception as e:
             self.get_logger().warning(f"Error parsing standardized odometry: {e}")
@@ -762,13 +811,19 @@ class StingrayCoreControlNode(Node):
             "yaw": float(msg.angular.z),
         }
 
-        horizontal_command = (incoming["surge"], incoming["sway"])
-        horizontal_closed = any(
-            self.control.enabled.get(axis, False) for axis in ("surge", "sway")
+        horizontal_command = horizontal_position_command(
+            incoming["surge"],
+            incoming["sway"],
+            self._uses_speed_feedback("surge"),
+            self._uses_speed_feedback("sway"),
+        )
+        horizontal_position_closed = any(
+            self.control.enabled.get(axis, False)
+            and not self._uses_speed_feedback(axis)
+            for axis in ("surge", "sway")
         )
         if (
-            horizontal_closed
-            and not self.flag_setup_feedback_speed
+            horizontal_position_closed
             and horizontal_setpoint_changed(
                 self.last_horizontal_command, horizontal_command
             )
@@ -784,8 +839,16 @@ class StingrayCoreControlNode(Node):
                 for horizontal_axis in ("surge", "sway"):
                     # These two fields store the target X/Y coordinates in
                     # odom; both coordinates belong to one atomic target.
-                    self.control_setpoint[horizontal_axis] = targets[horizontal_axis]
-                    if self.control.enabled.get(horizontal_axis, False):
+                    self.horizontal_position_setpoint[horizontal_axis] = targets[
+                        horizontal_axis
+                    ]
+                    if (
+                        self.control.enabled.get(horizontal_axis, False)
+                        and not self._uses_speed_feedback(horizontal_axis)
+                    ):
+                        self.control_setpoint[horizontal_axis] = targets[
+                            horizontal_axis
+                        ]
                         self.position_target_initialized[horizontal_axis] = True
                         self.controllers[horizontal_axis].reset()
                 self.last_horizontal_command = horizontal_command
@@ -800,10 +863,14 @@ class StingrayCoreControlNode(Node):
                 self.last_control_input_time[axis] = command_time
                 continue
 
-            if self.flag_setup_feedback_speed:
-                # In tuning mode all six fields are direct velocity setpoints.
-                self.control_input[axis] = value
-                self.last_control_input_time[axis] = command_time
+            if self._uses_speed_feedback(axis):
+                # A speed-mode loop consumes the matching Twist field as a
+                # linear velocity [m/s] or angular rate [deg/s] setpoint.
+                self.control_input[axis] = 0.0
+                if setpoint_changed(self.last_closed_loop_command[axis], value):
+                    self.control_setpoint[axis] = value
+                    self.last_closed_loop_command[axis] = value
+                    self.controllers[axis].reset()
                 continue
 
             if axis in ("surge", "sway"):
@@ -889,6 +956,14 @@ class StingrayCoreControlNode(Node):
                 if new_value:
                     newly_enabled.add(axis)
                     self.last_closed_loop_command[axis] = None
+                    if self._uses_speed_feedback(axis):
+                        self.control_input[axis] = 0.0
+                        self.control_setpoint[axis] = 0.0
+                        if axis in self.position_target_initialized:
+                            self.position_target_initialized[axis] = True
+                        self.controllers[axis].reset()
+                        self.control.enabled[axis] = new_value
+                        continue
                     if axis in ("surge", "sway"):
                         self.last_horizontal_command = None
                     if axis == "heave":
@@ -905,24 +980,32 @@ class StingrayCoreControlNode(Node):
                         self.controllers["roll"].reset()
                     elif axis == "surge":
                         self.control_input[axis] = 0.0
-                        if self.flag_setup_feedback_speed:
-                            self.control_setpoint[axis] = 0.0
-                            self.position_target_initialized[axis] = True
-                        elif self._is_dvl_position_fresh():
-                            self.control_setpoint["surge"] = self.dvl_position_x
-                            self.control_setpoint["sway"] = self.dvl_position_y
+                        if self._is_dvl_position_fresh():
+                            self.horizontal_position_setpoint[
+                                "surge"
+                            ] = self.dvl_position_x
+                            self.horizontal_position_setpoint[
+                                "sway"
+                            ] = self.dvl_position_y
+                            self.control_setpoint[axis] = (
+                                self.horizontal_position_setpoint[axis]
+                            )
                             self.position_target_initialized[axis] = True
                         else:
                             self.position_target_initialized[axis] = False
                         self.controllers[axis].reset()
                     elif axis == "sway":
                         self.control_input[axis] = 0.0
-                        if self.flag_setup_feedback_speed:
-                            self.control_setpoint[axis] = 0.0
-                            self.position_target_initialized[axis] = True
-                        elif self._is_dvl_position_fresh():
-                            self.control_setpoint["surge"] = self.dvl_position_x
-                            self.control_setpoint["sway"] = self.dvl_position_y
+                        if self._is_dvl_position_fresh():
+                            self.horizontal_position_setpoint[
+                                "surge"
+                            ] = self.dvl_position_x
+                            self.horizontal_position_setpoint[
+                                "sway"
+                            ] = self.dvl_position_y
+                            self.control_setpoint[axis] = (
+                                self.horizontal_position_setpoint[axis]
+                            )
                             self.position_target_initialized[axis] = True
                         else:
                             self.position_target_initialized[axis] = False
@@ -991,7 +1074,33 @@ class StingrayCoreControlNode(Node):
 
             # --- 3. Применяем node params ---
             for p in node_params:
-                if hasattr(self, p.name):
+                if p.name.startswith("feedback_speed."):
+                    axis = p.name.split(".", 1)[1]
+                    if axis not in self.feedback_speed_by_axis:
+                        raise ValueError(f"Unknown feedback axis: {axis}")
+                    if not isinstance(p.value, bool):
+                        raise ValueError(f"{p.name} must be boolean")
+                    self.feedback_speed_by_axis[axis] = p.value
+                    self.control_setpoint[axis] = 0.0
+                    self.last_closed_loop_command[axis] = None
+                    self.controllers[axis].reset()
+                    if self.control.enabled.get(axis, False) and not p.value:
+                        self._capture_hold_setpoint(axis)
+                    self.get_logger().info(
+                        f"Feedback mode '{axis}': "
+                        f"{'speed' if p.value else 'position'}"
+                    )
+                elif p.name == "flag_setup_feedback_speed":
+                    self.flag_setup_feedback_speed = bool(p.value)
+                    for axis in self.axes:
+                        self.feedback_speed_by_axis[axis] = bool(p.value)
+                        self.control_setpoint[axis] = 0.0
+                        self.last_closed_loop_command[axis] = None
+                        self.controllers[axis].reset()
+                    self.get_logger().warning(
+                        "flag_setup_feedback_speed is deprecated; updated all axes"
+                    )
+                elif hasattr(self, p.name):
                     setattr(self, p.name, p.value)
                     self.get_logger().info(f"Node param updated: {p.name} = {p.value}")
 

@@ -194,6 +194,9 @@ class YawController(BaseController):
 
         if self.debug_hook is not None:
             self.debug_hook({
+                "setpoint": setpoint,
+                "measurement": measurement_rate if flag_setup_feedback_speed else measurement,
+                "speed_mode": float(flag_setup_feedback_speed),
                 "err_position": err_position,
                 "output_pi": output_pi,
                 "feedback_speed": feedback_speed,
@@ -262,6 +265,9 @@ class PitchController(BaseController):
         # --- DEBUG ---
         if self.debug_hook is not None:
             self.debug_hook({
+                "setpoint": setpoint,
+                "measurement": measurement_rate if flag_setup_feedback_speed else measurement,
+                "speed_mode": float(flag_setup_feedback_speed),
                 "err_position": err_position,
                 "output_pi": output_pi,
                 "measurement_rate": measurement_rate,
@@ -333,6 +339,9 @@ class RollController(BaseController):
 
         if self.debug_hook is not None:
             self.debug_hook({
+                "setpoint": setpoint,
+                "measurement": measurement_rate if flag_setup_feedback_speed else measurement,
+                "speed_mode": float(flag_setup_feedback_speed),
                 "err_position": err_position,
                 "output_pi": output_pi,
                 "measurement_rate": measurement_rate,
@@ -393,6 +402,9 @@ class DepthController(BaseController):
 
         if self.debug_hook is not None:
             self.debug_hook({
+                "setpoint": setpoint,
+                "measurement": depth_rate if flag_setup_feedback_speed else measurement,
+                "speed_mode": float(flag_setup_feedback_speed),
                 "err_position": err_position,
                 "measurement_rate": depth_rate,
                 "feedback_speed": feedback_speed,
@@ -451,6 +463,9 @@ class SurgeController(BaseController):
 
         if self.debug_hook is not None:
             self.debug_hook({
+                "setpoint": setpoint,
+                "measurement": measurement_rate if flag_setup_feedback_speed else measurement,
+                "speed_mode": float(flag_setup_feedback_speed),
                 "position": setpoint,
                 "err_position": err_position,
                 "output_pi": output_pi,
