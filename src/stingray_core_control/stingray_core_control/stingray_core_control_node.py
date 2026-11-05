@@ -36,14 +36,19 @@ from .control.controllers import (
     SwayController,
     YawController,
 )
+from .control.command_arbiter import (
+    CommandRoute,
+    ControlCommandArbiter,
+    ControlMode,
+)
 from .control.thruster_mixer import ThrusterMixer
 from .state.control import ControlState
 from .state.imu import ImuState
 from .utils.save_params import save_params
 
-CONTROL_MODE_MANUAL = 0
-CONTROL_MODE_ASSISTED = 1
-CONTROL_MODE_AUTOMATIC = 2
+CONTROL_MODE_MANUAL = int(ControlMode.MANUAL)
+CONTROL_MODE_ASSISTED = int(ControlMode.ASSISTED)
+CONTROL_MODE_AUTOMATIC = int(ControlMode.AUTOMATIC)
 
 
 def relative_position_target(current: float, offset: float) -> float:
@@ -244,6 +249,7 @@ class StingrayCoreControlNode(Node):
             "topic_odometry": "/core/state/odometry",
             "topic_loop_flags": "/control/loop_flags",
             "topic_control_data": "/control/data",
+            "topic_manual_impact": "/control/manual_impact",
             "topic_control_mode": "/control/mode",
         }
 
@@ -349,6 +355,7 @@ class StingrayCoreControlNode(Node):
         # Последняя полученная команда из /control/data
         self.control_input: dict[str, float] = {axis: 0.0 for axis in self.axes}
         self.control_mode = CONTROL_MODE_MANUAL
+        self.command_arbiter = ControlCommandArbiter(ControlMode.MANUAL)
         self.sum_control_impacts = False
         self.manual_impact_active: dict[str, bool] = {
             axis: False for axis in self.axes
@@ -522,7 +529,11 @@ class StingrayCoreControlNode(Node):
         )
 
         self.sub_control_data = self.create_subscription(
-            Twist, self.topic_control_data, self.control_data_callback, qos_command
+            Twist, self.topic_control_data, self.automatic_data_callback, qos_command
+        )
+
+        self.sub_manual_impact = self.create_subscription(
+            Twist, self.topic_manual_impact, self.manual_impact_callback, qos_command
         )
 
         self.sub_control_mode = self.create_subscription(
@@ -710,11 +721,19 @@ class StingrayCoreControlNode(Node):
         except Exception as e:
             self.get_logger().warning(f"Error parsing standardized odometry: {e}")
 
-    def control_data_callback(self, msg: Twist):
-        if self.control_mode in (CONTROL_MODE_MANUAL, CONTROL_MODE_ASSISTED):
+    def manual_impact_callback(self, msg: Twist):
+        if (
+            self.command_arbiter.route_manual_command()
+            == CommandRoute.MANUAL_IMPACT
+        ):
             self._process_manual_impact(msg)
-            return
-        self._process_position_setpoint(msg)
+
+    def automatic_data_callback(self, msg: Twist):
+        if (
+            self.command_arbiter.route_automatic_command()
+            == CommandRoute.AUTOMATIC_SETPOINT
+        ):
+            self._process_position_setpoint(msg)
 
     def _process_manual_impact(self, msg: Twist):
         """Store UMAS-GUI commands as direct axis impacts."""
@@ -813,11 +832,7 @@ class StingrayCoreControlNode(Node):
 
     def control_mode_callback(self, msg: UInt8):
         requested_mode = int(msg.data)
-        if requested_mode not in (
-            CONTROL_MODE_MANUAL,
-            CONTROL_MODE_ASSISTED,
-            CONTROL_MODE_AUTOMATIC,
-        ):
+        if not self.command_arbiter.set_mode(requested_mode):
             self.get_logger().warning(
                 f"Ignored invalid control mode: {requested_mode}"
             )

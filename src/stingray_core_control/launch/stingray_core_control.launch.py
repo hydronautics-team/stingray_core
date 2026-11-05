@@ -25,6 +25,7 @@ def generate_launch_description():
     topic_odometry = LaunchConfiguration('topic_odometry')
     topic_loop_flags = LaunchConfiguration('topic_loop_flags')
     topic_control_data = LaunchConfiguration('topic_control_data')
+    topic_manual_impact = LaunchConfiguration('topic_manual_impact')
     topic_control_mode = LaunchConfiguration('topic_control_mode')
     # thruster_direction_matrix = LaunchConfiguration('thruster_direction_matrix')
 
@@ -82,6 +83,11 @@ def generate_launch_description():
             default_value='/control/mode',
             description='UMAS-GUI control mode: 0 manual, 1 assisted, 2 automatic'
         ),
+        DeclareLaunchArgument(
+            'topic_manual_impact',
+            default_value='/control/manual_impact',
+            description='Direct operator impacts from UMAS-GUI (Twist)'
+        ),
         # DeclareLaunchArgument(
         #     'thruster_direction_matrix',
         #     default_value='',
@@ -103,6 +109,7 @@ def generate_launch_description():
                     'topic_odometry': topic_odometry,
                     'topic_loop_flags': topic_loop_flags,
                     'topic_control_data': topic_control_data,
+                    'topic_manual_impact': topic_manual_impact,
                     'topic_control_mode': topic_control_mode,
                     # 'thruster_direction_matrix': thruster_direction_matrix,
                 }
