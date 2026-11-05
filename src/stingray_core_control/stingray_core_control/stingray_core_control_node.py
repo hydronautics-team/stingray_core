@@ -42,6 +42,11 @@ from .state.imu import ImuState
 from .utils.save_params import save_params
 
 
+def advance_position_target(target: float, velocity_command: float, dt: float) -> float:
+    """Move a held position target using a pilot velocity command."""
+    return target + velocity_command * dt
+
+
 class StingrayCoreControlNode(Node):
     def __init__(self):
         super().__init__("stingray_core_control_node")
@@ -99,6 +104,18 @@ class StingrayCoreControlNode(Node):
                         u[axis] = 0.0
                         self.control.impact[axis] = u[axis]
                         continue
+                    if self.flag_setup_feedback_speed:
+                        # Tuning mode bypasses the position loop and sends a
+                        # direct velocity setpoint to the inner feedback loop.
+                        self.control_setpoint[axis] = self.control_input[axis]
+                    else:
+                        # The stick commands target velocity. Integrating it
+                        # keeps the target fixed after release or timeout.
+                        self.control_setpoint[axis] = advance_position_target(
+                            self.control_setpoint[axis],
+                            self.control_input[axis],
+                            self.last_dt,
+                        )
                 elif axis == "heave":
                     # linear.z задаёт скорость изменения уставки глубины, м/с.
                     self.control_setpoint[axis] += (
@@ -596,42 +613,11 @@ class StingrayCoreControlNode(Node):
                 # Closed loop: linear.z is an absolute positive-down depth.
                 # self.control_setpoint[axis] = value
             elif axis in ("surge", "sway") and self.control.enabled.get(axis, False):
-                if self.flag_setup_feedback_speed:
-                    # Режим настройки скорости: прямая уставка скорости.
-                    self.control_setpoint[axis] = value
-                else:
-                    # Позиционный режим: команда — желаемое смещение
-                    # относительно текущего положения аппарата.
-                    if axis == "surge":
-                        self.control_setpoint[axis] = self.dvl_position_x + value
-                    else:  # sway
-                        self.control_setpoint[axis] = self.dvl_position_y + value
-
-                    self.position_target_initialized[axis] = True
-
-                    self.get_logger().info(
-                        f"{axis} target: current="
-                        f"{self.dvl_position_x if axis == 'surge' else self.dvl_position_y:+.3f} m, "
-                        f"offset={value:+.3f} m, "
-                        f"target={self.control_setpoint[axis]:+.3f} m"
-                    )
-            # elif axis in ("surge", "sway") and self.control.enabled.get(axis, False):
-            #     if self.flag_setup_feedback_speed:
-            #         # В режиме настройки контура скорости команда остаётся
-            #         # непосредственной уставкой скорости, м/с.
-            #         self.control_setpoint[axis] = value
-            #     else:
-            #         # В позиционном режиме команда задаёт скорость
-            #         # перемещения удерживаемой точки, м/с.
-            #         self.control_input[axis] = value
-            #         self.last_control_input_time[axis] = command_time
-            # elif axis in ("surge", "sway") and self.control.enabled.get(
-            #     axis, False
-            # ):
-            #     # Normally this is an absolute DVL position [m]. In feedback
-            #     # setup mode it is a direct velocity setpoint [m/s].
-            #     self.control_setpoint[axis] = value
-            #     self.position_target_initialized[axis] = True
+                # linear.x/y are velocity commands. The control loop either
+                # integrates them into held position targets or uses them
+                # directly in velocity-feedback tuning mode.
+                self.control_input[axis] = value
+                self.last_control_input_time[axis] = command_time
             else:
                 # Open-loop heave remains a direct pilot impact. Other axes
                 # retain their existing command semantics.
