@@ -117,7 +117,7 @@ def test_baud(port, baud, listen_sec):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("port", nargs="?", default="/dev/ttyUSB0")
+    ap.add_argument("port", nargs="?", default="/dev/imu")
     ap.add_argument("--baud", type=int)
     ap.add_argument("--listen", type=float, help="только слушать N секунд")
     ap.add_argument("--set-baud", type=int, choices=sorted(BAUD_CODES))
