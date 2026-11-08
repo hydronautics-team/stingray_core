@@ -2,7 +2,7 @@ FROM ros:humble-ros-base
 
 # Установим нужные пакеты + инструменты разработки для VS Code Dev Containers
 RUN apt-get update && apt-get install -y \
-    bash bash-completion build-essential cmake command-not-found gdb git jq less lsb-release \
+    bash bash-completion build-essential cmake command-not-found gdb git jq less lsb-release \  
     clang clangd clang-format clang-tidy clang-tools \
     i2c-tools libasio-dev libboost-all-dev libi2c-dev libserial-dev libgpiod-dev gpiod netcat-openbsd socat \
     python3-colcon-common-extensions python3-colorama python3-pip python3-pyqtgraph \
@@ -70,7 +70,7 @@ WORKDIR /stingray_core
 
 RUN groupadd -f i2c && usermod -aG i2c root
 
-COPY docker/entrypoint.sh /entrypoint.sh
+COPY /entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
