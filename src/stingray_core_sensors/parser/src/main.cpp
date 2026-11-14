@@ -180,6 +180,14 @@ private:
         return angle;
     }
 
+    // ========================================================
+    // FILTERED DEG
+    // ========================================================
+
+    bool rp_initialized_ = false;
+    double filtered_roll_deg_ = 0.0;
+    double filtered_pitch_deg_ = 0.0;
+
 
     // ========================================================
     // GYROSCOPE INTEGRATION
@@ -212,24 +220,29 @@ private:
 
         if (!gyro_initialized_)
         {
-            // Начальный курс берём из AH127C.
+            // Начальные углы берём из AH127C.
             //
             // Это сохраняет исходное направление.
             //
-            // Далее готовый Yaw AH127C больше
+            // Далее готовые углы AH127C больше
             // не влияет на интегрирование.
 
-            integrated_yaw_deg_ =
-                normalizeAngle(d.yaw);
+            integrated_roll_deg_  = normalizeAngle(d.roll);
+            integrated_pitch_deg_ = normalizeAngle(d.pitch);
+            integrated_yaw_deg_   = normalizeAngle(d.yaw);
 
-            previous_gyro_rate_ =
-                d.Z_rate;
+            previous_gyro_rate_x_ = -d.X_rate;
+            previous_gyro_rate_y_ = d.Y_rate;
+            previous_gyro_rate_z_ = d.Z_rate;
 
-            last_gyro_time_ =
-                sample_time;
-
+            last_gyro_time_ = sample_time;
             gyro_initialized_ = true;
 
+            RCLCPP_INFO(
+                this->get_logger(),
+                "Initial angles saved: Roll=%.2f, Pitch=%.2f, Yaw=%.2f",
+                integrated_roll_deg_, integrated_pitch_deg_, integrated_yaw_deg_
+            );
             return;
         }
 
@@ -260,8 +273,10 @@ private:
 
         if (dt > 0.1)
         {
-            previous_gyro_rate_ =
-                d.Z_rate;
+
+            previous_gyro_rate_x_ = d.X_rate;
+            previous_gyro_rate_y_ = d.Y_rate;
+            previous_gyro_rate_z_ = d.Z_rate;
 
             last_gyro_time_ =
                 sample_time;
@@ -279,6 +294,49 @@ private:
         }
 
         // ====================================================
+        // ADAPTIVE FILTER ROLL AND PITCH
+        // ====================================================
+
+        if (!rp_initialized_)
+        {
+            filtered_roll_deg_  = d.roll;
+            filtered_pitch_deg_ = d.pitch;
+            rp_initialized_ = true;
+        }
+        else
+        {
+            filtered_roll_deg_  += d.X_rate * dt;
+            filtered_pitch_deg_ += d.Y_rate * dt;
+
+            const double accel_norm = std::sqrt(
+                d.X_accel * d.X_accel +
+                d.Y_accel * d.Y_accel +
+                d.Z_accel * d.Z_accel
+            );
+            const double accel_error = std::abs(accel_norm - 9.80665);
+
+            if (accel_error < 1.5 && accel_norm > 0.1)
+            {
+                const double trust = 1.0 - (accel_error / 1.5);
+                const double k_pitch = 0.02 * trust;
+
+                const double accel_pitch_deg = d.pitch;
+                const double accel_roll_deg  = d.roll;
+
+                filtered_pitch_deg_ += k_pitch * normalizeAngle(accel_pitch_deg - filtered_pitch_deg_);
+
+                const double cos_pitch = std::cos(filtered_pitch_deg_ * DEG_TO_RAD);
+                const double pitch_damping = cos_pitch * cos_pitch; // от 1.0 (в горизонте) до 0.0 (вертикально)
+                const double k_roll = 0.02 * trust * pitch_damping;
+
+                filtered_roll_deg_ += k_roll * normalizeAngle(accel_roll_deg - filtered_roll_deg_);
+            }
+
+            filtered_roll_deg_  = normalizeAngle(filtered_roll_deg_);
+            filtered_pitch_deg_ = normalizeAngle(filtered_pitch_deg_);
+        }
+
+        // ====================================================
         // TRAPEZOIDAL INTEGRATION
         // ====================================================
         //
@@ -289,30 +347,31 @@ private:
         //
         // Yaw += (omega_prev + omega_now) / 2 * dt
 
-        const double average_rate =
-            0.5 * (
-                previous_gyro_rate_ +
-                d.Z_rate
-            );
+        const double avg_rate_x = 0.5 * (previous_gyro_rate_x_ + d.X_rate);
+        const double avg_rate_y = 0.5 * (previous_gyro_rate_y_ + d.Y_rate);
+        const double avg_rate_z = 0.5 * (previous_gyro_rate_z_ + d.Z_rate);
 
         integrated_yaw_deg_ +=
-            average_rate * dt;
+            avg_rate_z * dt;
 
         // ====================================================
         // NORMALIZATION
         // ====================================================
 
-        integrated_yaw_deg_ =
-            normalizeAngle(
-                integrated_yaw_deg_
-            );
+        integrated_roll_deg_  = 
+            normalizeAngle(integrated_roll_deg_  + avg_rate_x * dt);
+        integrated_pitch_deg_ = 
+            normalizeAngle(integrated_pitch_deg_ + avg_rate_y * dt);
+        integrated_yaw_deg_   = 
+            normalizeAngle(integrated_yaw_deg_   + avg_rate_z * dt);
 
         // ====================================================
         // SAVE PREVIOUS DATA
         // ====================================================
 
-        previous_gyro_rate_ =
-            d.Z_rate;
+        previous_gyro_rate_x_ = d.X_rate;
+        previous_gyro_rate_y_ = d.Y_rate;
+        previous_gyro_rate_z_ = d.Z_rate;
 
         last_gyro_time_ =
             sample_time;
@@ -438,8 +497,9 @@ private:
             //
             // Вместо d.yaw используем угол гироскопа.
 
-            const double corrected_yaw =
-                integrated_yaw_deg_;
+            const double corrected_roll  = integrated_roll_deg_;
+            const double corrected_pitch = integrated_pitch_deg_;
+            const double corrected_yaw   = integrated_yaw_deg_;
 
             // =================================================
             // 1. SENSOR_MSGS / IMU
@@ -455,10 +515,10 @@ private:
             // =================================================
 
             const double roll_rad =
-                d.roll * DEG_TO_RAD;
+                filtered_roll_deg_ * DEG_TO_RAD;
 
             const double pitch_rad =
-                d.pitch * DEG_TO_RAD;
+                filtered_pitch_deg_ * DEG_TO_RAD;
 
             // Используем новый курс.
             const double yaw_rad =
@@ -550,10 +610,10 @@ private:
             euler_msg.header.frame_id = frame_id_;
 
             // Roll от AH127C.
-            euler_msg.vector.x = d.roll;
+            euler_msg.vector.x = filtered_roll_deg_;
 
             // Pitch от AH127C.
-            euler_msg.vector.y = d.pitch;
+            euler_msg.vector.y = filtered_pitch_deg_;
 
             // Новый Yaw по гироскопу.
             euler_msg.vector.z = -corrected_yaw;
@@ -696,9 +756,13 @@ private:
 
     bool gyro_initialized_ = false;
 
+    double integrated_roll_deg_ = 0.0;
+    double integrated_pitch_deg_ = 0.0;
     double integrated_yaw_deg_ = 0.0;
 
-    double previous_gyro_rate_ = 0.0;
+    double previous_gyro_rate_x_ = 0.0;
+    double previous_gyro_rate_y_ = 0.0;
+    double previous_gyro_rate_z_ = 0.0;
 
     std::chrono::steady_clock::time_point
         last_gyro_time_;
