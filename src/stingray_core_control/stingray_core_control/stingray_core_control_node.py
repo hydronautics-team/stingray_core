@@ -373,7 +373,7 @@ class StingrayCoreControlNode(Node):
         qos_command = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             depth=5,
-            reliability=ReliabilityPolicy.RELIABLE,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
             durability=DurabilityPolicy.VOLATILE,
         )
 

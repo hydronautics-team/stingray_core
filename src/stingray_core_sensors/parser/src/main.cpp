@@ -5,7 +5,9 @@
 #include <memory>
 #include <string>
 
+
 #include "rclcpp/rclcpp.hpp"
+#include "rclcpp/qos.hpp"
 
 #include "sensor_msgs/msg/imu.hpp"
 #include "geometry_msgs/msg/vector3_stamped.hpp"
@@ -59,7 +61,7 @@ public:
                 sensor_msgs::msg::Imu
             >(
                 "/imu_full_data",
-                10
+                rclcpp::SensorDataQoS()
             );
 
         publisher_euler_ =
@@ -67,7 +69,7 @@ public:
                 geometry_msgs::msg::Vector3Stamped
             >(
                 "/imu_euler",
-                10
+                rclcpp::SensorDataQoS()
             );
 
         publisher_gyro_integrated_ =
@@ -75,7 +77,7 @@ public:
                 geometry_msgs::msg::Vector3Stamped
             >(
                 "/imu_gyro_integrated",
-                10
+                rclcpp::SensorDataQoS()
             );
 
         publisher_magnetic_ =
@@ -83,7 +85,7 @@ public:
                 geometry_msgs::msg::Vector3Stamped
             >(
                 "/imu_magnetic_field",
-                10
+                rclcpp::SensorDataQoS()
             );
 
         // ====================================================
@@ -318,7 +320,7 @@ private:
             if (accel_error < 1.5 && accel_norm > 0.1)
             {
                 const double trust = 1.0 - (accel_error / 1.5);
-                const double k_pitch = 0.02 * trust;
+                const double k_pitch = 0.04 * trust;
 
                 const double accel_pitch_deg = d.pitch;
                 const double accel_roll_deg  = d.roll;
@@ -327,7 +329,7 @@ private:
 
                 const double cos_pitch = std::cos(filtered_pitch_deg_ * DEG_TO_RAD);
                 const double pitch_damping = cos_pitch * cos_pitch; // от 1.0 (в горизонте) до 0.0 (вертикально)
-                const double k_roll = 0.02 * trust * pitch_damping;
+                const double k_roll = 0.04 * trust * pitch_damping;
 
                 filtered_roll_deg_ += k_roll * normalizeAngle(accel_roll_deg - filtered_roll_deg_);
             }
