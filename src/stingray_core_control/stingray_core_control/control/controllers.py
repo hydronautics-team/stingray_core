@@ -194,6 +194,9 @@ class YawController(BaseController):
 
         if self.debug_hook is not None:
             self.debug_hook({
+                "setpoint": setpoint,
+                "measurement": measurement_rate if flag_setup_feedback_speed else measurement,
+                "speed_mode": float(flag_setup_feedback_speed),
                 "err_position": err_position,
                 "output_pi": output_pi,
                 "feedback_speed": feedback_speed,
@@ -262,6 +265,8 @@ class PitchController(BaseController):
         # --- DEBUG ---
         if self.debug_hook is not None:
             self.debug_hook({
+                "setpoint": setpoint,
+                "measurement": measurement_rate if flag_setup_feedback_speed else measurement,
                 "err_position": err_position,
                 "output_pi": output_pi,
                 "measurement_rate": measurement_rate,
@@ -333,6 +338,8 @@ class RollController(BaseController):
 
         if self.debug_hook is not None:
             self.debug_hook({
+                "setpoint": setpoint,
+                "measurement": measurement_rate if flag_setup_feedback_speed else measurement,
                 "err_position": err_position,
                 "output_pi": output_pi,
                 "measurement_rate": measurement_rate,

@@ -284,8 +284,8 @@ class StingrayCoreControlNode(Node):
         self.axis_ctrl: dict[str, AxisController] = {
             "yaw": AngularAxisController(
                 controller=self.controllers["yaw"],
-                angle_fn=lambda: -self.imu.yaw,
-                rate_fn=lambda: -self.imu.rate_z,
+                angle_fn=lambda: self.imu.yaw,
+                rate_fn=lambda: self.imu.rate_z,
                 feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
             ),
             "pitch": AngularAxisController(
