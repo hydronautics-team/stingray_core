@@ -618,7 +618,7 @@ class StingrayCoreControlNode(Node):
                         self.controllers["heave"].reset()
                         self.controllers["heave"].prev_depth = self.depth
                     elif axis == "yaw":
-                        self.control_setpoint[axis] = self.imu.yaw
+                        self.control_setpoint[axis] = -self.imu.yaw
                     elif axis == "pitch":
                         self.control_setpoint[axis] = 0.0
                         self.controllers["pitch"].reset()

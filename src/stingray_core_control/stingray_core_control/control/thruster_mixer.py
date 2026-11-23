@@ -24,6 +24,8 @@ class ThrusterMixer:
             for i, a in enumerate(self.axes):
                 s += self.coeffs[t][i] * float(control_signals.get(a, 0.0))
             val_int = max(100, min(200, int(s + 150)))
+            # if (val_int != 150):
+            #     val_int += abs(val_int-150) / (val_int-150) * 10
             data.append(val_int)
         return data
 
@@ -38,6 +40,8 @@ class ThrusterMixer:
                 s += self.coeffs[t][i] * float(control_list[i])
             val_int = max(100, min(200, int(s + 150)))
             data.append(val_int)
+            # if (val_int != 150):
+            #     val_int += abs(val_int-150) / (val_int-150) * 10
         return data
 
     def update_coeffs(self, coeffs: Dict[str, Sequence[float]]):
