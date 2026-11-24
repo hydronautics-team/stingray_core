@@ -99,6 +99,9 @@ class StingrayCoreControlNode(Node):
                         u[axis] = 0.0
                         self.control.impact[axis] = u[axis]
                         continue
+                elif axis in self.feedback_mode_axes and self._uses_speed_feedback(axis):
+                    # In speed mode /control/data is a direct speed/rate target.
+                    self.control_setpoint[axis] = self.control_input[axis]
                 elif axis == "heave":
                     # linear.z задаёт скорость изменения уставки глубины, м/с.
                     self.control_setpoint[axis] += (
@@ -160,7 +163,7 @@ class StingrayCoreControlNode(Node):
             "topic_imu": "/core/sensors/imu",
             "topic_odometry": "/core/state/odometry",
             "topic_loop_flags": "/control/loop_flags",
-            "topic_control_data": "/control/data",
+            "topic_control_data": "/control/data",  
         }
 
         for name, default in defaults.items():
@@ -171,6 +174,16 @@ class StingrayCoreControlNode(Node):
             "axes", ["surge", "sway", "heave", "roll", "pitch", "yaw"]
         )
         self.axes = list(self.get_parameter("axes").value)
+        self.feedback_mode_axes = tuple(
+            axis
+            for axis in ("heave", "roll", "pitch", "yaw")
+            if axis in self.axes
+        )
+        self.feedback_speed_by_axis = {}
+        for axis in self.feedback_mode_axes:
+            pname = f"feedback_speed.{axis}"
+            self.declare_parameter(pname, self.flag_setup_feedback_speed)
+            self.feedback_speed_by_axis[axis] = bool(self.get_parameter(pname).value)
 
         self.declare_parameter("dvl_timeout_sec", 0.5)
         self.dvl_timeout_sec = float(self.get_parameter("dvl_timeout_sec").value)
@@ -183,6 +196,11 @@ class StingrayCoreControlNode(Node):
         self.declare_parameter("command_timeout_sec", 0.5)
         self.command_timeout_sec = float(
             self.get_parameter("command_timeout_sec").value
+        )
+
+        self.declare_parameter("depth_rate_timeout_sec", 0.5)
+        self.depth_rate_timeout_sec = float(
+            self.get_parameter("depth_rate_timeout_sec").value
         )
 
         self.declare_parameter("thrusters", Parameter.Type.STRING_ARRAY)
@@ -249,8 +267,8 @@ class StingrayCoreControlNode(Node):
 
             self.controllers[axis] = axis_class_map[axis](**params)
 
-        for ctrl in self.controllers.values():
-            ctrl.set_debug_hook(self.debug_cb)
+        for axis, ctrl in self.controllers.items():
+            ctrl.set_debug_hook(lambda data, axis=axis: self.debug_cb(axis, data))
 
         self.imu = ImuState()
         self.control = ControlState.from_axes(self.axes)
@@ -263,6 +281,11 @@ class StingrayCoreControlNode(Node):
         self.open_loop_pending: dict[str, bool] = {axis: False for axis in self.axes}
 
         self.depth = 0.0
+        self.depth_rate = 0.0
+        self.depth_last_time = 0.0
+        self.previous_depth = None
+        self.previous_depth_stamp = None
+        self.previous_depth_stamp_is_ros = None
         self.distance_to_bottom = 0.0
 
         self.dvl_velocity_x = 0.0
@@ -286,26 +309,26 @@ class StingrayCoreControlNode(Node):
                 controller=self.controllers["yaw"],
                 angle_fn=lambda: self.imu.yaw,
                 rate_fn=lambda: self.imu.rate_z,
-                feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
+                feedback_flag_fn=lambda: self._uses_speed_feedback("yaw"),
             ),
             "pitch": AngularAxisController(
                 controller=self.controllers["pitch"],
                 angle_fn=lambda: self.imu.pitch,
                 rate_fn=lambda: self.imu.rate_y,
-                feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
+                feedback_flag_fn=lambda: self._uses_speed_feedback("pitch"),
             ),
             "roll": AngularAxisController(
                 controller=self.controllers["roll"],
                 angle_fn=lambda: self.imu.roll,
                 rate_fn=lambda: self.imu.rate_x,
-                feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
+                feedback_flag_fn=lambda: self._uses_speed_feedback("roll"),
             ),
             "heave": LinearAxisController(
                 controller=self.controllers["heave"],
                 pos_fn=lambda: self.depth,
                 vel_fn=self._get_heave_velocity_measurement,
                 accel_fn=lambda: self.imu.accel_z,
-                feedback_flag_fn=lambda: self.flag_setup_feedback_speed,
+                feedback_flag_fn=lambda: self._uses_speed_feedback("heave"),
             ),
             "surge": LinearPositionAxisController(
                 controller=self.controllers["surge"],
@@ -359,7 +382,16 @@ class StingrayCoreControlNode(Node):
         return self.dvl_velocity_y
 
     def _get_heave_velocity_measurement(self) -> float:
-        return self.dvl_velocity_z
+        if (
+            self.depth_last_time <= 0.0
+            or time.monotonic() - self.depth_last_time > self.depth_rate_timeout_sec
+        ):
+            return 0.0
+        return self.depth_rate
+
+    def _uses_speed_feedback(self, axis: str) -> bool:
+        """Use per-axis feedback mode where supported, legacy mode elsewhere."""
+        return self.feedback_speed_by_axis.get(axis, self.flag_setup_feedback_speed)
 
     def _init_subscriptions(self):
         # Explicit QoS profiles for deterministic behavior by topic class.
@@ -446,6 +478,26 @@ class StingrayCoreControlNode(Node):
         )
         self.pub_out = self.create_publisher(Float64, "~/debug/out", qos_debug)
 
+        debug_fields = (
+            "setpoint",
+            "measurement",
+            "speed_mode",
+            "err_position",
+            "output_pi",
+            "feedback_speed",
+            "measurement_rate",
+            "out",
+        )
+        self.axis_debug_publishers = {
+            axis: {
+                field: self.create_publisher(
+                    Float64, f"~/debug/{axis}/{field}", qos_debug
+                )
+                for field in debug_fields
+            }
+            for axis in self.axes
+        }
+
     # --- Колбэки ---
     def imu_callback(self, msg: Imu):
         """Consume the sensor-independent IMU stream produced by localization."""
@@ -514,7 +566,34 @@ class StingrayCoreControlNode(Node):
             ) and max(msg.pose.covariance[0], msg.pose.covariance[7]) < 100.0
             self.dvl_position_last_time = time.time()
             # REP-103 odometry Z is positive upward; control depth is positive down.
-            self.depth = -float(msg.pose.pose.position.z)
+            new_depth = -float(msg.pose.pose.position.z)
+            if not math.isfinite(new_depth):
+                raise ValueError("Odometry supplied a non-finite depth")
+
+            stamp = (
+                float(msg.header.stamp.sec)
+                + float(msg.header.stamp.nanosec) * 1e-9
+            )
+            stamp_is_ros = stamp > 0.0
+            if not stamp_is_ros:
+                stamp = time.monotonic()
+
+            if self.previous_depth is not None:
+                depth_dt = stamp - self.previous_depth_stamp
+                if (
+                    stamp_is_ros == self.previous_depth_stamp_is_ros
+                    and 1e-4 <= depth_dt <= 1.0
+                ):
+                    self.depth_rate = (new_depth - self.previous_depth) / depth_dt
+                else:
+                    # Ignore duplicate, out-of-order, or stale samples.
+                    self.depth_rate = 0.0
+
+            self.depth = new_depth
+            self.depth_last_time = time.monotonic()
+            self.previous_depth = new_depth
+            self.previous_depth_stamp = stamp
+            self.previous_depth_stamp_is_ros = stamp_is_ros
 
             current_position = {
                 "surge": self.dvl_position_x,
@@ -616,7 +695,6 @@ class StingrayCoreControlNode(Node):
                         self.control_input[axis] = 0.0
                         self.control_setpoint[axis] = 0.30  # 30 cm, positive down
                         self.controllers["heave"].reset()
-                        self.controllers["heave"].prev_depth = self.depth
                     elif axis == "yaw":
                         self.control_setpoint[axis] = self.imu.yaw
                     elif axis == "pitch":
@@ -691,7 +769,41 @@ class StingrayCoreControlNode(Node):
 
             # --- 3. Применяем node params ---
             for p in node_params:
-                if hasattr(self, p.name):
+                if p.name.startswith("feedback_speed."):
+                    axis = p.name.split(".", 1)[1]
+                    if axis not in self.feedback_mode_axes:
+                        raise ValueError(
+                            f"Per-axis feedback mode is unsupported for '{axis}'"
+                        )
+                    if not isinstance(p.value, bool):
+                        raise ValueError(f"{p.name} must be boolean")
+                    self.feedback_speed_by_axis[axis] = p.value
+                    self.controllers[axis].reset()
+                    if p.value:
+                        # Start speed mode from a stopped target.
+                        self.control_setpoint[axis] = 0.0
+                    else:
+                        self.control_setpoint[axis] = {
+                            "heave": self.depth,
+                            "yaw": self.imu.yaw,
+                            "pitch": self.imu.pitch,
+                            "roll": self.imu.roll,
+                        }[axis]
+                    self.get_logger().info(
+                        f"Feedback mode '{axis}': "
+                        f"{'speed' if p.value else 'position'}"
+                    )
+                elif p.name == "flag_setup_feedback_speed":
+                    self.flag_setup_feedback_speed = bool(p.value)
+                    for axis in self.feedback_mode_axes:
+                        self.feedback_speed_by_axis[axis] = bool(p.value)
+                        self.controllers[axis].reset()
+                        if p.value:
+                            self.control_setpoint[axis] = 0.0
+                    self.get_logger().warning(
+                        "flag_setup_feedback_speed updated all angular/depth axes"
+                    )
+                elif hasattr(self, p.name):
                     setattr(self, p.name, p.value)
                     self.get_logger().info(f"Node param updated: {p.name} = {p.value}")
 
@@ -745,15 +857,23 @@ class StingrayCoreControlNode(Node):
     def _is_controller_param(self, name: str) -> bool:
         return name.startswith("controllers.")
 
-    def debug_cb(self, data: dict):
+    def debug_cb(self, axis: str, data: dict):
         if not self.get_parameter("debug_publish").value:
             return
 
-        self.pub_err_position.publish(Float64(data=data["err_position"]))
-        self.pub_output_pi.publish(Float64(data=data["output_pi"]))
-        self.pub_feedback_speed.publish(Float64(data=data["feedback_speed"]))
-        self.pub_measurement_rate.publish(Float64(data=data["measurement_rate"]))
-        self.pub_out.publish(Float64(data=data["out"]))
+        for field, publisher in self.axis_debug_publishers[axis].items():
+            if field in data:
+                publisher.publish(Float64(data=float(data[field])))
+
+        # Preserve the legacy debug topics as heave aliases.
+        if axis == "heave":
+            self.pub_err_position.publish(Float64(data=data["err_position"]))
+            self.pub_output_pi.publish(Float64(data=data["output_pi"]))
+            self.pub_feedback_speed.publish(Float64(data=data["feedback_speed"]))
+            self.pub_measurement_rate.publish(
+                Float64(data=data["measurement_rate"])
+            )
+            self.pub_out.publish(Float64(data=data["out"]))
 
 
 def main(args=None):

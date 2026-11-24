@@ -267,6 +267,7 @@ class PitchController(BaseController):
             self.debug_hook({
                 "setpoint": setpoint,
                 "measurement": measurement_rate if flag_setup_feedback_speed else measurement,
+                "speed_mode": float(flag_setup_feedback_speed),
                 "err_position": err_position,
                 "output_pi": output_pi,
                 "measurement_rate": measurement_rate,
@@ -340,6 +341,7 @@ class RollController(BaseController):
             self.debug_hook({
                 "setpoint": setpoint,
                 "measurement": measurement_rate if flag_setup_feedback_speed else measurement,
+                "speed_mode": float(flag_setup_feedback_speed),
                 "err_position": err_position,
                 "output_pi": output_pi,
                 "measurement_rate": measurement_rate,
@@ -355,14 +357,6 @@ class RollController(BaseController):
 # Linear controllers
 # -----------------------
 class DepthController(BaseController):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.prev_depth = 0.0
-
-    def reset(self):
-        super().reset()
-        self.prev_depth = 0.0
-
     def update(
         self,
         setpoint: float,
@@ -376,11 +370,10 @@ class DepthController(BaseController):
         # защита dt
         dt = max(min(dt, 0.05), 1e-3)
 
-        # -------- скорость глубины --------
-        #depth_rate = measurement_rate
-        depth_rate = (measurement-self.prev_depth)/dt
-
-        self.prev_depth = measurement
+        # Depth rate is derived from each new odometry sample in the node.
+        # Re-differentiating the same depth at the control-loop rate creates
+        # artificial zeroes and spikes when odometry runs more slowly.
+        depth_rate = measurement_rate
 
         # -------- режим настройки скорости --------
         if flag_setup_feedback_speed:
@@ -410,6 +403,9 @@ class DepthController(BaseController):
 
         if self.debug_hook is not None:
             self.debug_hook({
+                "setpoint": setpoint,
+                "measurement": measurement_rate if flag_setup_feedback_speed else measurement,
+                "speed_mode": float(flag_setup_feedback_speed),
                 "err_position": err_position,
                 "measurement_rate": depth_rate,
                 "feedback_speed": feedback_speed,
@@ -468,6 +464,9 @@ class SurgeController(BaseController):
 
         if self.debug_hook is not None:
             self.debug_hook({
+                "setpoint": setpoint,
+                "measurement": measurement_rate if flag_setup_feedback_speed else measurement,
+                "speed_mode": float(flag_setup_feedback_speed),
                 "position": setpoint,
                 "err_position": err_position,
                 "output_pi": output_pi,
